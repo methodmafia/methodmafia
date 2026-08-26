@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Method Mafia — Premium VIP Community</title>
+<meta name="description" content="1000+ premium digital methods, tools and guides in one place. Join The Method Mafia VIP community.">
+<link rel="icon" href="images/logo.jpg">
+
+<meta property="og:title" content="The Method Mafia — Premium VIP Community">
+<meta property="og:description" content="1000+ premium digital methods, tools and guides. One membership. Unlimited methods.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://themethodmafia.com">
+<meta property="og:image" content="https://themethodmafia.com/images/banner.jpg">
+<meta name="twitter:card" content="summary_large_image">
+
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Hind+Siliguri:wght@400;600;700&family=Inter:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script src="config.js"></script>
+
+<!-- Meta Pixel -->
+<script>
+!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
+document,'script','https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', CONFIG.META_PIXEL); fbq('track','PageView');
+</script>
+
+<!-- TikTok Pixel -->
+<script>
+!function(w,d,t){w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie"],ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.instance=function(t){for(var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++)ttq.setAndDefer(e,ttq.methods[n]);return e},ttq.load=function(e,n){var i="https://analytics.tiktok.com/i18n/pixel/events.js";ttq._i=ttq._i||{},ttq._i[e]=[],ttq._i[e]._u=i,ttq._t=ttq._t||{},ttq._t[e]=+new Date,ttq._o=ttq._o||{},ttq._o[e]=n||{};var o=d.createElement("script");o.type="text/javascript",o.async=!0,o.src=i+"?sdkid="+e+"&lib="+t;var a=d.getElementsByTagName("script")[0];a.parentNode.insertBefore(o,a)};
+ttq.load(CONFIG.TIKTOK_PIXEL); ttq.page();
+}(window,document,'ttq');
+</script>
+
+<!-- Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js"></script>
+<script>
+window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}
+gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
+</script>
+</head>
+<body>
+
+<div class="progress-bar" id="progressBar"></div>
+<canvas id="bg-canvas"></canvas>
+
+<!-- ══ HEADER ══ -->
+<header>
+  <div class="hdr-left">
+    <div class="hdr-logo"><img src="images/logo.jpg" alt="The Method Mafia"></div>
+    <div>
+      <div class="hdr-name">THE METHOD MAFIA</div>
+      <div class="hdr-sub" data-t="footerTag">Premium VIP Community</div>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <div class="lang-wrap">
+      <button class="lang-btn" onclick="toggleLangMenu()">
+        🌐 <span id="langLabel">EN</span> ▾
+      </button>
+      <div class="lang-menu" id="langMenu">
+        <button class="lang-item" data-lang="en" onclick="setLang('en')">English</button>
+        <button class="lang-item" data-lang="bn" onclick="setLang('bn')">বাংলা</button>
+        <button class="lang-item" data-lang="hi" onclick="setLang('hi')">हिन्दी</button>
+      </div>
+    </div>
+    <a href="#order" class="btn-gold" data-t="navJoin">Join Now</a>
+  </div>
+</header>
+
+<!-- ══ TICKER ══ -->
+<div class="ticker-wrap">
+  <div class="ticker">
+    <span>ChatGPT Access</span><span>Canva Pro Panel</span><span>Google Ads Credit</span>
+    <span>LinkedIn Ads Credit</span><span>AI Automation Course</span><span>3M+ Email Database</span>
+    <span>Cursor Pro Method</span><span>WhatsApp CRM Script</span><span>Adobe CC Method</span>
+    <span>Copywriting Masterclass</span><span>Figma Access</span><span>OpenAI API Credits</span>
+    <span>ChatGPT Access</span><span>Canva Pro Panel</span><span>Google Ads Credit</span>
+    <span>LinkedIn Ads Credit</span><span>AI Automation Course</span><span>3M+ Email Database</span>
+    <span>Cursor Pro Method</span><span>WhatsApp CRM Script</span><span>Adobe CC Method</span>
+    <span>Copywriting Masterclass</span><span>Figma Access</span><span>OpenAI API Credits</span>
+  </div>
+</div>
+
+<!-- ══ HERO ══ -->
+<div class="hero">
+  <div class="logo-wrap" id="logoWrap">
+    <img src="images/logo.jpg" alt="The Method Mafia" class="logo-img" id="logoImg">
+    <div class="logo-ring"></div>
+    <div class="logo-ring-2"></div>
+  </div>
+
+  <div class="live-badge"><span class="dot"></span><span data-t="liveBadge">Limited Seats</span></div>
+  <h1 class="hero-title">THE METHOD MAFIA</h1>
+  <p class="hero-sub" data-t="tagline">The Ultimate Library of Professional Digital Methods &amp; Tools</p>
+  <p class="hero-free-note">📢 <span data-t="freeChannelNote">Free methods daily on our public channel</span></p>
+
+  <div class="cd-wrap">
+    <div class="cd-label" data-t="cdLabel">Offer ends in</div>
+    <div class="cd-row">
+      <div class="cd-box"><span class="cd-n" id="cdH">00</span><div class="cd-u" data-t="cdHours">Hours</div></div>
+      <div class="cd-sep">:</div>
+      <div class="cd-box"><span class="cd-n" id="cdM">00</span><div class="cd-u" data-t="cdMins">Minutes</div></div>
+      <div class="cd-sep">:</div>
+      <div class="cd-box"><span class="cd-n" id="cdS">00</span><div class="cd-u" data-t="cdSecs">Seconds</div></div>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="stat-n" id="sVip">0</div><div class="stat-l" data-t="statVip">VIP Members</div></div>
+    <div class="stat"><div class="stat-n" id="sComm">0</div><div class="stat-l" data-t="statCommunity">Community</div></div>
+    <div class="stat"><div class="stat-n" id="sMeth">0</div><div class="stat-l" data-t="statMethods">Methods</div></div>
+    <div class="stat"><div class="stat-n" id="sUpd">0</div><div class="stat-l" data-t="statUpdates">Updates</div></div>
+  </div>
+
+  <a href="#order" class="cta-lg"><span data-t="heroCta">Join The Mafia</span> — <span data-cfg="ENTRY_USD">$30</span></a>
+  <p class="cta-note">🔒 <span data-t="heroNote">Instant access after payment confirmation</span></p>
+</div>
+
+<div class="divider"></div>
+
+<!-- ══ PROBLEM ══ -->
+<section class="reveal">
+  <div class="eyebrow" data-t="problemEyebrow">The Problem</div>
+  <h2 class="sec-title" data-t="problemTitle">Why Most People Never Start</h2>
+  <p class="sec-sub" data-t="problemSub">You already know the reasons</p>
+  <div class="prob-grid">
+    <div class="prob-card"><span class="prob-icon">💸</span>
+      <div class="prob-t" data-t="problem1Title">Tools Cost Too Much</div>
+      <div class="prob-d" data-t="problem1Text"></div></div>
+    <div class="prob-card"><span class="prob-icon">🎓</span>
+      <div class="prob-t" data-t="problem2Title">Courses Are Overpriced</div>
+      <div class="prob-d" data-t="problem2Text"></div></div>
+    <div class="prob-card"><span class="prob-icon">🤷</span>
+      <div class="prob-t" data-t="problem4Title">No One To Ask</div>
+      <div class="prob-d" data-t="problem4Text"></div></div>
+  </div>
+</section>
+
+
+<div class="divider"></div>
+
+<!-- ══ SOLUTION ══ -->
+<section class="reveal">
+  <div class="eyebrow" data-t="solutionEyebrow">The Solution</div>
+  <h2 class="sec-title" data-t="solveTitle">Everything In One Place</h2>
+  <p class="sec-sub" data-t="solveSub">One membership replaces a dozen subscriptions</p>
+  <div class="why-grid">
+    <div class="why-card"><span class="why-ic">📚</span><div class="why-t" data-t="s1t"></div><div class="why-d" data-t="s1d"></div></div>
+    <div class="why-card"><span class="why-ic">🔄</span><div class="why-t" data-t="s2t"></div><div class="why-d" data-t="s2d"></div></div>
+    <div class="why-card"><span class="why-ic">🗣️</span><div class="why-t" data-t="s3t"></div><div class="why-d" data-t="s3d"></div></div>
+    <div class="why-card"><span class="why-ic">🏷️</span><div class="why-t" data-t="s4t"></div><div class="why-d" data-t="s4d"></div></div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ══ BANNER + FREE CHANNEL ══ -->
+<section class="reveal">
+  <div class="eyebrow" data-t="bannerEyebrow">What's Inside</div>
+  <h2 class="sec-title" data-t="bannerTitle">Your Complete Resource Library</h2>
+  <p class="sec-sub" data-t="bannerSub">Over 1000 curated methods, tools and guides</p>
+  <div class="banner-wrap">
+    <img src="images/banner.jpg" alt="The Method Mafia — Premium VIP Group">
+  </div>
+
+  <div class="tg-block">
+    <h3 data-t="tgTitle">Start Free</h3>
+    <p data-t="tgText"></p>
+    <a class="tg-btn" data-href="PUBLIC_CHANNEL" target="_blank" rel="noopener">
+      ✈️ <span data-t="tgBtn">Join Free Channel</span>
+    </a>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ══ VAULT TABS ══ -->
+<section class="reveal">
+  <div class="eyebrow" data-t="featuresEyebrow">Inside The Premium Group</div>
+  <h2 class="sec-title" data-t="featuresTitle">What You Get</h2>
+  <p class="sec-sub" data-t="featuresSub">New resources added every month</p>
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab(this,'ai')" data-t="tabAi">AI &amp; Tools</button>
+    <button class="tab-btn" onclick="switchTab(this,'ads')" data-t="tabAds">Ads Credits</button>
+    <button class="tab-btn" onclick="switchTab(this,'courses')" data-t="tabCourses">Courses</button>
+    <button class="tab-btn" onclick="switchTab(this,'scripts')" data-t="tabScripts">Scripts</button>
+    <a class="tab-btn tab-link" data-href="FULL_LIST_POST" target="_blank" rel="noopener" data-t="tabFull">📋 Full List</a>
+  </div>
+  <div class="tab-panel active" id="tab-ai"></div>
+  <div class="tab-panel" id="tab-ads"></div>
+  <div class="tab-panel" id="tab-courses"></div>
+  <div class="tab-panel" id="tab-scripts"></div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ══ WHY ══ -->
+<section class="reveal">
+  <div class="eyebrow" data-t="whyEyebrow">Why Us</div>
+  <h2 class="sec-title" data-t="whyTitle">Why The Method Mafia</h2>
+  <p class="sec-sub" data-t="whySub">Built for people who are serious about it</p>
+  <div class="why-grid">
+    <div class="why-card"><span class="why-ic">📦</span><div class="why-t" data-t="why1t"></div><div class="why-d" data-t="why1d"></div></div>
+    <div class="why-card"><span class="why-ic">🔄</span><div class="why-t" data-t="why2t"></div><div class="why-d" data-t="why2d"></div></div>
+    <div class="why-card"><span class="why-ic">🎧</span><div class="why-t" data-t="why3t"></div><div class="why-d" data-t="why3d"></div></div>
+    <div class="why-card"><span class="why-ic">🛡️</span><div class="why-t" data-t="why4t"></div><div class="why-d" data-t="why4d"></div></div>
+    <div class="why-card"><span class="why-ic">👥</span><div class="why-t" data-t="why5t"></div><div class="why-d" data-t="why5d"></div></div>
+    <div class="why-card"><span class="why-ic">💸</span><div class="why-t" data-t="why6t"></div><div class="why-d" data-t="why6d"></div></div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ══ TESTIMONIALS ══ -->
+<section class="reveal">
+  <div class="eyebrow" data-t="testiEyebrow">Member Reviews</div>
+  <h2 class="sec-title" data-t="testiTitle">What Members Say</h2>
+  <p class="sec-sub" data-t="testiSub">Real members, real results</p>
+  <div class="t-grid" id="reviewGrid"></div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ══ PRICING ══ -->
+<section id="pricing" class="reveal">
+  <div class="eyebrow" data-t="pricingEyebrow">Membership</div>
+  <h2 class="sec-title" data-t="pricingTitle">Join The Elite</h2>
+  <p class="sec-sub" data-t="pricingSub">Simple pricing. Cancel anytime.</p>
+
+  <div class="price-grid">
+    <div class="price-card featured">
+      <div class="p-badge" data-t="planEntryBadge">START HERE</div>
+      <div class="p-name" data-t="planEntryName">Entry — First Month</div>
+      <div class="p-price" id="pEntryPrice">$30</div>
+      <div class="p-freq" data-t="planEntryFreq">One-time payment</div>
+      <div class="p-bdt local-price" data-cfg="ENTRY_BDT">৳৩,৯৩০</div>
+      <div class="p-feats">
+        <div class="p-feat"><span class="chk">✓</span><span data-t="ef1"></span></div>
+        <div class="p-feat"><span class="chk">✓</span><span data-t="ef2"></span></div>
+        <div class="p-feat"><span class="chk">✓</span><span data-t="ef3"></span></div>
+        <div class="p-feat"><span class="chk">✓</span><span data-t="ef4"></span></div>
+        <div class="p-feat"><span class="chk">✓</span><span data-t="ef5"></span></div>
+      </div>
+      <a href="#order" class="p-btn" data-t="btnGetStarted">Get Started</a>
+    </div>
+
+    <div class="price-card plain">
+      <div class="p-name" data-t="planMonthlyName">Monthly</div>
+      <div class="p-price"><span id="pMonthlyPrice">$15</span><span class="p-per" data-t="planPerMonth">/month</span></div>
+      <div class="p-freq" data-t="planMonthlyFreq">From second month onwards</div>
+      <div class="p-bdt local-price" data-cfg="MONTHLY_BDT">৳১,৯২০</div>
+      <div class="p-feats">
+        <div class="p-feat"><span class="chk">✓</span><span data-t="mf1"></span></div>
+        <div class="p-feat"><span class="chk">✓</span><span data-t="mf2"></span></div>
+        <div class="p-feat"><span class="chk">✓</span><span data-t="mf3"></span></div>
+        <div class="p-feat"><span class="chk">✓</span><span data-t="mf4"></span></div>
+        <div class="p-feat"><span class="chk">✓</span><span data-t="mf5"></span></div>
+      </div>
+      <a href="#order" class="p-btn outline" data-t="btnSubscribe">Subscribe</a>
+    </div>
+  </div>
+
+  <p class="price-note">
+    💬 <span data-t="pricingNote">Questions about payment?</span>
+    <a data-href="SUPPORT" target="_blank" rel="noopener" data-cfg="SUPPORT_HANDLE">@MMHQ_Support</a>
+  </p>
+</section>
+
+<div class="divider"></div>
+
+<!-- ══ ORDER FORM ══ -->
+<section id="order" class="reveal">
+  <div class="eyebrow" data-t="checkoutEyebrow">Secure Order</div>
+  <h2 class="sec-title" data-t="checkoutTitle">Place Your Order</h2>
+  <p class="sec-sub" data-t="checkoutSub">Fill this out and we'll send you access details</p>
+
+  <div class="form-wrap">
+    <div class="form-title">🔐 <span data-t="formTitle">ORDER FORM</span></div>
+    <div class="form-sub" data-t="formSub"></div>
+
+    <div class="fg">
+      <label class="lbl" data-t="lblName">Your Name</label>
+      <input type="text" class="inp" id="iName" data-tp="phName" placeholder="Enter your full name">
+    </div>
+    <div class="fg">
+      <label class="lbl" data-t="lblEmail">Email Address</label>
+      <input type="email" class="inp" id="iEmail" data-tp="phEmail" placeholder="you@example.com">
+    </div>
+    <div class="fg">
+      <label class="lbl" data-t="lblTelegram">Telegram Username</label>
+      <input type="text" class="inp" id="iTelegram" data-tp="phTelegram" placeholder="@yourusername">
+    </div>
+    <div class="fg">
+      <label class="lbl" data-t="lblPlan">Select Plan</label>
+      <div class="plan-row">
+        <button class="plan-opt sel" onclick="selectPlan(this,'entry')">
+          <span class="plan-ic">🚀</span><span data-t="optEntry">Entry $30</span>
+        </button>
+        <button class="plan-opt" onclick="selectPlan(this,'monthly')">
+          <span class="plan-ic">🔄</span><span data-t="optMonthly">Monthly $15</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="order-box">
+      <div class="o-row"><span id="oPlan">Entry</span><span class="o-gold" id="oAmount">$30</span></div>
+      <div class="o-row"><span data-t="orderThen">Then monthly</span><span class="o-gold" id="oThen">$15</span></div>
+      <div class="o-row total"><span data-t="orderTotal">Total</span><span class="o-gold" id="oTotal">$30</span></div>
+    </div>
+
+    <div class="fg">
+      <label class="lbl" data-t="payTitle">Select Payment Method</label>
+      <div class="pay-select-row" id="payBadges"></div>
+    </div>
+
+    <button class="submit-btn" id="submitBtn" onclick="submitOrder()" data-t="btnSubmit">Submit Order</button>
+    <p class="form-footer" data-t="formFooter"></p>
+  </div>
+</section>
+
+
+<div class="divider"></div>
+
+<!-- ══ GUARANTEE ══ -->
+<section class="reveal">
+  <div class="eyebrow">🛡️ Guarantee</div>
+  <h2 class="sec-title" data-t="guarTitle">You Are Not Taking A Risk</h2>
+  <p class="sec-sub" data-t="guarSub">Here is exactly what we promise</p>
+  <div class="why-grid">
+    <div class="why-card"><span class="why-ic">👀</span><div class="why-t" data-t="g1t"></div><div class="why-d" data-t="g1d"></div></div>
+    <div class="why-card"><span class="why-ic">🚫</span><div class="why-t" data-t="g2t"></div><div class="why-d" data-t="g2d"></div></div>
+    <div class="why-card"><span class="why-ic">💰</span><div class="why-t" data-t="g3t"></div><div class="why-d" data-t="g3d"></div></div>
+    <div class="why-card"><span class="why-ic">🤝</span><div class="why-t" data-t="g4t"></div><div class="why-d" data-t="g4d"></div></div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ══ FAQ ══ -->
+<section class="reveal">
+  <div class="eyebrow" data-t="faqEyebrow">FAQ</div>
+  <h2 class="sec-title" data-t="faqTitle">Common Questions</h2>
+  <div class="faq">
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span data-t="q1"></span><span class="faq-ic">+</span></button><div class="faq-a" data-t="a1"></div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span data-t="q2"></span><span class="faq-ic">+</span></button><div class="faq-a" data-t="a2"></div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span data-t="q3"></span><span class="faq-ic">+</span></button><div class="faq-a" data-t="a3"></div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span data-t="q4"></span><span class="faq-ic">+</span></button><div class="faq-a" data-t="a4"></div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span data-t="q5"></span><span class="faq-ic">+</span></button><div class="faq-a" data-t="a5"></div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span data-t="q6"></span><span class="faq-ic">+</span></button><div class="faq-a" data-t="a6"></div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span data-t="q7"></span><span class="faq-ic">+</span></button><div class="faq-a" data-t="a7"></div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span data-t="q8"></span><span class="faq-ic">+</span></button><div class="faq-a" data-t="a8"></div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span data-t="q9"></span><span class="faq-ic">+</span></button><div class="faq-a" data-t="a9"></div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span data-t="q10"></span><span class="faq-ic">+</span></button><div class="faq-a" data-t="a10"></div></div>
+  </div>
+</section>
+
+
+<!-- ══ FINAL CTA ══ -->
+<section class="final-cta reveal">
+  <div class="final-inner">
+    <img src="images/logo.jpg" alt="" class="final-logo">
+    <h2 class="sec-title" data-t="finalTitle">Ready When You Are</h2>
+    <p class="final-text" data-t="finalText"></p>
+    <a href="#order" class="cta-lg"><span data-t="finalBtn">Join Premium Group</span> — <span data-cfg="ENTRY_USD">$30</span></a>
+    <div class="final-or" data-t="finalOr">or</div>
+    <a class="tg-btn" data-href="PUBLIC_CHANNEL" target="_blank" rel="noopener">
+      ✈️ <span data-t="tgBtn">Join Free Channel</span>
+    </a>
+  </div>
+</section>
+
+<!-- ══ FOOTER ══ -->
+<footer>
+  <img src="images/logo.jpg" alt="The Method Mafia" class="ft-logo-img">
+  <div class="ft-name">THE METHOD MAFIA</div>
+  <div class="ft-tag" data-t="footerTag">Premium VIP Community</div>
+  <div class="ft-links">
+    <a data-href="PUBLIC_CHANNEL" target="_blank" rel="noopener">📢 Telegram</a>
+    <a data-href="FACEBOOK_PAGE" target="_blank" rel="noopener">👍 Facebook</a>
+    <a href="about.html" data-t="ftAbout">About</a>
+    <a href="payment.html" data-t="ftPayment">Payment</a>
+    <a href="order-status.html" data-t="ftOrder">Order Status</a>
+    <a href="terms.html" data-t="ftTerms">Terms</a>
+    <a href="privacy.html" data-t="ftPrivacy">Privacy</a>
+    <a href="refund.html" data-t="ftRefund">Refund</a>
+  </div>
+  <div class="ft-copy">
+    © 2026 The Method Mafia. <span data-t="ftRights">All rights reserved.</span><br>
+    <span data-cfg="EMAIL">info@themethodmafia.com</span>
+  </div>
+</footer>
+
+<!-- ══ FLOATING ══ -->
+<a class="float-tg" data-href="SUPPORT" target="_blank" rel="noopener" title="Telegram Support">✈️</a>
+<button class="scroll-top" id="scrollTop" onclick="scrollToTop()">↑</button>
+<div class="toast" id="toast"></div>
+<div class="live-pop" id="livePop"></div>
+
+<!-- ══ EXIT POPUP ══ -->
+<div class="exit-overlay" id="exitPop">
+  <div class="exit-box">
+    <div class="exit-icon">✈️</div>
+    <div class="exit-title" data-t="exitTitle">Before You Go</div>
+    <div class="exit-text" data-t="exitText"></div>
+    <a class="tg-btn" data-href="PUBLIC_CHANNEL" target="_blank" rel="noopener" data-t="exitBtn">Join Free Channel</a>
+    <button class="exit-close" onclick="closeExit()" data-t="exitClose">No thanks</button>
+  </div>
+</div>
+
+<script src="js/translations.js"></script>
+<script src="js/pages.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

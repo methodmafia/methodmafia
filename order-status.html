@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Order Status — The Method Mafia</title>
+<meta name="description" content="Check your Method Mafia order status">
+<link rel="icon" href="images/logo.jpg">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Hind+Siliguri:wght@400;600;700&family=Inter:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script src="config.js"></script>
+<script>try{var L=localStorage.getItem('mm_lang');if(L)document.documentElement.lang=L;}catch(e){}</script>
+<script async src="https://www.googletagmanager.com/gtag/js"></script>
+<script>
+window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}
+gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
+</script>
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+
+<header>
+  <div class="hdr-left">
+    <a href="index.html" style="display:flex;align-items:center;gap:11px">
+      <div class="hdr-logo"><img src="images/logo.jpg" alt="The Method Mafia"></div>
+      <div>
+        <div class="hdr-name">THE METHOD MAFIA</div>
+        <div class="hdr-sub" data-t="footerTag">Premium VIP Community</div>
+      </div>
+    </a>
+  </div>
+  <div class="hdr-right">
+    <div class="lang-wrap">
+      <button class="lang-btn" onclick="toggleLangMenu()">🌐 <span id="langLabel">EN</span> ▾</button>
+      <div class="lang-menu" id="langMenu">
+        <button class="lang-item" data-lang="en" onclick="setLang('en')">English</button>
+        <button class="lang-item" data-lang="bn" onclick="setLang('bn')">বাংলা</button>
+        <button class="lang-item" data-lang="hi" onclick="setLang('hi')">हिन्दी</button>
+      </div>
+    </div>
+    <a href="index.html#order" class="btn-gold" data-t="navJoin">Join Now</a>
+  </div>
+</header>
+
+<div class="page-wrap">
+<a href="index.html" class="back-link">← <span data-p="back">Back to home</span></a>
+<h1 class="page-title" data-p="ordTitle">Order Status</h1>
+<p class="page-sub" data-p="ordSub"></p>
+<div class="page-body">
+
+<div class="form-wrap" style="margin-bottom:28px">
+  <div class="form-title">🔍 <span data-p="ordFind"></span></div>
+  <div class="form-sub" data-p="ordFindSub"></div>
+  <div class="fg">
+    <label class="lbl" data-p="ordLbl">Order ID</label>
+    <input type="text" class="inp" id="iOrderId" data-pp="ordLbl" placeholder="MM-2026-0000">
+  </div>
+  <button class="submit-btn" onclick="checkOrder()" data-p="ordBtn">Check Status</button>
+  <div id="statusResult" style="margin-top:16px"></div>
+</div>
+
+<h3 data-p="ordH1">What The Statuses Mean</h3>
+<ul>
+  <li data-p="ordSt1"></li><li data-p="ordSt2"></li>
+  <li data-p="ordSt3"></li><li data-p="ordSt4"></li>
+</ul>
+
+<h3 data-p="ordH2">Lost Your Order ID?</h3>
+<p data-p="ordLost"></p>
+
+<div class="info-box"><p>
+  <span data-p="ordHelp"></span>
+  <a data-href="SUPPORT" target="_blank" style="color:var(--gold);font-weight:700" data-cfg="SUPPORT_HANDLE"></a>
+  <span data-p="ordHelp2"></span>
+</p></div>
+</div>
+
+<script>
+function checkOrder(){
+  var v=document.getElementById('iOrderId').value.trim().toUpperCase();
+  var box=document.getElementById('statusResult');
+  if(!v){ box.innerHTML='<div class="info-box" style="border-left-color:var(--red)"><p>'+tp('ordErr')+'</p></div>'; return; }
+  var saved=''; try{ saved=(localStorage.getItem('mm_last_order')||'').toUpperCase(); }catch(e){}
+  if(v===saved){
+    box.innerHTML='<div class="info-box" style="border-left-color:var(--green)">'+
+      '<p><strong>'+tp('ordFound')+' '+v+'</strong></p>'+
+      '<p style="margin-top:8px">'+tp('ordStatus')+' <strong style="color:var(--green)">'+tp('ordSubmitted')+'</strong></p>'+
+      '<p style="margin-top:8px">'+tp('ordFoundMsg')+'</p></div>';
+  } else {
+    box.innerHTML='<div class="info-box"><p>'+tp('ordNF')+'</p>'+
+      '<p style="margin-top:8px">'+tp('ordNF2')+'</p></div>';
+  }
+}
+</script>
+</div>
+
+<footer>
+  <div class="ft-name">THE METHOD MAFIA</div>
+  <div class="ft-tag" data-t="footerTag">Premium VIP Community</div>
+  <div class="ft-links">
+    <a href="index.html">Home</a>
+    <a data-href="PUBLIC_CHANNEL" target="_blank" rel="noopener">📢 Telegram</a>
+    <a data-href="FACEBOOK_PAGE" target="_blank" rel="noopener">👍 Facebook</a>
+    <a href="about.html" data-t="ftAbout">About</a>
+    <a href="payment.html" data-t="ftPayment">Payment</a>
+    <a href="order-status.html" data-t="ftOrder">Order Status</a>
+    <a href="terms.html" data-t="ftTerms">Terms</a>
+    <a href="privacy.html" data-t="ftPrivacy">Privacy</a>
+    <a href="refund.html" data-t="ftRefund">Refund</a>
+  </div>
+  <div class="ft-copy">
+    © 2026 The Method Mafia. <span data-t="ftRights">All rights reserved.</span><br>
+    <span data-cfg="EMAIL">info@themethodmafia.com</span>
+  </div>
+</footer>
+
+<a class="float-tg" data-href="SUPPORT" target="_blank" rel="noopener" title="Telegram">✈️</a>
+<div class="toast" id="toast"></div>
+
+<script src="js/translations.js"></script>
+<script src="js/pages.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

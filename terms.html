@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Terms and Conditions — The Method Mafia</title>
+<meta name="description" content="Terms and conditions for The Method Mafia">
+<link rel="icon" href="images/logo.jpg">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Hind+Siliguri:wght@400;600;700&family=Inter:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script src="config.js"></script>
+<script>try{var L=localStorage.getItem('mm_lang');if(L)document.documentElement.lang=L;}catch(e){}</script>
+<script async src="https://www.googletagmanager.com/gtag/js"></script>
+<script>
+window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}
+gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
+</script>
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+
+<header>
+  <div class="hdr-left">
+    <a href="index.html" style="display:flex;align-items:center;gap:11px">
+      <div class="hdr-logo"><img src="images/logo.jpg" alt="The Method Mafia"></div>
+      <div>
+        <div class="hdr-name">THE METHOD MAFIA</div>
+        <div class="hdr-sub" data-t="footerTag">Premium VIP Community</div>
+      </div>
+    </a>
+  </div>
+  <div class="hdr-right">
+    <div class="lang-wrap">
+      <button class="lang-btn" onclick="toggleLangMenu()">🌐 <span id="langLabel">EN</span> ▾</button>
+      <div class="lang-menu" id="langMenu">
+        <button class="lang-item" data-lang="en" onclick="setLang('en')">English</button>
+        <button class="lang-item" data-lang="bn" onclick="setLang('bn')">বাংলা</button>
+        <button class="lang-item" data-lang="hi" onclick="setLang('hi')">हिन्दी</button>
+      </div>
+    </div>
+    <a href="index.html#order" class="btn-gold" data-t="navJoin">Join Now</a>
+  </div>
+</header>
+
+<div class="page-wrap">
+<a href="index.html" class="back-link">← <span data-p="back">Back to home</span></a>
+<h1 class="page-title" data-p="tmTitle">Terms &amp; Conditions</h1>
+<p class="page-sub" data-p="tmSub"></p>
+<div class="page-body">
+
+<h3 data-p="tmH1"></h3><p data-p="tmP1"></p>
+<h3 data-p="tmH2"></h3><p data-p="tmP2"></p><p data-p="tmP2b"></p>
+<h3 data-p="tmH3"></h3>
+<ul><li data-p="tmB1"></li><li data-p="tmB2"></li><li data-p="tmB3"></li><li data-p="tmB4"></li><li data-p="tmB5"></li></ul>
+<h3 data-p="tmH4"></h3><p data-p="tmP4"></p>
+<ul><li data-p="tmC1"></li><li data-p="tmC2"></li><li data-p="tmC3"></li><li data-p="tmC4"></li><li data-p="tmC5"></li></ul>
+<h3 data-p="tmH5"></h3><p data-p="tmP5"></p>
+<ul><li data-p="tmD1"></li><li data-p="tmD2"></li><li data-p="tmD3"></li><li data-p="tmD4"></li></ul>
+<h3 data-p="tmH6"></h3><p data-p="tmP6"></p>
+<h3 data-p="tmH7"></h3><p data-p="tmP7"></p>
+<h3 data-p="tmH8"></h3><p data-p="tmP8"></p>
+<h3 data-p="tmH9"></h3><p data-p="tmP9"></p>
+<h3 data-p="tmH10"></h3><p data-p="tmP10"></p>
+<h3 data-p="tmH11"></h3><p data-p="tmP11"></p>
+<h3 data-p="tmH12"></h3>
+<p><span data-p="tmP12"></span> <span data-cfg="EMAIL"></span>
+   <span data-p="tmP12b"></span>
+   <a data-href="SUPPORT" target="_blank" style="color:var(--gold)" data-cfg="SUPPORT_HANDLE"></a><span data-p="tmP12c"></span></p>
+</div>
+</div>
+
+<footer>
+  <div class="ft-name">THE METHOD MAFIA</div>
+  <div class="ft-tag" data-t="footerTag">Premium VIP Community</div>
+  <div class="ft-links">
+    <a href="index.html">Home</a>
+    <a data-href="PUBLIC_CHANNEL" target="_blank" rel="noopener">📢 Telegram</a>
+    <a data-href="FACEBOOK_PAGE" target="_blank" rel="noopener">👍 Facebook</a>
+    <a href="about.html" data-t="ftAbout">About</a>
+    <a href="payment.html" data-t="ftPayment">Payment</a>
+    <a href="order-status.html" data-t="ftOrder">Order Status</a>
+    <a href="terms.html" data-t="ftTerms">Terms</a>
+    <a href="privacy.html" data-t="ftPrivacy">Privacy</a>
+    <a href="refund.html" data-t="ftRefund">Refund</a>
+  </div>
+  <div class="ft-copy">
+    © 2026 The Method Mafia. <span data-t="ftRights">All rights reserved.</span><br>
+    <span data-cfg="EMAIL">info@themethodmafia.com</span>
+  </div>
+</footer>
+
+<a class="float-tg" data-href="SUPPORT" target="_blank" rel="noopener" title="Telegram">✈️</a>
+<div class="toast" id="toast"></div>
+
+<script src="js/translations.js"></script>
+<script src="js/pages.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
