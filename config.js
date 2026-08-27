@@ -82,7 +82,7 @@ const CONFIG = {
      ⚠️ পরামর্শ: শুরুতে false রাখো।
         আসল order আসা শুরু হলে true করো। */
 
-  SHOW_LIVE_ACTIVITY: false,
+  SHOW_LIVE_ACTIVITY: true,
 
 
   /* ─── COUNTDOWN TIMER ───────────────────────────────────
