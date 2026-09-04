@@ -32,11 +32,12 @@ function setLang(code){
 
 function applyLang(){
   document.documentElement.lang = LANG;
-  // সব [data-t] element এ text বসাও
+  // সব [data-t] element এ text বসাও (HTML tag থাকলে innerHTML — যেমন strikethrough)
   document.querySelectorAll('[data-t]').forEach(el=>{
     const k = el.getAttribute('data-t');
     const val = t(k);
-    if(val) el.textContent = val;
+    if(!val) return;
+    if(val.indexOf('<') !== -1) el.innerHTML = val; else el.textContent = val;
   });
   // placeholder
   document.querySelectorAll('[data-tp]').forEach(el=>{
@@ -348,10 +349,12 @@ function updateOrderBox(){
 
   if(SELECTED_PLAN === 'entry'){
     lbl.textContent = t('planEntryName');
-    amt.textContent = showBDT
+    const amountText = showBDT
       ? CONFIG.ENTRY_USD + ' / ' + CONFIG.ENTRY_BDT
       : CONFIG.ENTRY_USD;
-    tot.textContent = CONFIG.ENTRY_USD;
+    const oldText = showBDT ? CONFIG.ENTRY_REGULAR_USD + ' / ' + CONFIG.ENTRY_REGULAR_BDT : CONFIG.ENTRY_REGULAR_USD;
+    amt.innerHTML = '<s class="price-old">'+oldText+'</s> '+amountText;
+    tot.innerHTML = '<s class="price-old">'+CONFIG.ENTRY_REGULAR_USD+'</s> '+CONFIG.ENTRY_USD;
   } else {
     lbl.textContent = t('planMonthlyName');
     amt.textContent = showBDT

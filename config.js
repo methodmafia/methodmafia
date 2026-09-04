@@ -21,7 +21,10 @@ const CONFIG = {
 
 
   /* ─── দাম ───────────────────────────────────────────────
-     দাম বদলাতে চাইলে এই ৪টা লাইন বদলাও */
+     Entry এর regular দাম (কাটাকাটি হয়ে দেখাবে) + discount দাম */
+
+  ENTRY_REGULAR_USD: "$80",
+  ENTRY_REGULAR_BDT: "৳১০,৪৮০",
 
   ENTRY_USD: "$30",
   ENTRY_BDT: "৳৩,৯৩০",
@@ -52,7 +55,7 @@ const CONFIG = {
   /* ─── TRACKING ──────────────────────────────────────────
      Pixel ID বদলাতে চাইলে এখানে */
 
-  META_PIXEL: "1041150375454334",
+  META_PIXEL: "1152543677214096",
   TIKTOK_PIXEL: "DA6ITFJC77U72JPLUACG",
   GA_ID: "G-HG9ELWF8ER",
 

@@ -116,7 +116,7 @@ gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
     <div class="stat"><div class="stat-n" id="sUpd">0</div><div class="stat-l" data-t="statUpdates">Updates</div></div>
   </div>
 
-  <a href="#order" class="cta-lg"><span data-t="heroCta">Join The Mafia</span> — <span data-cfg="ENTRY_USD">$30</span></a>
+  <a href="#order" class="cta-lg"><span data-t="heroCta">Join The Mafia</span> — <span class="price-old" data-cfg="ENTRY_REGULAR_USD">$80</span> <span data-cfg="ENTRY_USD">$30</span> <span class="price-save" data-t="priceSaveShort">SAVE 62%</span></a>
   <p class="cta-note">🔒 <span data-t="heroNote">Instant access after payment confirmation</span></p>
 </div>
 
@@ -235,9 +235,13 @@ gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
     <div class="price-card featured">
       <div class="p-badge" data-t="planEntryBadge">START HERE</div>
       <div class="p-name" data-t="planEntryName">Entry — First Month</div>
-      <div class="p-price" id="pEntryPrice">$30</div>
+      <div class="p-price-wrap">
+        <span class="p-price-old" data-cfg="ENTRY_REGULAR_USD">$80</span>
+        <span class="p-price" id="pEntryPrice">$30</span>
+      </div>
+      <div class="p-save-badge" data-t="priceSave">SAVE $50 — 62% OFF</div>
       <div class="p-freq" data-t="planEntryFreq">One-time payment</div>
-      <div class="p-bdt local-price" data-cfg="ENTRY_BDT">৳৩,৯৩০</div>
+      <div class="p-bdt local-price"><span class="local-old" data-cfg="ENTRY_REGULAR_BDT">৳১০,৪৮০</span> <span data-cfg="ENTRY_BDT">৳৩,৯৩০</span></div>
       <div class="p-feats">
         <div class="p-feat"><span class="chk">✓</span><span data-t="ef1"></span></div>
         <div class="p-feat"><span class="chk">✓</span><span data-t="ef2"></span></div>
@@ -298,7 +302,7 @@ gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
       <label class="lbl" data-t="lblPlan">Select Plan</label>
       <div class="plan-row">
         <button class="plan-opt sel" onclick="selectPlan(this,'entry')">
-          <span class="plan-ic">🚀</span><span data-t="optEntry">Entry $30</span>
+          <span class="plan-ic">🚀</span><span data-t="optEntry">Entry <s class="plan-old">$80</s> $30</span>
         </button>
         <button class="plan-opt" onclick="selectPlan(this,'monthly')">
           <span class="plan-ic">🔄</span><span data-t="optMonthly">Monthly $15</span>
@@ -365,7 +369,7 @@ gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
     <img src="images/logo.jpg" alt="" class="final-logo">
     <h2 class="sec-title" data-t="finalTitle">Ready When You Are</h2>
     <p class="final-text" data-t="finalText"></p>
-    <a href="#order" class="cta-lg"><span data-t="finalBtn">Join Premium Group</span> — <span data-cfg="ENTRY_USD">$30</span></a>
+    <a href="#order" class="cta-lg"><span data-t="finalBtn">Join Premium Group</span> — <span class="price-old" data-cfg="ENTRY_REGULAR_USD">$80</span> <span data-cfg="ENTRY_USD">$30</span> <span class="price-save" data-t="priceSaveShort">SAVE 62%</span></a>
     <div class="final-or" data-t="finalOr">or</div>
     <a class="tg-btn" data-href="PUBLIC_CHANNEL" target="_blank" rel="noopener">
       ✈️ <span data-t="tgBtn">Join Free Channel</span>
