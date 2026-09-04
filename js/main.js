@@ -270,15 +270,18 @@ function renderReviews(){
     'linear-gradient(135deg,#10b981,#3b82f6)',
     'linear-gradient(135deg,#8b5cf6,#ec4899)'
   ];
-  box.innerHTML = list.map(([ini,name,date,text],i)=>`
+  box.innerHTML = list.map(([ini,name,date,text,stars],i)=>{
+    const s = (stars === 4) ? '★★★★<span class="t-star-dim">★</span>' : '★★★★★';
+    return `
     <div class="t-card">
       <div class="t-head">
         <div class="t-av" style="background:${colors[i%4]}">${ini}</div>
         <div><div class="t-name">${name}</div><div class="t-date">${date}</div></div>
       </div>
-      <div class="t-stars">★★★★★</div>
+      <div class="t-stars">${s}</div>
       <div class="t-text">${text}</div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 /* ─── স্থানীয় মুদ্রা (৳) শুধু বাংলায় দেখাবে ─── */
@@ -408,18 +411,28 @@ function submitOrder(){
     [name,email,tg].forEach(f=>{ if(!f.value.trim()) f.classList.add('error'); });
     return toast(t('errFill'), true);
   }
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim())){
+  // Name: must be at least 2 chars and contain at least one letter (not purely digits/symbols)
+  const nameVal = name.value.trim();
+  if(nameVal.length < 2 || !/[\p{L}]/u.test(nameVal)){
+    name.classList.add('error');
+    return toast(t('errName'), true);
+  }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.value.trim())){
     email.classList.add('error');
     return toast(t('errEmail'), true);
   }
+  // Telegram: strip leading @, must be 5-32 chars, letters/digits/underscore, start with a letter
+  let handle = tg.value.trim().replace(/^@+/, '').replace(/\s+/g,'');
+  if(!/^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(handle)){
+    tg.classList.add('error');
+    return toast(t('errTgFormat'), true);
+  }
+  handle = '@' + handle;
   if(!SELECTED_PAY){
     const pb = document.getElementById('payBadges');
     if(pb){ pb.classList.add('error'); pb.scrollIntoView({behavior:'smooth',block:'center'}); }
     return toast(t('errPay'), true);
   }
-
-  let handle = tg.value.trim();
-  if(handle[0] !== '@') handle = '@' + handle;
 
   const orderId = makeOrderId();
   const payload = {
@@ -499,17 +512,33 @@ function initScroll(){
   }, {passive:true});
 }
 
-/* ─── লাইভ অ্যাক্টিভিটি পপআপ ─── */
+/* ─── লাইভ অ্যাক্টিভিটি পপআপ ───
+   Random name × city combo — same combo won't repeat within a session */
 function initLiveActivity(){
   if(!CONFIG.SHOW_LIVE_ACTIVITY) return;
   const pop = document.getElementById('livePop');
   if(!pop) return;
-  let idx = 0;
+  const recent = [];
+  const MAX_RECENT = 40;
+
+  function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
 
   function show(){
-    const names = LIVE_NAMES[LANG] || LIVE_NAMES.en;
-    const [nm, city] = names[idx % names.length];
-    idx++;
+    const data = LIVE_NAMES[LANG] || LIVE_NAMES.en;
+    // legacy fallback if data is old [[name,city],...] format
+    let nm, city;
+    if(Array.isArray(data)){
+      const p = pick(data); nm = p[0]; city = p[1];
+    } else {
+      let combo;
+      for(let tries=0; tries<12; tries++){
+        nm = pick(data.names); city = pick(data.cities);
+        combo = nm+'|'+city;
+        if(recent.indexOf(combo) === -1) break;
+      }
+      recent.push(combo);
+      if(recent.length > MAX_RECENT) recent.shift();
+    }
     const mins = 2 + Math.floor(Math.random()*24);
     pop.innerHTML = `
       <div class="live-av">${nm.charAt(0)}</div>
