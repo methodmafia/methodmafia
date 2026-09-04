@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /order-status.html
+
+Sitemap: https://themethodmafia.com/sitemap.xml
