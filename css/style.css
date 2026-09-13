@@ -66,11 +66,13 @@ header{
   box-shadow:0 0 12px rgba(255,215,0,.45);
 }
 .hdr-logo img{width:100%;height:100%;object-fit:cover}
+.hdr-text{min-width:0;overflow:hidden}
 .hdr-name{
   font-family:var(--font-display);font-size:12.5px;font-weight:900;
   color:var(--gold);letter-spacing:2.2px;line-height:1.25;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;
 }
-.hdr-sub{font-size:8.5px;color:var(--gold-dim);letter-spacing:2.5px;text-transform:uppercase}
+.hdr-sub{font-size:8.5px;color:var(--gold-dim);letter-spacing:2.5px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hdr-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
 
 /* Language switcher */
@@ -650,9 +652,19 @@ footer{
 /* ═══ RESPONSIVE ═══ */
 @media(max-width:700px){
   header{padding:9px 14px}
-  .hdr-name{font-size:11px;letter-spacing:1.6px}
-  .hdr-sub{font-size:7.5px;letter-spacing:1.8px}
-  .btn-gold{padding:8px 14px;font-size:11px}
+  /* Tighter letter-spacing so wordmark fits without clipping */
+  .hdr-name{font-size:11px;letter-spacing:0.8px}
+  .hdr-sub{font-size:7.5px;letter-spacing:1px}
+  /* ── Tap targets: minimum 44 × 44 px ── */
+  .btn-gold{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 14px;font-size:11px}
+  .lang-btn{min-height:44px;padding:0 11px}
+  .tab-btn{min-height:44px;padding:8px 13px}
+  .scroll-top{width:44px;height:44px;bottom:20px;left:18px}
+  /* ── Exit popup: prevent off-screen clipping on short viewports ── */
+  .exit-box{padding:24px 20px;max-height:88vh;overflow-y:auto}
+  .exit-icon{font-size:28px;margin-bottom:10px}
+  .exit-title{font-size:17px}
+  /* ── Layout ── */
   .hero{padding:42px 16px 38px}
   .logo-wrap,.logo-img{width:145px;height:145px}
   .logo-ring{width:178px;height:178px}
@@ -663,7 +675,6 @@ footer{
   .cd-box{min-width:52px;padding:8px 11px}
   .cd-n{font-size:24px}
   .float-tg{width:46px;height:46px;font-size:21px;bottom:18px;right:18px}
-  .scroll-top{width:36px;height:36px;bottom:20px;left:18px}
   .live-pop{max-width:230px;bottom:18px;left:18px;padding:9px 12px}
   .toast{bottom:76px;right:18px;max-width:250px}
 }
@@ -741,10 +752,11 @@ footer{
 }
 @media(max-width:700px){
   .sticky-cta{display:flex}
-  /* push toast/float above sticky bar */
+  /* push overlapping elements above sticky bar (~48px tall) */
   .toast{bottom:80px}
   .float-tg{bottom:74px}
-  body.sticky-visible .scroll-top{bottom:78px}
+  body.sticky-visible .scroll-top{bottom:80px}
+  body.sticky-visible .live-pop{bottom:80px}
 }
 
 /* ═══ UPSELL BOX (A2) ═══ */

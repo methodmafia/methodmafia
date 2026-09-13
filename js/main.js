@@ -540,14 +540,17 @@ function initScroll(){
     /* ── Mobile sticky CTA (A3) — show after hero, hide near order form ── */
     if(sticky){
       const orderSec = document.getElementById('order');
+      let isVisible;
       if(orderSec){
         const ot = orderSec.getBoundingClientRect().top;
         const pastHero = scrollY > 300;
         const nearOrder = ot < 200 && ot > -orderSec.offsetHeight;
-        sticky.classList.toggle('show', pastHero && !nearOrder);
+        isVisible = pastHero && !nearOrder;
       } else {
-        sticky.classList.toggle('show', scrollY > 300);
+        isVisible = scrollY > 300;
       }
+      sticky.classList.toggle('show', isVisible);
+      document.body.classList.toggle('sticky-visible', isVisible);
     }
   }, {passive:true});
 }
