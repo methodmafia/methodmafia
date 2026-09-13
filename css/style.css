@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════════════
    THE METHOD MAFIA — STYLESHEET
-   সব রঙ ও ডিজাইন এখানে। রঙ বদলাতে চাইলে :root এ বদলাও।
+   সব রং ও ডিজাইন এখানে। রং বদলাতে চাইলে :root এ বদলাও।
    ═══════════════════════════════════════════════════════════ */
 
-/* ─── রঙ (এখানে বদলালে পুরো সাইটে বদলাবে) ─── */
+/* ─── রং (এখানে বদলালে পুরো সাইটে বদলাবে) ─── */
 :root{
   --gold:#FFD700;
   --gold-2:#FFA500;
@@ -401,18 +401,29 @@ html[lang="bn"] h2.sec-title,html[lang="hi"] h2.sec-title{letter-spacing:.8px}
 .price-old{
   text-decoration:line-through;
   text-decoration-color:#ef4444;
-  text-decoration-thickness:2.5px;
-  color:rgba(230,170,50,.82);           /* visible gold on dark bg */
-  font-weight:700;margin-right:4px;font-size:.85em;
+  text-decoration-thickness:3px;
+  color:rgba(230,170,50,.88);           /* visible gold on dark bg */
+  font-weight:800;margin-right:5px;font-size:.9em;
 }
-/* ── On the YELLOW/GOLD CTA button the above is invisible:
-   override to dark so it reads clearly against the gradient ── */
+/* ── On YELLOW/GOLD CTA buttons: dark, bold, thick strike for "was $100" urgency ── */
 .cta-lg .price-old,
 .sticky-cta .price-old{
-  color:rgba(0,0,0,.52);               /* dark = readable on yellow */
-  text-decoration-color:rgba(120,0,0,.8); /* dark red slash */
-  text-decoration-thickness:3px;
-  font-weight:800;
+  color:rgba(0,0,0,.72);               /* dark — legible on gold gradient */
+  font-size:.95em;                     /* larger — closer to $30 size so it reads */
+  font-weight:900;                     /* maximum weight */
+  text-decoration-color:rgba(160,0,0,.9); /* deep red slash */
+  text-decoration-thickness:4px;       /* thick = unmissably crossed out */
+  margin-right:6px;
+  letter-spacing:-.3px;
+}
+@media(max-width:700px){
+  /* Mobile: make regular-price strike even more prominent */
+  .cta-lg .price-old,
+  .sticky-cta .price-old{
+    font-size:1em;                     /* full-size on mobile for clarity */
+    text-decoration-thickness:5px;
+    color:rgba(0,0,0,.78);
+  }
 }
 .price-save{display:inline-block;margin-left:8px;padding:3px 10px;font-size:.55em;font-weight:800;letter-spacing:.8px;color:#0a0a0a;background:linear-gradient(135deg,#ef4444,#f59e0b);border-radius:14px;vertical-align:middle;text-transform:uppercase;text-shadow:none;box-shadow:0 3px 10px rgba(239,68,68,.4)}
 /* Plan selector struck price (dark bg) */
