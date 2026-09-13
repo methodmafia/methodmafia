@@ -213,11 +213,12 @@ function sendDailyDigest() {
 
   if (todayOrders.length > 0) {
     body += '<h3>New Orders</h3><table border="1" cellpadding="6" style="border-collapse:collapse">';
-    body += '<tr><th>Order ID</th><th>Name</th><th>Telegram</th><th>Plan</th><th>Payment</th><th>Source</th></tr>';
+    body += '<tr><th>Order ID</th><th>Name</th><th>Telegram</th><th>Plan</th><th>Payment</th><th>Source</th><th>Medium</th><th>Campaign</th></tr>';
     todayOrders.forEach(r => {
       body += '<tr><td>' + r[COL.ORDER_ID] + '</td><td>' + r[COL.NAME] + '</td>'
             + '<td>' + r[COL.TELEGRAM] + '</td><td>' + r[COL.PLAN] + '</td>'
-            + '<td>' + r[COL.PAYMENT] + '</td><td>' + (r[COL.SOURCE]||'direct') + '</td></tr>';
+            + '<td>' + r[COL.PAYMENT] + '</td><td>' + (r[COL.SOURCE]||'direct') + '</td>'
+            + '<td>' + (r[COL.MEDIUM]||'') + '</td><td>' + (r[COL.CAMPAIGN]||'') + '</td></tr>';
     });
     body += '</table>';
   }
