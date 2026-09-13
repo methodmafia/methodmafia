@@ -81,12 +81,23 @@ function trySendPurchaseForRow_(sheet, row) {
     ttclid: ttclid
   });
 
-  if (results.meta === 'ok' || results.tiktok === 'ok') {
+  if (capiShouldMarkSent_(results)) {
     sheet.getRange(row, COL.NOTES + 1).setValue(capiAppendSentNote_(notes));
   }
 
   Logger.log('CAPI Purchase ' + orderId + ': ' + JSON.stringify(results));
   return { sent: true, results: results };
+}
+
+function capiShouldMarkSent_(results) {
+  var attempted = [];
+  if (results.meta && results.meta !== 'skipped') attempted.push(results.meta);
+  if (results.tiktok && results.tiktok !== 'skipped') attempted.push(results.tiktok);
+  if (!attempted.length) return false;
+  for (var i = 0; i < attempted.length; i++) {
+    if (attempted[i] !== 'ok') return false;
+  }
+  return true;
 }
 
 function sendPurchaseCapi_(opts) {
@@ -116,6 +127,7 @@ function sendMetaPurchase_(props, opts, eventTime, email, telegram) {
       event_name: 'Purchase',
       event_time: eventTime,
       event_id: opts.orderId || '',
+      event_source_url: 'https://themethodmafia.com/',
       action_source: 'website',
       user_data: userData,
       custom_data: {
@@ -160,6 +172,7 @@ function sendTikTokPurchase_(props, opts, eventTime, email, telegram) {
       event_time: eventTime,
       event_id: opts.orderId || '',
       user: user,
+      page: { url: 'https://themethodmafia.com/' },
       properties: {
         value: CAPI_PURCHASE_VALUE,
         currency: 'USD',
@@ -193,8 +206,11 @@ function sendTikTokPurchase_(props, opts, eventTime, email, telegram) {
 function onOrderStatusEdit(e) {
   if (!e || !e.range) return;
   var sheet = e.range.getSheet();
-  var col = e.range.getColumn();
-  if (col !== COL.STATUS + 1) return;
+  if (typeof SHEET_NAME !== 'undefined' && sheet.getName() !== SHEET_NAME) return;
+  var startCol = e.range.getColumn();
+  var endCol = startCol + e.range.getNumColumns() - 1;
+  var statusCol = COL.STATUS + 1;
+  if (statusCol < startCol || statusCol > endCol) return;
 
   var start = e.range.getRow();
   var n = e.range.getNumRows();

@@ -26,14 +26,17 @@ test('every public HTML page loads config.js then js/pixels.js', () => {
     const rel = path.relative(ROOT, file);
     const inBlog = rel.startsWith('blog' + path.sep);
     const configSrc = inBlog ? '../config.js' : 'config.js';
+    const libSrc = inBlog ? '../js/tracking-lib.js' : 'js/tracking-lib.js';
     const pixelsSrc = inBlog ? '../js/pixels.js' : 'js/pixels.js';
 
     assert.ok(html.indexOf('src="' + configSrc + '"') !== -1, rel + ' must load ' + configSrc);
+    assert.ok(html.indexOf('src="' + libSrc + '"') !== -1, rel + ' must load ' + libSrc);
     assert.ok(html.indexOf('src="' + pixelsSrc + '"') !== -1, rel + ' must load ' + pixelsSrc);
 
     const cfgAt = html.indexOf('src="' + configSrc + '"');
+    const libAt = html.indexOf('src="' + libSrc + '"');
     const pxAt = html.indexOf('src="' + pixelsSrc + '"');
-    assert.ok(cfgAt < pxAt, rel + ' must load pixels.js after config.js');
+    assert.ok(cfgAt < libAt && libAt < pxAt, rel + ' must load config → tracking-lib → pixels');
   });
 });
 

@@ -691,7 +691,11 @@ function initPurchaseConfirm(){
     if(typeof fbq !== 'undefined'){
       fbq('track', decision.eventName, extra, decision.eventId ? {eventID: decision.eventId} : undefined);
     }
-    if(typeof ttq !== 'undefined') ttq.track(decision.tiktokEvent, extra);
+    if(typeof ttq !== 'undefined'){
+      var ttExtra = {currency:decision.currency, value:decision.value, content_name:decision.contentName};
+      if(decision.eventId) ttExtra.event_id = decision.eventId;
+      ttq.track(decision.tiktokEvent, ttExtra);
+    }
     if(typeof gtag !== 'undefined') gtag('event','purchase',{
       transaction_id: decision.eventId,
       currency:decision.currency, value:decision.value,

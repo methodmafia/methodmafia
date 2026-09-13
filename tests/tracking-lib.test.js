@@ -91,17 +91,28 @@ test('ViewContent fires once per session', () => {
   assert.equal(lib.shouldFireViewContent(store), false);
 });
 
-test('support / public-channel hrefs are Contact targets; Facebook is not', () => {
+test('support / public-channel hrefs are Contact targets; Facebook and Full List are not', () => {
   const cfg = {
     SUPPORT: 'https://t.me/MMHQ_Support',
     PUBLIC_CHANNEL: 'https://t.me/TheMethodMafia',
-    FACEBOOK_PAGE: 'https://www.facebook.com/share/19Q7KrfTBT/'
+    FACEBOOK_PAGE: 'https://www.facebook.com/share/19Q7KrfTBT/',
+    FULL_LIST_POST: 'https://t.me/TheMethodmafia1/95'
   };
   assert.equal(lib.isContactHref('https://t.me/MMHQ_Support', cfg), true);
   assert.equal(lib.isContactHref('https://t.me/MMHQ_Support?text=hi', cfg), true);
   assert.equal(lib.isContactHref('https://t.me/TheMethodMafia', cfg), true);
   assert.equal(lib.isContactHref(cfg.FACEBOOK_PAGE, cfg), false);
   assert.equal(lib.isContactHref('https://themethodmafia.com/about.html', cfg), false);
+  assert.equal(lib.isContactHref(cfg.FULL_LIST_POST, cfg), false);
+});
+
+test('reads click IDs from localStorage when sessionStorage is empty', () => {
+  const session = memoryStore();
+  const local = memoryStore({ mm_fbclid: 'from_local', mm_ttclid: 'tt_local', mm_fbc: 'fb.1.1.from_local' });
+  const ids = lib.captureClickIds('', session, local);
+  assert.equal(ids.fbclid, 'from_local');
+  assert.equal(ids.ttclid, 'tt_local');
+  assert.equal(ids.fbc, 'fb.1.1.from_local');
 });
 
 test('advanced matching passes email and telegram as external_id', () => {

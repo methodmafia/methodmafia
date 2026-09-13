@@ -41,6 +41,7 @@ test('Meta CAPI Purchase payload is $30 USD with hashed email and orderId event_
   assert.equal(ev.custom_data.value, 30);
   assert.equal(ev.custom_data.currency, 'USD');
   assert.equal(ev.custom_data.content_name, 'Entry');
+  assert.equal(ev.event_source_url, 'https://themethodmafia.com/');
 });
 
 test('TikTok Events API uses CompletePayment with $30 and hashed email', () => {
@@ -64,6 +65,16 @@ test('TikTok Events API uses CompletePayment with $30 and hashed email', () => {
   assert.equal(ev.user.ttclid, 'TtClick88');
   assert.equal(ev.properties.value, 30);
   assert.equal(ev.properties.currency, 'USD');
+  assert.equal(ev.page.url, 'https://themethodmafia.com/');
+});
+
+test('PURCHASE_SENT only after every configured API succeeds', () => {
+  assert.equal(capi.shouldMarkPurchaseSent({ meta: 'ok', tiktok: 'ok' }), true);
+  assert.equal(capi.shouldMarkPurchaseSent({ meta: 'ok', tiktok: 'skipped' }), true);
+  assert.equal(capi.shouldMarkPurchaseSent({ meta: 'skipped', tiktok: 'ok' }), true);
+  assert.equal(capi.shouldMarkPurchaseSent({ meta: 'ok', tiktok: 'error' }), false);
+  assert.equal(capi.shouldMarkPurchaseSent({ meta: 'error', tiktok: 'ok' }), false);
+  assert.equal(capi.shouldMarkPurchaseSent({ meta: 'skipped', tiktok: 'skipped' }), false);
 });
 
 test('notes helper appends PURCHASE_SENT without duplicating', () => {
@@ -82,6 +93,8 @@ test('Apps Script CAPI uses Script Properties and documented endpoints', () => {
   assert.ok(gs.indexOf('https://business-api.tiktok.com/open_api/v1.3/event/track/') !== -1);
   assert.ok(gs.indexOf('CompletePayment') !== -1);
   assert.ok(gs.indexOf('onOrderStatusEdit') !== -1);
+  assert.ok(gs.indexOf('event_source_url') !== -1);
+  assert.ok(gs.indexOf('capiShouldMarkSent_') !== -1);
   assert.ok(gs.indexOf('access_token=EAA') === -1);
   assert.ok(!/META_ACCESS_TOKEN\s*[:=]\s*['"][^'"]+['"]/.test(gs));
 });

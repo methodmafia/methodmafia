@@ -72,6 +72,7 @@
         event_name: 'Purchase',
         event_time: eventTime,
         event_id: opts.orderId || '',
+        event_source_url: opts.eventSourceUrl || 'https://themethodmafia.com/',
         action_source: 'website',
         user_data: userData,
         custom_data: {
@@ -102,6 +103,7 @@
         event_time: eventTime,
         event_id: opts.orderId || '',
         user: user,
+        page: { url: opts.pageUrl || 'https://themethodmafia.com/' },
         properties: {
           value: PURCHASE_VALUE,
           currency: 'USD',
@@ -109,6 +111,18 @@
         }
       }]
     };
+  }
+
+  function shouldMarkPurchaseSent(results){
+    results = results || {};
+    var attempted = [];
+    if(results.meta && results.meta !== 'skipped') attempted.push(results.meta);
+    if(results.tiktok && results.tiktok !== 'skipped') attempted.push(results.tiktok);
+    if(!attempted.length) return false;
+    for(var i = 0; i < attempted.length; i++){
+      if(attempted[i] !== 'ok') return false;
+    }
+    return true;
   }
 
   function appendPurchaseSentNote(notes){
@@ -130,6 +144,7 @@
     PURCHASE_VALUE: PURCHASE_VALUE,
     PURCHASE_SENT: PURCHASE_SENT,
     shouldSendPurchase: shouldSendPurchase,
+    shouldMarkPurchaseSent: shouldMarkPurchaseSent,
     buildMetaPurchasePayload: buildMetaPurchasePayload,
     buildTikTokPurchasePayload: buildTikTokPurchasePayload,
     appendPurchaseSentNote: appendPurchaseSentNote,

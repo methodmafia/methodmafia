@@ -689,10 +689,11 @@ This trigger is required. A normal `onEdit` cannot call the ads APIs.
 ### 4) Test
 
 **A. Token check (editor)**
-1. Function dropdown → `testCapiConnection` → ▶ Run
-2. **Executions** (left) → open the run → log should show `meta: ok` and/or `tiktok: ok`
-3. Facebook Events Manager → Test events / Overview
-4. TikTok Events Manager → Test events / Overview  
+1. Optional but safer: add Script properties `META_TEST_EVENT_CODE` and `TIKTOK_TEST_EVENT_CODE` from Events Manager (Test events). Without these, `testCapiConnection` sends a real test Purchase.
+2. Function dropdown → `testCapiConnection` → ▶ Run
+3. **Executions** (left) → open the run → log should show `meta: ok` and/or `tiktok: ok`
+4. Facebook Events Manager → Test events / Overview
+5. TikTok Events Manager → Test events / Overview  
    Event: Meta `Purchase` / TikTok `CompletePayment`, value `30`, event_id starts with `TEST-`
 
 **B. Real flow (Sheet)**

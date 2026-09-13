@@ -67,9 +67,9 @@
     if(ttclid) writeBoth(store, secondary, TTCLID_KEY, ttclid);
 
     return {
-      fbclid: fbclid || safeGet(store, FBCLID_KEY),
-      ttclid: ttclid || safeGet(store, TTCLID_KEY),
-      fbc: (fbclid ? buildFbc(fbclid) : '') || safeGet(store, FBC_KEY)
+      fbclid: fbclid || safeGet(store, FBCLID_KEY) || safeGet(secondary, FBCLID_KEY),
+      ttclid: ttclid || safeGet(store, TTCLID_KEY) || safeGet(secondary, TTCLID_KEY),
+      fbc: (fbclid ? buildFbc(fbclid) : '') || safeGet(store, FBC_KEY) || safeGet(secondary, FBC_KEY)
     };
   }
 
@@ -161,7 +161,7 @@
     if(!href || !target) return false;
     var a = String(href).split('?')[0].replace(/\/$/, '').toLowerCase();
     var b = String(target).split('?')[0].replace(/\/$/, '').toLowerCase();
-    return a === b || String(href).toLowerCase().indexOf(b) === 0;
+    return a === b;
   }
 
   function isContactHref(href, cfg){
