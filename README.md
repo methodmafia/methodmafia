@@ -17,6 +17,9 @@ css/style.css       All styling
 js/translations.js  Main page text (3 languages)
 js/pages.js         Inner page text (3 languages)
 js/main.js          All functionality
+js/tracking-lib.js  Click IDs, UTM, event rules
+js/pixels.js        Shared Meta + TikTok pixels
+apps-script/        Google Sheet + CAPI Purchase
 images/             Logo & banner
 ```
 

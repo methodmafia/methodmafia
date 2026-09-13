@@ -343,6 +343,9 @@ function selectPlan(el, plan){
   el.classList.add('sel');
   SELECTED_PLAN = plan;
   updateOrderBox();
+  if(window.MMPixels && typeof MMPixels.fireViewContent === 'function'){
+    MMPixels.fireViewContent();
+  }
 }
 function updateOrderBox(){
   const lbl = document.getElementById('oPlan');
@@ -380,22 +383,38 @@ function makeOrderId(){
   return `MM-${y}-${rnd}`;
 }
 
-/* ─── UTM + source capture (B4) ─── */
+/* ─── UTM + click IDs (fbclid / ttclid) ─── */
 function getUtmData(){
   try{
+    if(typeof MMTracking !== 'undefined'){
+      const attr = MMTracking.getAttribution(location.search, sessionStorage, localStorage);
+      return {
+        utm_source: attr.utm_source,
+        utm_medium: attr.utm_medium,
+        utm_campaign: attr.utm_campaign,
+        fbclid: attr.fbclid || '',
+        ttclid: attr.ttclid || ''
+      };
+    }
     const p = new URLSearchParams(location.search);
     const src = p.get('utm_source');
     const med = p.get('utm_medium');
     const cam = p.get('utm_campaign');
+    const fbclid = p.get('fbclid');
+    const ttclid = p.get('ttclid');
     if(src) sessionStorage.setItem('mm_utm_source', src);
     if(med) sessionStorage.setItem('mm_utm_medium', med);
     if(cam) sessionStorage.setItem('mm_utm_campaign', cam);
+    if(fbclid){ sessionStorage.setItem('mm_fbclid', fbclid); localStorage.setItem('mm_fbclid', fbclid); }
+    if(ttclid){ sessionStorage.setItem('mm_ttclid', ttclid); localStorage.setItem('mm_ttclid', ttclid); }
     return {
       utm_source: sessionStorage.getItem('mm_utm_source') || 'direct',
       utm_medium: sessionStorage.getItem('mm_utm_medium') || '',
-      utm_campaign: sessionStorage.getItem('mm_utm_campaign') || ''
+      utm_campaign: sessionStorage.getItem('mm_utm_campaign') || '',
+      fbclid: sessionStorage.getItem('mm_fbclid') || localStorage.getItem('mm_fbclid') || '',
+      ttclid: sessionStorage.getItem('mm_ttclid') || localStorage.getItem('mm_ttclid') || ''
     };
-  }catch(e){ return {utm_source:'direct', utm_medium:'', utm_campaign:''}; }
+  }catch(e){ return {utm_source:'direct', utm_medium:'', utm_campaign:'', fbclid:'', ttclid:''}; }
 }
 
 /* legacy wrapper */
@@ -450,6 +469,9 @@ function submitOrder(){
 
   const orderId = makeOrderId();
   const utmData = getUtmData();
+  const track = (typeof MMTracking !== 'undefined')
+    ? MMTracking.buildSheetTrackingFields(utmData)
+    : {source:utmData.utm_source, medium:utmData.utm_medium, campaign:utmData.utm_campaign, fbclid:utmData.fbclid||'', ttclid:utmData.ttclid||''};
   const payload = {
     orderId: orderId,
     name: name.value.trim(),
@@ -458,25 +480,41 @@ function submitOrder(){
     plan: SELECTED_PLAN === 'entry' ? 'Entry' : 'Monthly',
     amount: SELECTED_PLAN === 'entry' ? CONFIG.ENTRY_USD : CONFIG.MONTHLY_USD,
     payment: SELECTED_PAY,
-    source: utmData.utm_source,
-    medium: utmData.utm_medium,
-    campaign: utmData.utm_campaign
+    source: track.source,
+    medium: track.medium,
+    campaign: track.campaign,
+    fbclid: track.fbclid,
+    ttclid: track.ttclid
   };
 
   btn.disabled = true;
 
-  /* ── Pixel / Analytics events (B2/B3) ── */
-  const value = SELECTED_PLAN === 'entry' ? 30 : 15;
-  if(typeof fbq !== 'undefined'){
-    fbq('track','Lead',{currency:'USD',value:value});
-    fbq('track','InitiateCheckout',{currency:'USD',value:value,content_name:payload.plan});
+  /* ── Pixel / Analytics events — Lead + InitiateCheckout ── */
+  const ev = (typeof MMTracking !== 'undefined')
+    ? MMTracking.checkoutEventValue(payload.plan)
+    : {value: SELECTED_PLAN === 'entry' ? 30 : 15, contentName: payload.plan, currency:'USD'};
+  if(typeof MMTracking !== 'undefined'){
+    const am = MMTracking.advancedMatching(payload.email, payload.telegram);
+    if(typeof fbq !== 'undefined' && CONFIG.META_PIXEL){
+      fbq('init', CONFIG.META_PIXEL, am);
+    }
+    if(typeof ttq !== 'undefined' && typeof ttq.identify === 'function'){
+      ttq.identify({email: am.em, external_id: am.external_id});
+    }
   }
-  if(typeof ttq !== 'undefined') ttq.track('InitiateCheckout',{value:value,currency:'USD'});
+  if(typeof fbq !== 'undefined'){
+    fbq('track','Lead',{currency:ev.currency,value:ev.value,content_name:ev.contentName},{eventID:orderId+'_lead'});
+    fbq('track','InitiateCheckout',{currency:ev.currency,value:ev.value,content_name:ev.contentName},{eventID:orderId+'_ic'});
+  }
+  if(typeof ttq !== 'undefined'){
+    ttq.track('SubmitForm',{value:ev.value,currency:ev.currency,content_name:ev.contentName});
+    ttq.track('InitiateCheckout',{value:ev.value,currency:ev.currency,content_name:ev.contentName});
+  }
   if(typeof gtag !== 'undefined'){
-    gtag('event','generate_lead',{currency:'USD',value:value,plan:payload.plan});
+    gtag('event','generate_lead',{currency:ev.currency,value:ev.value,plan:payload.plan});
     gtag('event','begin_checkout',{
-      currency:'USD',value:value,
-      items:[{item_id:SELECTED_PLAN,item_name:payload.plan,price:value,quantity:1}]
+      currency:ev.currency,value:ev.value,
+      items:[{item_id:SELECTED_PLAN,item_name:payload.plan,price:ev.value,quantity:1}]
     });
   }
 
@@ -634,22 +672,30 @@ function initExitPopup(){
   ov.addEventListener('click', e=>{ if(e.target === ov) closeExit(); });
 }
 
-/* ─── Purchase event on confirmed URL (B2/B3)
-   Swa sends customer: /order-status.html?orderId=MM-XXXX&confirmed=1
-   Page fires GA Purchase when confirmed=1 is present ─── */
+/* ─── Purchase backup on confirmed=1 — Entry only, value $30.
+   Primary Purchase is Apps Script CAPI when Status → Active. ─── */
 function initPurchaseConfirm(){
   try{
     const p = new URLSearchParams(location.search);
-    if(p.get('confirmed') !== '1') return;
-    const oid = p.get('orderId') || '';
-    const plan = p.get('plan') || 'Entry';
-    const value = plan === 'Monthly' ? 15 : 30;
-    if(typeof fbq !== 'undefined') fbq('track','Purchase',{currency:'USD',value:value});
-    if(typeof ttq !== 'undefined') ttq.track('CompletePayment',{value:value,currency:'USD'});
+    const decision = (typeof MMTracking !== 'undefined')
+      ? MMTracking.purchaseBackupEvent({
+          confirmed: p.get('confirmed'),
+          plan: p.get('plan') || 'Entry',
+          orderId: p.get('orderId') || ''
+        })
+      : {fire: p.get('confirmed')==='1' && (p.get('plan')||'Entry') !== 'Monthly',
+         eventName:'Purchase', tiktokEvent:'CompletePayment',
+         value:30, currency:'USD', contentName:'Entry', eventId: p.get('orderId')||''};
+    if(!decision.fire) return;
+    const extra = {currency:decision.currency, value:decision.value, content_name:decision.contentName};
+    if(typeof fbq !== 'undefined'){
+      fbq('track', decision.eventName, extra, decision.eventId ? {eventID: decision.eventId} : undefined);
+    }
+    if(typeof ttq !== 'undefined') ttq.track(decision.tiktokEvent, extra);
     if(typeof gtag !== 'undefined') gtag('event','purchase',{
-      transaction_id: oid,
-      currency:'USD', value:value,
-      items:[{item_id:plan.toLowerCase(),item_name:'Method Mafia '+plan,price:value,quantity:1}]
+      transaction_id: decision.eventId,
+      currency:decision.currency, value:decision.value,
+      items:[{item_id:'entry',item_name:'Method Mafia Entry',price:decision.value,quantity:1}]
     });
   }catch(e){}
 }

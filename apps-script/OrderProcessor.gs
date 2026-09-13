@@ -18,6 +18,7 @@
  *        marks order Active + logs timestamp
  *  • C3: Daily digest email to DIGEST_EMAIL
  *  • C4: Expiry reminder email (members expiring in ≤3 days)
+ *  • CAPI: Status → Active (Entry) sends Purchase via CapiPurchase.gs
  * ──────────────────────────────────────────────────────────────
  */
 
@@ -43,7 +44,9 @@ const COL = {
   STATUS     : 11,  // L
   EXPIRY     : 12,  // M
   DAYS_LEFT  : 13,  // N  ← formula-driven
-  NOTES      : 14   // O
+  NOTES      : 14,  // O
+  FBCLID     : 15,  // P  ← Facebook click id (ads)
+  TTCLID     : 16   // Q  ← TikTok click id (ads)
 };
 
 /* ────────────────────────────────────────────────────────────
@@ -76,7 +79,9 @@ function doPost(e) {
       'Pending',                  // L: Status
       expiry.toISOString().split('T')[0],  // M: Expiry (30 days)
       '',                         // N: Days Left (formula added below)
-      isDupe ? '⚠️ DUPLICATE' : ''         // O: Notes
+      isDupe ? '⚠️ DUPLICATE' : '',        // O: Notes
+      data.fbclid || '',          // P: FBclid
+      data.ttclid || ''           // Q: TTclid
     ];
 
     const lastRow = sheet.getLastRow();
@@ -121,9 +126,18 @@ function doGet(e) {
       return htmlResponse('<h2>❌ Not Found</h2><p>Order ID <strong>' + orderId + '</strong> not found.</p>');
     }
     sheet.getRange(row, COL.STATUS + 1).setValue('Active');
-    sheet.getRange(row, COL.NOTES + 1).setValue('Activated: ' + new Date().toLocaleString());
+    var prevNotes = sheet.getRange(row, COL.NOTES + 1).getValue();
+    var activated = 'Activated: ' + new Date().toLocaleString();
+    sheet.getRange(row, COL.NOTES + 1).setValue(
+      prevNotes ? (String(prevNotes) + ' | ' + activated) : activated
+    );
 
-    /* B2/B3: Return a "confirmed" URL that fires Purchase pixel on the customer's browser */
+    /* Primary Purchase: Meta CAPI + TikTok Events API (Entry only, $30) */
+    try { trySendPurchaseForRow_(sheet, row); } catch (err) {
+      Logger.log('activate CAPI: ' + err.message);
+    }
+
+    /* Optional backup: confirmed URL still fires browser Purchase if the customer opens it */
     const plan     = sheet.getRange(row, COL.PLAN + 1).getValue();
     const confirmUrl = 'https://themethodmafia.com/order-status.html?orderId='
                      + encodeURIComponent(orderId)
@@ -138,7 +152,7 @@ function doGet(e) {
       '<p style="word-break:break-all;background:#f5f5f5;padding:12px;border-radius:6px;">' +
         '<a href="' + confirmUrl + '">' + confirmUrl + '</a>' +
       '</p>' +
-      '<p style="color:#555;font-size:13px">When the customer visits this link, their GA/FB Purchase conversion fires automatically.</p>'
+      '<p style="color:#555;font-size:13px">Purchase is already sent from this sheet (Status → Active). The link below is only an optional backup if you also want the customer browser pixel to fire.</p>'
     );
   }
 
@@ -345,7 +359,7 @@ function setupSheetHeaders() {
   const headers = [
     'Timestamp','Order ID','Name','Email','Telegram',
     'Plan','Amount','Payment','Source','Medium','Campaign',
-    'Status','Expiry','Days Left','Notes'
+    'Status','Expiry','Days Left','Notes','FBclid','TTclid'
   ];
 
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);

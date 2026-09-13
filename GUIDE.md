@@ -25,7 +25,13 @@ methodmafia/
 ├── js/
 │   ├── translations.js ← মূল পেজের লেখা (৩ ভাষা)
 │   ├── pages.js        ← বাকি পেজের লেখা (৩ ভাষা)
-│   └── main.js         ← সব কাজ করার কোড
+│   ├── main.js         ← সব কাজ করার কোড
+│   ├── tracking-lib.js ← click ID / UTM / event rules
+│   └── pixels.js       ← Meta + TikTok pixel (সব পেজে)
+│
+├── apps-script/
+│   ├── OrderProcessor.gs  ← Sheet orders + FBclid/TTclid
+│   └── CapiPurchase.gs    ← Status→Active Purchase (CAPI)
 │
 └── images/
     ├── logo.jpg
@@ -379,7 +385,9 @@ $15 দিয়ে ঢুকতে পারবেন।
 business.facebook.com → Events Manager → তোমার Pixel
 ```
 
-দেখবে: `PageView` (কতজন এসেছে), `InitiateCheckout` (কতজন ফর্ম পূরণ করেছে)
+দেখবে: `PageView` (কতজন এসেছে), `ViewContent` (প্রাইসিং দেখেছে), `Lead` / `InitiateCheckout` (ফর্ম সাবমিট), `Purchase` (Entry Active — $30)
+
+TikTok Events Manager-এ একই ফ্লো: `ViewContent` → `InitiateCheckout` → `CompletePayment` ($30, Entry only)
 
 ## কোন Ad থেকে বিক্রি আসছে
 
@@ -506,7 +514,9 @@ const DIGEST_EMAIL = 'info@themethodmafia.com';  // digest email ঠিকান
 
 **ধাপ ৪: Sheet headers সেটআপ**
 Apps Script editor-এ `setupSheetHeaders` ফাংশন সিলেক্ট করে ▶ Run চাপো।
-Sheet-এ নতুন কলাম তৈরি হবে: Timestamp, Order ID, Name, Email, Telegram, Plan, Amount, Payment, **Source, Medium, Campaign**, Status, Expiry, Days Left, Notes
+Sheet-এ কলাম তৈরি হবে: Timestamp, Order ID, Name, Email, Telegram, Plan, Amount, Payment, **Source, Medium, Campaign**, Status, Expiry, Days Left, Notes, **FBclid, TTclid**
+
+আগে থেকে Sheet চালু থাকলে শেষে দুটো কলাম যোগ করো: `FBclid` আর `TTclid` (Notes-এর পরে)। অথবা `setupSheetHeaders` আবার Run করো — শুধু হেডার রো আপডেট হবে।
 
 ---
 
@@ -520,7 +530,8 @@ Sheet-এ নতুন কলাম তৈরি হবে: Timestamp, Order ID,
 সেই লিংকে ক্লিক করলে:
 1. Order `Active` হয়ে যাবে
 2. একটা **confirmation URL** দেখাবে — এটা কাস্টমারকে পাঠাও
-3. কাস্টমার সেই URL খুললে তাদের ব্রাউজারে Purchase event fire হবে (GA/FB ads tracking)
+3. **Purchase এখন Sheet থেকেই যায়** (Status → Active, Entry, $30) — কাস্টমারকে লিংক খুলতে হয় না
+4. confirmation URL শুধু **optional backup** — খুললে ব্রাউজার pixel-ও fire হতে পারে (Entry only)
 
 **অথবা সরাসরি URL দিয়ে:**
 ```
@@ -592,10 +603,12 @@ https://themethodmafia.com/order-status.html?orderId=MM-XXXX&confirmed=1&plan=En
 ```
 (Apps Script-এর Activate লিংক থেকেও এই URL পাওয়া যাবে)
 
-এই URL খুললে:
+এই URL খুললে (optional backup, Entry only):
 - GA-তে `purchase` event fire হবে
-- FB Pixel-এ `Purchase` event fire হবে
+- FB Pixel-এ `Purchase` / TikTok-এ `CompletePayment` fire হবে (value $30, event_id = Order ID)
 - "Payment Confirmed" banner দেখাবে কাস্টমারকে
+
+**মূল Purchase এখন Google Sheet Status → Active থেকে যায়।** কাস্টমার এই লিংক না খুললেও ads conversion count হবে (PART 9 সেটআপ করলে)। Monthly-এ Purchase যাবে না।
 
 ---
 
@@ -621,4 +634,96 @@ https://themethodmafia.com/?utm_source=telegram&utm_medium=organic
 
 সব পেজে GA এখন সঠিকভাবে লোড হবে (`?id=G-HG9ELWF8ER` সহ)।
 `config.js`-এ `GA_ID` বদলালে সব পেজে অটো আপডেট হবে।
+
+---
+
+# 🎯 PART 9 — Ads conversion (Meta CAPI + TikTok Events API)
+
+Ads শুধু **Entry** টার্গেট করে। Purchase value **সবসময় $30**। Monthly ($15) এ Purchase যাবে না।
+
+**মূল পথ:** তুমি Google Sheet-এ `Status` = `Active` লিখলেই Purchase চলে যায়। কাস্টমারকে `order-status.html?confirmed=1` খুলতে হয় না (সেটা শুধু backup)।
+
+---
+
+## English — one-time setup (10 minutes)
+
+### 1) Paste the new Apps Script files
+
+Google Sheet → **Extensions** → **Apps Script**
+
+- Keep `OrderProcessor.gs` (replace with the repo file — it now has FBclid / TTclid columns)
+- **+** → Script → name it `CapiPurchase` → paste `apps-script/CapiPurchase.gs`
+
+Save (Ctrl+S).
+
+### 2) Script Properties (tokens — never put tokens in the code)
+
+Apps Script → ⚙️ **Project Settings** → scroll to **Script properties** → **Add script property**:
+
+| Property | Where to get it |
+|---|---|
+| `META_PIXEL_ID` | Facebook Events Manager → your Pixel ID (same as `config.js` → `META_PIXEL`) |
+| `META_ACCESS_TOKEN` | Events Manager → Settings → Conversions API → Generate access token |
+| `TIKTOK_PIXEL_ID` | TikTok Events Manager → Pixel code (same as `config.js` → `TIKTOK_PIXEL`) |
+| `TIKTOK_ACCESS_TOKEN` | TikTok Events Manager → Settings → Events API → Generate Access Token |
+
+Optional (only while testing): `META_TEST_EVENT_CODE`, `TIKTOK_TEST_EVENT_CODE`
+
+**Save**. Tokens stay in Script Properties. Do not paste them into GitHub.
+
+### 3) Install the On edit trigger
+
+Apps Script → ⏰ **Triggers** → **Add Trigger**:
+
+```
+Function:       onOrderStatusEdit
+Deployment:     Head
+Event source:   From spreadsheet
+Event type:     On edit
+```
+
+Authorize when Google asks (your Google account sends the events).
+
+This trigger is required. A normal `onEdit` cannot call the ads APIs.
+
+### 4) Test
+
+**A. Token check (editor)**
+1. Function dropdown → `testCapiConnection` → ▶ Run
+2. **Executions** (left) → open the run → log should show `meta: ok` and/or `tiktok: ok`
+3. Facebook Events Manager → Test events / Overview
+4. TikTok Events Manager → Test events / Overview  
+   Event: Meta `Purchase` / TikTok `CompletePayment`, value `30`, event_id starts with `TEST-`
+
+**B. Real flow (Sheet)**
+1. Add a test row: Plan = `Entry`, Status = `Pending`, Email = your email, Order ID = `MM-2026-TEST`
+2. Change Status to `Active` (any capitalization is fine)
+3. Notes should get `PURCHASE_SENT`
+4. Changing Status again must NOT send a second Purchase
+5. A Monthly row set to Active must NOT send Purchase
+
+If Notes never gets `PURCHASE_SENT`: tokens missing, trigger not installed, or Plan is not Entry. Check **Executions**.
+
+---
+
+## বাংলা — একবারের সেটআপ
+
+**ধাপ ১:** Sheet → Extensions → Apps Script। `OrderProcessor.gs` আপডেট করো। নতুন ফাইল `CapiPurchase` বানিয়ে `apps-script/CapiPurchase.gs` পেস্ট করো।
+
+**ধাপ ২:** ⚙️ Project Settings → Script properties-এ ৪টা key বসাও: `META_PIXEL_ID`, `META_ACCESS_TOKEN`, `TIKTOK_PIXEL_ID`, `TIKTOK_ACCESS_TOKEN`। টোকেন কোডে লিখবে না, GitHub-এও না।
+
+**ধাপ ৩:** ⏰ Triggers → Add Trigger → Function `onOrderStatusEdit` → From spreadsheet → On edit। Authorize দাও।
+
+**ধাপ ৪:** `testCapiConnection` Run করে Events Manager-এ event দেখো। তারপর একটা Entry রো-এর Status `Active` করো — Notes-এ `PURCHASE_SENT` আসবে, value $30।
+
+---
+
+## মনে রাখার নিয়ম
+
+- Purchase **শুধু Entry**, value **সবসময় 30 USD**
+- এক অর্ডারে একবারই যাবে (`PURCHASE_SENT`)
+- `event_id` = Order ID — browser backup আর CAPI একই conversion হিসেবে গণনা হবে
+- FBclid / TTclid কলাম Swa ignore করতে পারো — ads matching-এর জন্য
+- Pixel ID বদলাতে `config.js` → `META_PIXEL` / `TIKTOK_PIXEL` (সাইট) **এবং** Script Properties (CAPI) দুটো জায়গায়
+
 
