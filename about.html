@@ -4,16 +4,24 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>About Us — The Method Mafia</title>
-<meta name="description" content="About The Method Mafia community">
+<meta name="description" content="About The Method Mafia — a VIP community of 2900+ members sharing 1000+ premium digital methods, AI tools, ad credits and freelancer resources.">
+<link rel="canonical" href="https://themethodmafia.com/about.html">
 <link rel="icon" href="images/logo.jpg">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Hind+Siliguri:wght@400;600;700&family=Inter:wght@700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <script src="config.js"></script>
 <script>try{var L=localStorage.getItem('mm_lang');if(L)document.documentElement.lang=L;}catch(e){}</script>
-<script async src="https://www.googletagmanager.com/gtag/js"></script>
+<!-- Google Analytics — B1 -->
 <script>
-window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}
-gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
+(function(GA_ID){
+  var s=document.createElement('script');s.async=true;
+  s.src='https://www.googletagmanager.com/gtag/js?id='+GA_ID;
+  document.head.appendChild(s);
+  window.dataLayer=window.dataLayer||[];
+  function gtag(){dataLayer.push(arguments)}
+  window.gtag=gtag;
+  gtag('js',new Date());gtag('config',GA_ID);
+})(CONFIG.GA_ID);
 </script>
 </head>
 <body>
@@ -22,7 +30,7 @@ gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
 <header>
   <div class="hdr-left">
     <a href="index.html" style="display:flex;align-items:center;gap:11px">
-      <div class="hdr-logo"><img src="images/logo.jpg" alt="The Method Mafia"></div>
+      <div class="hdr-logo"><img src="images/logo.jpg" alt="The Method Mafia" loading="lazy"></div>
       <div>
         <div class="hdr-name">THE METHOD MAFIA</div>
         <div class="hdr-sub" data-t="footerTag">Premium VIP Community</div>
@@ -49,7 +57,7 @@ gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
 <div class="page-body">
 
 <div style="text-align:center;margin-bottom:30px">
-  <img src="images/logo.jpg" alt="The Method Mafia" style="width:112px;height:112px;border-radius:50%;object-fit:cover;border:3px solid var(--gold);margin:0 auto;box-shadow:0 0 28px rgba(255,140,0,.35)">
+  <img src="images/logo.jpg" alt="The Method Mafia" loading="lazy" style="width:112px;height:112px;border-radius:50%;object-fit:cover;border:3px solid var(--gold);margin:0 auto;box-shadow:0 0 28px rgba(255,140,0,.35)">
 </div>
 
 <h3 data-p="abH1">Our Story</h3>

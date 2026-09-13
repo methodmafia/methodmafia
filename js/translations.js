@@ -90,8 +90,8 @@ en: {
   planMonthlyName: "Monthly",
   planMonthlyFreq: "From second month onwards",
   planPerMonth: "/month",
-  priceSave: "SAVE $50 — 62% OFF",
-  priceSaveShort: "SAVE 62%",
+  priceSave: "SAVE $70 — 70% OFF",
+  priceSaveShort: "SAVE 70%",
 
   ef1: "Instant VIP channel access",
   ef2: "1000+ premium methods & guides",
@@ -122,7 +122,7 @@ en: {
   phName: "Enter your full name",
   phEmail: "you@example.com",
   phTelegram: "@yourusername",
-  optEntry: "Entry <s class='plan-old'>$80</s> $30",
+  optEntry: "Entry <s class='plan-old'>$100</s> $30",
   optMonthly: "Monthly $15",
   orderTotal: "Total",
   orderThen: "Then monthly",
@@ -195,8 +195,29 @@ en: {
   errTg: "Please enter your Telegram username.",
   errTgFormat: "Telegram username: 5-32 chars, letters/digits/_ only, start with a letter.",
 
-  /* Live activity */
-  laJoined: "just joined",
+  /* Upsell box (A2) */
+  upsellTitle: "Why $30 first, then $15?",
+  upsellText: "The $30 entry covers your <strong>first full month</strong> plus the one-time work our team does to onboard you into the private channel. From month 2 it is just <strong>$15/month</strong> — pay when you want, stop when you want. No card stored. No auto-charges.",
+
+  /* Next steps after ordering (A1/A5) */
+  nextStepsTitle: "✅ What happens next",
+  nextStep1: "1. A Telegram window just opened — or message <strong>@MMHQ_Support</strong> directly",
+  nextStep2: "2. Send your <strong>Order ID</strong> + your <strong>payment screenshot / TXN ID</strong>",
+  nextStep3: "3. Our team verifies manually — your <strong>VIP invite arrives in 30 min–3 hrs</strong>",
+  nextStepsNote: "Keep your Order ID safe. You will need it to confirm payment.",
+
+  /* FAQ — new items (A4) */
+  q11: "What exactly do I send to confirm payment?",
+  a11: "Message @MMHQ_Support with: (1) your Order ID — shown on screen after you submit, and (2) a screenshot or transaction ID of your payment. That is all. We confirm manually and send your private invite link within 3 hours.",
+  q12: "Is there a refund if something goes wrong?",
+  a12: "Yes. If we cannot deliver access within 48 hours of your payment, you get a full refund. If you simply change your mind after joining the channel, we cannot refund — digital content cannot be returned once seen. See our full Refund Policy for details.",
+  q13: "How long does it take to get VIP access?",
+  a13: "Between 30 minutes and 3 hours after you send your payment proof on Telegram. We verify every payment manually, so it is never instant — but we do check regularly throughout the day and evening.",
+
+  /* Live activity (A6 — polished) */
+  laJoined: "just joined VIP 🔒",
+  laRenewed: "just renewed membership 🔄",
+  laDownloaded: "just accessed a method 📥",
   laAgo: "min ago",
 
   /* Exit popup */
@@ -280,8 +301,8 @@ bn: {
   planMonthlyName: "মাসিক",
   planMonthlyFreq: "দ্বিতীয় মাস থেকে",
   planPerMonth: "/মাস",
-  priceSave: "সাশ্রয় $৫০ — ৬২% ছাড়",
-  priceSaveShort: "সাশ্রয় ৬২%",
+  priceSave: "সাশ্রয় $৭০ — ৭০% ছাড়",
+  priceSaveShort: "সাশ্রয় ৭০%",
 
   ef1: "সাথে সাথে ভিআইপি চ্যানেল অ্যাক্সেস",
   ef2: "১০০০+ প্রিমিয়াম মেথড ও গাইড",
@@ -311,7 +332,7 @@ bn: {
   phName: "পুরো নাম লিখুন",
   phEmail: "you@example.com",
   phTelegram: "@yourusername",
-  optEntry: "এন্ট্রি <s class='plan-old'>$৮০</s> $৩০",
+  optEntry: "এন্ট্রি <s class='plan-old'>$১০০</s> $৩০",
   optMonthly: "মাসিক $১৫",
   orderTotal: "সর্বমোট",
   orderThen: "এরপর মাসিক",
@@ -377,7 +398,29 @@ bn: {
   errTg: "আপনার টেলিগ্রাম ইউজারনেম লিখুন।",
   errTgFormat: "টেলিগ্রাম ইউজারনেম: ৫-৩২ অক্ষর, শুধু ইংরেজি অক্ষর/সংখ্যা/_, অক্ষর দিয়ে শুরু।",
 
-  laJoined: "জয়েন করেছেন",
+  /* Upsell box (A2) */
+  upsellTitle: "আগে $৩০, তারপর $১৫ কেন?",
+  upsellText: "$৩০ এন্ট্রি দিয়ে আপনার <strong>পুরো প্রথম মাস</strong> কভার হয়, সাথে আমাদের টিমের একবারের অনবোর্ডিং কাজ। দ্বিতীয় মাস থেকে মাত্র <strong>$১৫/মাস</strong> — চাইলে দেবেন, না চাইলে বন্ধ। কোনো কার্ড সেভ নেই, অটো-চার্জ নেই।",
+
+  /* Next steps after ordering (A1/A5) */
+  nextStepsTitle: "✅ পরের ধাপ",
+  nextStep1: "১. একটি Telegram উইন্ডো খুলেছে — অথবা সরাসরি <strong>@MMHQ_Support</strong>-এ মেসেজ করুন",
+  nextStep2: "২. আপনার <strong>Order ID</strong> + <strong>পেমেন্ট স্ক্রিনশট / TXN ID</strong> পাঠান",
+  nextStep3: "৩. আমরা নিজে যাচাই করব — <strong>৩০ মিনিট থেকে ৩ ঘণ্টার মধ্যে</strong> VIP ইনভাইট পাবেন",
+  nextStepsNote: "Order ID সংরক্ষণ করুন — পেমেন্ট কনফার্ম করতে লাগবে।",
+
+  /* FAQ — new items (A4) */
+  q11: "পেমেন্ট নিশ্চিত করতে ঠিক কী পাঠাব?",
+  a11: "@MMHQ_Support-এ মেসেজ করুন এবং পাঠান: (১) Order ID — সাবমিটের পর স্ক্রিনে দেখাবে, এবং (২) পেমেন্টের স্ক্রিনশট বা ট্রানজেকশন আইডি। এটুকুই। আমরা নিজে যাচাই করে ৩ ঘণ্টার মধ্যে প্রাইভেট ইনভাইট লিংক পাঠাই।",
+  q12: "কিছু ভুল হলে কি রিফান্ড পাব?",
+  a12: "হ্যাঁ। পেমেন্টের পর ৪৮ ঘণ্টার মধ্যে অ্যাক্সেস দিতে না পারলে পুরো টাকা ফেরত। তবে চ্যানেলে ঢুকে দেখার পর শুধু মত বদলালে সাধারণত রিফান্ড দেওয়া সম্ভব নয় — ডিজিটাল কনটেন্ট একবার দেখে ফেললে ফেরত দেওয়া যায় না। বিস্তারিত আমাদের রিফান্ড নীতি দেখুন।",
+  q13: "VIP অ্যাক্সেস পেতে কতক্ষণ লাগে?",
+  a13: "টেলিগ্রামে পেমেন্ট প্রমাণ পাঠানোর পর ৩০ মিনিট থেকে ৩ ঘণ্টার মধ্যে। আমরা প্রতিটি পেমেন্ট নিজে যাচাই করি — তাই সাথে সাথে হয় না। তবে সারাদিন ও সন্ধ্যায় নিয়মিত চেক করি।",
+
+  /* Live activity (A6 — polished) */
+  laJoined: "এইমাত্র ভিআইপিতে জয়েন করেছেন 🔒",
+  laRenewed: "মেম্বারশিপ রিনিউ করেছেন 🔄",
+  laDownloaded: "একটি মেথড অ্যাক্সেস করেছেন 📥",
   laAgo: "মিনিট আগে",
 
   exitTitle: "যাওয়ার আগে",
@@ -460,8 +503,8 @@ hi: {
   planMonthlyName: "मासिक",
   planMonthlyFreq: "दूसरे महीने से",
   planPerMonth: "/माह",
-  priceSave: "बचत $50 — 62% छूट",
-  priceSaveShort: "बचत 62%",
+  priceSave: "बचत $70 — 70% छूट",
+  priceSaveShort: "बचत 70%",
 
   ef1: "तुरंत वीआईपी चैनल एक्सेस",
   ef2: "1000+ प्रीमियम मेथड्स और गाइड",
@@ -491,7 +534,7 @@ hi: {
   phName: "पूरा नाम लिखें",
   phEmail: "you@example.com",
   phTelegram: "@yourusername",
-  optEntry: "एंट्री <s class='plan-old'>$80</s> $30",
+  optEntry: "एंट्री <s class='plan-old'>$100</s> $30",
   optMonthly: "मासिक $15",
   orderTotal: "कुल",
   orderThen: "फिर मासिक",
@@ -557,7 +600,29 @@ hi: {
   errTg: "कृपया अपना टेलीग्राम यूजरनेम लिखें।",
   errTgFormat: "टेलीग्राम यूजरनेम: 5-32 अक्षर, केवल अंग्रेजी अक्षर/अंक/_, अक्षर से शुरू।",
 
-  laJoined: "ने जॉइन किया",
+  /* Upsell box (A2) */
+  upsellTitle: "पहले $30, फिर $15 क्यों?",
+  upsellText: "$30 एंट्री से आपका <strong>पहला पूरा महीना</strong> कवर होता है, साथ में हमारी टीम का एक बार का ऑनबोर्डिंग काम। दूसरे महीने से सिर्फ <strong>$15/माह</strong> — जब चाहें दें, जब चाहें बंद करें। कोई कार्ड सेव नहीं, ऑटो-चार्ज नहीं।",
+
+  /* Next steps after ordering (A1/A5) */
+  nextStepsTitle: "✅ अब क्या करें",
+  nextStep1: "1. एक Telegram विंडो खुली है — या सीधे <strong>@MMHQ_Support</strong> पर मैसेज करें",
+  nextStep2: "2. अपनी <strong>Order ID</strong> + <strong>पेमेंट स्क्रीनशॉट / TXN ID</strong> भेजें",
+  nextStep3: "3. हम मैन्युअली जांच करते हैं — <strong>30 मिनट से 3 घंटे में</strong> VIP इनवाइट मिलेगा",
+  nextStepsNote: "Order ID संभाल कर रखें — पेमेंट कन्फर्म करने में काम आएगी।",
+
+  /* FAQ — new items (A4) */
+  q11: "पेमेंट कन्फर्म करने के लिए ठीक क्या भेजूं?",
+  a11: "@MMHQ_Support पर मैसेज करें और भेजें: (1) Order ID — सबमिट के बाद स्क्रीन पर दिखती है, और (2) पेमेंट का स्क्रीनशॉट या ट्रांजैक्शन आईडी। बस इतना काफी है। हम खुद जांचते हैं और 3 घंटे में प्राइवेट इनवाइट लिंक भेज देते हैं।",
+  q12: "कुछ गलत होने पर रिफंड मिलेगा?",
+  a12: "हां। पेमेंट के बाद 48 घंटे में एक्सेस न दे पाएं तो पूरे पैसे वापस। पर चैनल में जाकर सामग्री देख लेने के बाद सिर्फ मन बदलने पर रिफंड आमतौर पर नहीं होता — डिजिटल सामग्री एक बार देख लेने के बाद वापस नहीं की जा सकती। पूरी जानकारी हमारी रिफंड नीति में है।",
+  q13: "VIP एक्सेस मिलने में कितना समय लगता है?",
+  a13: "टेलीग्राम पर पेमेंट प्रमाण भेजने के 30 मिनट से 3 घंटे के बाद। हम हर पेमेंट मैन्युअली जांचते हैं — इसलिए तुरंत नहीं होता। पर दिन और शाम में नियमित रूप से चेक करते हैं।",
+
+  /* Live activity (A6 — polished) */
+  laJoined: "अभी वीआईपी जॉइन किया 🔒",
+  laRenewed: "मेंबरशिप रिन्यू किया 🔄",
+  laDownloaded: "एक मेथड एक्सेस किया 📥",
   laAgo: "मिनट पहले",
 
   exitTitle: "जाने से पहले",
