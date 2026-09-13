@@ -540,13 +540,24 @@ function initScroll(){
     /* ── Mobile sticky CTA (A3) — show after hero, hide near order form ── */
     if(sticky){
       const orderSec = document.getElementById('order');
+      let shown = false;
+      let nearOrder = false;
       if(orderSec){
         const ot = orderSec.getBoundingClientRect().top;
         const pastHero = scrollY > 300;
-        const nearOrder = ot < 200 && ot > -orderSec.offsetHeight;
-        sticky.classList.toggle('show', pastHero && !nearOrder);
+        nearOrder = ot < 200 && ot > -orderSec.offsetHeight;
+        shown = pastHero && !nearOrder;
       } else {
-        sticky.classList.toggle('show', scrollY > 300);
+        shown = scrollY > 300;
+      }
+      sticky.classList.toggle('show', shown);
+      document.body.classList.toggle('sticky-visible', shown);
+      document.body.classList.toggle('near-order', nearOrder);
+      if(shown){
+        document.documentElement.style.setProperty(
+          '--sticky-clearance',
+          (sticky.offsetHeight + 12) + 'px'
+        );
       }
     }
   }, {passive:true});
@@ -599,7 +610,7 @@ function initLiveActivity(){
         <div class="live-time">${icon} ${mins} ${t('laAgo')}</div>
       </div>`;
     pop.classList.add('show');
-    setTimeout(()=>pop.classList.remove('show'), 6000);
+    setTimeout(()=>pop.classList.remove('show'), 4200);
   }
 
   /* first popup at 8s, then every 18s (tighter, feels more active) */
