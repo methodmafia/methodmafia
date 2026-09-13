@@ -5,3 +5,4 @@ apps-script/
 GUIDE.md
 README.md
 wrangler.jsonc
+tests/
