@@ -32,19 +32,16 @@ function setLang(code){
 
 function applyLang(){
   document.documentElement.lang = LANG;
-  // সব [data-t] element এ text বসাও (HTML tag থাকলে innerHTML — যেমন strikethrough)
   document.querySelectorAll('[data-t]').forEach(el=>{
     const k = el.getAttribute('data-t');
     const val = t(k);
     if(!val) return;
     if(val.indexOf('<') !== -1) el.innerHTML = val; else el.textContent = val;
   });
-  // placeholder
   document.querySelectorAll('[data-tp]').forEach(el=>{
     const val = t(el.getAttribute('data-tp'));
     if(val) el.placeholder = val;
   });
-  // ভেতরের পেজ (HTML সহ)
   document.querySelectorAll('[data-p]').forEach(el=>{
     const val = tp(el.getAttribute('data-p'));
     if(val) el.innerHTML = val;
@@ -53,18 +50,17 @@ function applyLang(){
     const val = tp(el.getAttribute('data-pp'));
     if(val) el.placeholder = val;
   });
-  // ভাষার নাম বাটনে
   const lbl = document.getElementById('langLabel');
   if(lbl) lbl.textContent = LANG.toUpperCase();
   document.querySelectorAll('.lang-item').forEach(b=>{
     b.classList.toggle('active', b.dataset.lang === LANG);
   });
-  // ডাইনামিক অংশ
   if(document.getElementById('tab-ai')) renderVault();
   if(document.getElementById('reviewGrid')) renderReviews();
   if(document.getElementById('payBadges')) renderPayments();
   updateLocalPrice();
   updateOrderBox();
+  updatePlanOptions();
 }
 
 /* ─── ভাষা মেনু ─── */
@@ -89,6 +85,19 @@ function applyConfig(){
   document.querySelectorAll('[data-href]').forEach(el=>{
     const v = CONFIG[el.getAttribute('data-href')];
     if(v) el.href = v;
+  });
+}
+
+/* ─── Plan option labels — config থেকে price টানে (D5) ─── */
+function updatePlanOptions(){
+  const showBDT = (LANG === 'bn');
+  document.querySelectorAll('[data-t="optEntry"]').forEach(el=>{
+    el.innerHTML = showBDT
+      ? `${t('planEntryName')} <s class="plan-old">${CONFIG.ENTRY_REGULAR_BDT}</s> ${CONFIG.ENTRY_BDT}`
+      : `${t('planEntryName')} <s class="plan-old">${CONFIG.ENTRY_REGULAR_USD}</s> ${CONFIG.ENTRY_USD}`;
+  });
+  document.querySelectorAll('[data-t="optMonthly"]').forEach(el=>{
+    el.textContent = `${t('planMonthlyName')} ${showBDT ? CONFIG.MONTHLY_BDT : CONFIG.MONTHLY_USD}`;
   });
 }
 
@@ -125,14 +134,12 @@ function initParticles(){
 
   function draw(){
     ctx.clearRect(0,0,W,H);
-
     const g = ctx.createRadialGradient(W/2,H*.35,0,W/2,H*.35,W*.45);
     g.addColorStop(0,'rgba(255,140,0,.035)');
     g.addColorStop(.5,'rgba(255,215,0,.018)');
     g.addColorStop(1,'transparent');
     ctx.fillStyle = g;
     ctx.fillRect(0,0,W,H);
-
     if(!isMobile){
       const mg = ctx.createRadialGradient(mx,my,0,mx,my,190);
       mg.addColorStop(0,'rgba(255,215,0,.045)');
@@ -140,7 +147,6 @@ function initParticles(){
       ctx.fillStyle = mg;
       ctx.fillRect(0,0,W,H);
     }
-
     const now = Date.now()*.001;
     parts.forEach(p=>{
       p.x += p.vx; p.y += p.vy;
@@ -218,7 +224,6 @@ function initStats(){
     map.forEach(([id,key])=>{
       const el = document.getElementById(id);
       const raw = CONFIG[key];
-      // যদি টেক্সট হয় (যেমন "50-70+") তাহলে সরাসরি দেখাও
       if(typeof raw === 'string'){ el.textContent = raw; return; }
       const target = raw || 0;
       let v = 0;
@@ -308,7 +313,6 @@ function renderPayments(){
        <span class="pay-opt-ic">${ic}</span>${name}
      </button>`
   ).join('');
-  // আগের সিলেকশন ধরে রাখো (ভাষা বদলালে index অনুযায়ী)
   if(SELECTED_PAY_INDEX !== null && box.children[SELECTED_PAY_INDEX]){
     box.children[SELECTED_PAY_INDEX].classList.add('sel');
     SELECTED_PAY = box.children[SELECTED_PAY_INDEX].dataset.pay;
@@ -347,7 +351,6 @@ function updateOrderBox(){
   const thn = document.getElementById('oThen');
   if(!lbl) return;
 
-  // ৳ শুধু বাংলা ভাষায় দেখাবে
   const showBDT = (LANG === 'bn');
 
   if(SELECTED_PLAN === 'entry'){
@@ -377,14 +380,27 @@ function makeOrderId(){
   return `MM-${y}-${rnd}`;
 }
 
-/* ─── UTM ধরে রাখা ─── */
-function getSource(){
+/* ─── UTM + source capture (B4) ─── */
+function getUtmData(){
   try{
     const p = new URLSearchParams(location.search);
-    const s = p.get('utm_source');
-    if(s){ sessionStorage.setItem('mm_src', s); return s; }
-    return sessionStorage.getItem('mm_src') || 'direct';
-  }catch(e){ return 'direct'; }
+    const src = p.get('utm_source');
+    const med = p.get('utm_medium');
+    const cam = p.get('utm_campaign');
+    if(src) sessionStorage.setItem('mm_utm_source', src);
+    if(med) sessionStorage.setItem('mm_utm_medium', med);
+    if(cam) sessionStorage.setItem('mm_utm_campaign', cam);
+    return {
+      utm_source: sessionStorage.getItem('mm_utm_source') || 'direct',
+      utm_medium: sessionStorage.getItem('mm_utm_medium') || '',
+      utm_campaign: sessionStorage.getItem('mm_utm_campaign') || ''
+    };
+  }catch(e){ return {utm_source:'direct', utm_medium:'', utm_campaign:''}; }
+}
+
+/* legacy wrapper */
+function getSource(){
+  return getUtmData().utm_source;
 }
 
 /* ─── টোস্ট ─── */
@@ -411,7 +427,6 @@ function submitOrder(){
     [name,email,tg].forEach(f=>{ if(!f.value.trim()) f.classList.add('error'); });
     return toast(t('errFill'), true);
   }
-  // Name: must be at least 2 chars and contain at least one letter (not purely digits/symbols)
   const nameVal = name.value.trim();
   if(nameVal.length < 2 || !/[\p{L}]/u.test(nameVal)){
     name.classList.add('error');
@@ -421,7 +436,6 @@ function submitOrder(){
     email.classList.add('error');
     return toast(t('errEmail'), true);
   }
-  // Telegram: strip leading @, must be 5-32 chars, letters/digits/underscore, start with a letter
   let handle = tg.value.trim().replace(/^@+/, '').replace(/\s+/g,'');
   if(!/^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(handle)){
     tg.classList.add('error');
@@ -435,6 +449,7 @@ function submitOrder(){
   }
 
   const orderId = makeOrderId();
+  const utmData = getUtmData();
   const payload = {
     orderId: orderId,
     name: name.value.trim(),
@@ -443,18 +458,28 @@ function submitOrder(){
     plan: SELECTED_PLAN === 'entry' ? 'Entry' : 'Monthly',
     amount: SELECTED_PLAN === 'entry' ? CONFIG.ENTRY_USD : CONFIG.MONTHLY_USD,
     payment: SELECTED_PAY,
-    source: getSource()
+    source: utmData.utm_source,
+    medium: utmData.utm_medium,
+    campaign: utmData.utm_campaign
   };
 
   btn.disabled = true;
 
-  // Pixel events
+  /* ── Pixel / Analytics events (B2/B3) ── */
   const value = SELECTED_PLAN === 'entry' ? 30 : 15;
-  if(typeof fbq !== 'undefined') fbq('track','InitiateCheckout',{currency:'USD',value:value});
+  if(typeof fbq !== 'undefined'){
+    fbq('track','Lead',{currency:'USD',value:value});
+    fbq('track','InitiateCheckout',{currency:'USD',value:value,content_name:payload.plan});
+  }
   if(typeof ttq !== 'undefined') ttq.track('InitiateCheckout',{value:value,currency:'USD'});
-  if(typeof gtag !== 'undefined') gtag('event','begin_checkout',{currency:'USD',value:value});
+  if(typeof gtag !== 'undefined'){
+    gtag('event','generate_lead',{currency:'USD',value:value,plan:payload.plan});
+    gtag('event','begin_checkout',{
+      currency:'USD',value:value,
+      items:[{item_id:SELECTED_PLAN,item_name:payload.plan,price:value,quantity:1}]
+    });
+  }
 
-  // Google Sheets এ পাঠাও
   fetch(CONFIG.SHEET_URL, {
     method:'POST',
     mode:'no-cors',
@@ -470,6 +495,7 @@ function submitOrder(){
     ? '\nAmount (BDT): ' + (SELECTED_PLAN === 'entry' ? CONFIG.ENTRY_BDT : CONFIG.MONTHLY_BDT)
     : '';
 
+  const supportHandle = CONFIG.SUPPORT_HANDLE || '@MMHQ_Support';
   const msg = encodeURIComponent(
     '🧾 NEW ORDER\n' +
     '━━━━━━━━━━━━━━\n' +
@@ -482,7 +508,7 @@ function submitOrder(){
     'Amount   : ' + payload.amount + localLine + '\n' +
     'Payment  : ' + SELECTED_PAY + '\n' +
     '━━━━━━━━━━━━━━\n\n' +
-    'I would like to complete my payment. Please send me the payment details.'
+    'I have placed my order. Please send me the payment details.'
   );
   setTimeout(()=>{
     window.open(CONFIG.SUPPORT + '?text=' + msg, '_blank');
@@ -503,17 +529,30 @@ function initScroll(){
 
   const bar = document.getElementById('progressBar');
   const top = document.getElementById('scrollTop');
+  const sticky = document.getElementById('stickyCta');
   addEventListener('scroll', ()=>{
     if(bar){
       const h = document.documentElement.scrollHeight - innerHeight;
       bar.style.width = (h > 0 ? (scrollY/h)*100 : 0) + '%';
     }
     if(top) top.classList.toggle('show', scrollY > 420);
+
+    /* ── Mobile sticky CTA (A3) — show after hero, hide near order form ── */
+    if(sticky){
+      const orderSec = document.getElementById('order');
+      if(orderSec){
+        const ot = orderSec.getBoundingClientRect().top;
+        const pastHero = scrollY > 300;
+        const nearOrder = ot < 200 && ot > -orderSec.offsetHeight;
+        sticky.classList.toggle('show', pastHero && !nearOrder);
+      } else {
+        sticky.classList.toggle('show', scrollY > 300);
+      }
+    }
   }, {passive:true});
 }
 
-/* ─── লাইভ অ্যাক্টিভিটি পপআপ ───
-   Random name × city combo — same combo won't repeat within a session */
+/* ─── লাইভ অ্যাক্টিভিটি পপআপ (A6 — polished) ─── */
 function initLiveActivity(){
   if(!CONFIG.SHOW_LIVE_ACTIVITY) return;
   const pop = document.getElementById('livePop');
@@ -523,9 +562,11 @@ function initLiveActivity(){
 
   function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
 
+  /* action variants — 70% join, 15% renew, 15% downloaded */
+  const actionWeights = ['join','join','join','join','join','join','join','renew','download'];
+
   function show(){
     const data = LIVE_NAMES[LANG] || LIVE_NAMES.en;
-    // legacy fallback if data is old [[name,city],...] format
     let nm, city;
     if(Array.isArray(data)){
       const p = pick(data); nm = p[0]; city = p[1];
@@ -539,18 +580,30 @@ function initLiveActivity(){
       recent.push(combo);
       if(recent.length > MAX_RECENT) recent.shift();
     }
-    const mins = 2 + Math.floor(Math.random()*24);
+
+    const action = pick(actionWeights);
+    const mins = 1 + Math.floor(Math.random()*28);
+    let icon, actionText;
+    if(action === 'renew'){
+      icon = '🔄'; actionText = t('laRenewed');
+    } else if(action === 'download'){
+      icon = '📥'; actionText = t('laDownloaded');
+    } else {
+      icon = '🔒'; actionText = t('laJoined');
+    }
+
     pop.innerHTML = `
       <div class="live-av">${nm.charAt(0)}</div>
       <div>
-        <div class="live-tx"><b>${nm}</b> — ${city} ${t('laJoined')}</div>
-        <div class="live-time">${mins} ${t('laAgo')}</div>
+        <div class="live-tx"><b>${nm}</b> <span class="live-city">— ${city}</span> ${actionText}</div>
+        <div class="live-time">${icon} ${mins} ${t('laAgo')}</div>
       </div>`;
     pop.classList.add('show');
-    setTimeout(()=>pop.classList.remove('show'), 5000);
+    setTimeout(()=>pop.classList.remove('show'), 6000);
   }
 
-  setTimeout(()=>{ show(); setInterval(show, 22000); }, 12000);
+  /* first popup at 8s, then every 18s (tighter, feels more active) */
+  setTimeout(()=>{ show(); setInterval(show, 18000); }, 8000);
 }
 
 /* ─── এক্সিট পপআপ ─── */
@@ -578,6 +631,26 @@ function initExitPopup(){
   ov.addEventListener('click', e=>{ if(e.target === ov) closeExit(); });
 }
 
+/* ─── Purchase event on confirmed URL (B2/B3)
+   Swa sends customer: /order-status.html?orderId=MM-XXXX&confirmed=1
+   Page fires GA Purchase when confirmed=1 is present ─── */
+function initPurchaseConfirm(){
+  try{
+    const p = new URLSearchParams(location.search);
+    if(p.get('confirmed') !== '1') return;
+    const oid = p.get('orderId') || '';
+    const plan = p.get('plan') || 'Entry';
+    const value = plan === 'Monthly' ? 15 : 30;
+    if(typeof fbq !== 'undefined') fbq('track','Purchase',{currency:'USD',value:value});
+    if(typeof ttq !== 'undefined') ttq.track('CompletePayment',{value:value,currency:'USD'});
+    if(typeof gtag !== 'undefined') gtag('event','purchase',{
+      transaction_id: oid,
+      currency:'USD', value:value,
+      items:[{item_id:plan.toLowerCase(),item_name:'Method Mafia '+plan,price:value,quantity:1}]
+    });
+  }catch(e){}
+}
+
 /* ─── স্ক্রল টু টপ ─── */
 function scrollToTop(){ scrollTo({top:0,behavior:'smooth'}); }
 
@@ -592,5 +665,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
   initScroll();
   initLiveActivity();
   initExitPopup();
-  getSource();
+  initPurchaseConfirm();
+  getUtmData();
 });

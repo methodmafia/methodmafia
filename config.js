@@ -23,8 +23,8 @@ const CONFIG = {
   /* ─── দাম ───────────────────────────────────────────────
      Entry এর regular দাম (কাটাকাটি হয়ে দেখাবে) + discount দাম */
 
-  ENTRY_REGULAR_USD: "$80",
-  ENTRY_REGULAR_BDT: "৳১০,৪৮০",
+  ENTRY_REGULAR_USD: "$100",
+  ENTRY_REGULAR_BDT: "৳১৩,১০০",
 
   ENTRY_USD: "$30",
   ENTRY_BDT: "৳৩,৯৩০",

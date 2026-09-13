@@ -465,3 +465,160 @@ Google Sheet-এর **Source** কলামে দেখবে কোথা থ�
 ---
 
 **কোথাও আটকে গেলে screenshot দিয়ে জানিও।**
+
+---
+
+# 🆕 PART 8 — নতুন ফিচার (Sep 2026 আপডেট)
+
+## দাম আপডেট
+- **Entry regular price: $100** (কাটাকাটি দেখাবে) → **Entry price: $30** (70% OFF)
+- `config.js`-এ বদলানো হয়েছে: `ENTRY_REGULAR_USD: "$100"`, `ENTRY_REGULAR_BDT: "৳১৩,১০০"`
+- ভবিষ্যতে দাম বদলাতে শুধু `config.js` এডিট করলেই পুরো সাইটে বদলাবে।
+
+---
+
+## 📊 Apps Script আপগ্রেড (C1–C4)
+
+`apps-script/OrderProcessor.gs` ফাইলে সম্পূর্ণ কোড আছে।
+
+### একবারের সেটআপ:
+
+**ধাপ ১: Apps Script খোলো**
+1. Google Sheet খোলো
+2. **Extensions** → **Apps Script**
+3. যা আছে সব মুছে `apps-script/OrderProcessor.gs` ফাইলের সম্পূর্ণ কোড পেস্ট করো
+
+**ধাপ ২: Config বসাও**
+স্ক্রিপ্টের উপরে এই লাইনগুলো বদলাও:
+```javascript
+const SHEET_NAME   = 'Orders';          // তোমার Sheet-এর tab নাম
+const ADMIN_TOKEN  = 'CHANGE_ME_NOW';   // একটা লম্বা random পাসওয়ার্ড দাও (random.org থেকে)
+const DIGEST_EMAIL = 'info@themethodmafia.com';  // digest email ঠিকানা
+```
+
+**ধাপ ৩: Deploy করো**
+1. **Deploy** → **New deployment**
+2. Type: **Web App**
+3. Execute as: **Me**
+4. Who has access: **Anyone**
+5. **Deploy** চাপো → URL কপি করো
+6. সেই URL → `config.js`-এ `SHEET_URL:` লাইনে বসাও
+
+**ধাপ ৪: Sheet headers সেটআপ**
+Apps Script editor-এ `setupSheetHeaders` ফাংশন সিলেক্ট করে ▶ Run চাপো।
+Sheet-এ নতুন কলাম তৈরি হবে: Timestamp, Order ID, Name, Email, Telegram, Plan, Amount, Payment, **Source, Medium, Campaign**, Status, Expiry, Days Left, Notes
+
+---
+
+### প্রতিদিনের কাজ — C1: Pending → Active (১-ক্লিক)
+
+সকালে Daily Digest email আসবে `info@themethodmafia.com`-এ। তাতে:
+- নতুন অর্ডারের তালিকা
+- Pending অর্ডারের লিস্ট
+- প্রতিটির নিচে **"Activate [Order ID]"** লিংক
+
+সেই লিংকে ক্লিক করলে:
+1. Order `Active` হয়ে যাবে
+2. একটা **confirmation URL** দেখাবে — এটা কাস্টমারকে পাঠাও
+3. কাস্টমার সেই URL খুললে তাদের ব্রাউজারে Purchase event fire হবে (GA/FB ads tracking)
+
+**অথবা সরাসরি URL দিয়ে:**
+```
+https://script.google.com/macros/.../exec?action=activate&orderId=MM-2026-XXXX&token=তোমার_টোকেন
+```
+
+---
+
+### C2: Duplicate Detection
+
+নতুন অর্ডার আসলে Apps Script আপনাআপনি দেখবে সেই Telegram বা Email আগে এসেছে কিনা।
+Sheet-এর **Notes** কলামে `⚠️ DUPLICATE` লেখা দেখলে সেই অর্ডারটা একটু সতর্কতার সাথে যাচাই করো।
+
+---
+
+### C3: Daily Digest Setup
+
+Apps Script editor → **Triggers** (⏰ আইকন) → **Add Trigger**:
+```
+Function:     dailyDigestTrigger
+Event source: Time-driven
+Type:         Day timer
+Time:         9am to 10am
+```
+এখন প্রতিদিন সকাল ৯টায় digest email আসবে।
+
+---
+
+### C4: Expiry Reminder Setup
+
+আরেকটা Trigger:
+```
+Function:     expiryReminderTrigger
+Event source: Time-driven
+Type:         Day timer
+Time:         10am to 11am
+```
+৩ দিন বা কম বাকি থাকলে প্রতিদিন reminder email আসবে।
+
+**ম্যানুয়ালি চালাতে:**
+```
+https://script.google.com/macros/.../exec?action=expiry&token=তোমার_টোকেন
+```
+
+---
+
+## 📝 Blog পেজ (E4 — SEO)
+
+নতুন ৪টি পেজ তৈরি হয়েছে:
+
+| পেজ | URL |
+|-----|-----|
+| VIP-তে কী আছে | `/blog/vip-access.html` |
+| Payment কীভাবে কাজ করে | `/blog/how-payment-works.html` |
+| Freelancers-দের জন্য | `/blog/freelancer-tools.html` |
+| নতুন মেম্বার গাইড | `/blog/getting-started.html` |
+
+- Footer-এ link আছে
+- Sitemap-এ add করা হয়েছে
+- প্রতি পেজে CTA আছে `#order`-এ
+
+---
+
+## 📍 Order Status URL — Purchase Tracking
+
+পেমেন্ট নিশ্চিত হলে কাস্টমারকে এই URL পাঠাও:
+```
+https://themethodmafia.com/order-status.html?orderId=MM-XXXX&confirmed=1&plan=Entry
+```
+(Apps Script-এর Activate লিংক থেকেও এই URL পাওয়া যাবে)
+
+এই URL খুললে:
+- GA-তে `purchase` event fire হবে
+- FB Pixel-এ `Purchase` event fire হবে
+- "Payment Confirmed" banner দেখাবে কাস্টমারকে
+
+---
+
+## 🔗 UTM Tracking
+
+এখন ad লিংকে UTM যোগ করলে Sheet-এ **Source, Medium, Campaign** কলামে যাবে:
+```
+https://themethodmafia.com/?utm_source=facebook&utm_medium=paid&utm_campaign=entry_sep26
+https://themethodmafia.com/?utm_source=tiktok&utm_medium=paid&utm_campaign=promo_oct
+https://themethodmafia.com/?utm_source=telegram&utm_medium=organic
+```
+
+---
+
+## 🔒 Security Headers
+
+`_headers` ফাইল যোগ করা হয়েছে — Cloudflare Pages এটা অটো লোড করে।
+`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` সব set আছে।
+
+---
+
+## 🌐 Google Analytics Fix
+
+সব পেজে GA এখন সঠিকভাবে লোড হবে (`?id=G-HG9ELWF8ER` সহ)।
+`config.js`-এ `GA_ID` বদলালে সব পেজে অটো আপডেট হবে।
+

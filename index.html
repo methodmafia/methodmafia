@@ -10,9 +10,7 @@
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta name="theme-color" content="#FFA500">
 <link rel="canonical" href="https://themethodmafia.com/">
-<link rel="alternate" hreflang="en" href="https://themethodmafia.com/">
-<link rel="alternate" hreflang="bn" href="https://themethodmafia.com/">
-<link rel="alternate" hreflang="hi" href="https://themethodmafia.com/">
+<!-- Single-URL multilingual site: one canonical, no per-language duplicates -->
 <link rel="alternate" hreflang="x-default" href="https://themethodmafia.com/">
 <link rel="icon" href="images/logo.jpg">
 <link rel="apple-touch-icon" href="images/logo.jpg">
@@ -28,8 +26,6 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="The Method Mafia — Premium VIP Community">
 <meta property="og:locale" content="en_US">
-<meta property="og:locale:alternate" content="bn_BD">
-<meta property="og:locale:alternate" content="hi_IN">
 
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
@@ -86,11 +82,17 @@ ttq.load(CONFIG.TIKTOK_PIXEL); ttq.page();
 }(window,document,'ttq');
 </script>
 
-<!-- Google Analytics -->
-<script async src="https://www.googletagmanager.com/gtag/js"></script>
+<!-- Google Analytics — B1: loads with ?id= from config -->
 <script>
-window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}
-gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
+(function(GA_ID){
+  var s=document.createElement('script');s.async=true;
+  s.src='https://www.googletagmanager.com/gtag/js?id='+GA_ID;
+  document.head.appendChild(s);
+  window.dataLayer=window.dataLayer||[];
+  function gtag(){dataLayer.push(arguments)}
+  window.gtag=gtag;
+  gtag('js',new Date());gtag('config',GA_ID);
+})(CONFIG.GA_ID);
 </script>
 </head>
 <body>
@@ -101,7 +103,7 @@ gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
 <!-- ══ HEADER ══ -->
 <header>
   <div class="hdr-left">
-    <div class="hdr-logo"><img src="images/logo.jpg" alt="The Method Mafia"></div>
+    <div class="hdr-logo"><img src="images/logo.jpg" alt="The Method Mafia" loading="lazy"></div>
     <div>
       <div class="hdr-name">THE METHOD MAFIA</div>
       <div class="hdr-sub" data-t="footerTag">Premium VIP Community</div>
@@ -167,7 +169,7 @@ gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
     <div class="stat"><div class="stat-n" id="sUpd">0</div><div class="stat-l" data-t="statUpdates">Updates</div></div>
   </div>
 
-  <a href="#order" class="cta-lg"><span data-t="heroCta">Join The Mafia</span> — <span class="price-old" data-cfg="ENTRY_REGULAR_USD">$80</span> <span data-cfg="ENTRY_USD">$30</span> <span class="price-save" data-t="priceSaveShort">SAVE 62%</span></a>
+  <a href="#order" class="cta-lg"><span data-t="heroCta">Join The Mafia</span> — <span class="price-old" data-cfg="ENTRY_REGULAR_USD">$100</span> <span data-cfg="ENTRY_USD">$30</span> <span class="price-save" data-t="priceSaveShort">SAVE 70%</span></a>
   <p class="cta-note">🔒 <span data-t="heroNote">Instant access after payment confirmation</span></p>
 </div>
 
@@ -190,7 +192,6 @@ gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
       <div class="prob-d" data-t="problem4Text"></div></div>
   </div>
 </section>
-
 
 <div class="divider"></div>
 
@@ -215,7 +216,7 @@ gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
   <h2 class="sec-title" data-t="bannerTitle">Your Complete Resource Library</h2>
   <p class="sec-sub" data-t="bannerSub">Over 1000 curated methods, tools and guides</p>
   <div class="banner-wrap">
-    <img src="images/banner.jpg" alt="The Method Mafia — Premium VIP Group">
+    <img src="images/banner.jpg" alt="The Method Mafia — Premium VIP Group" loading="lazy">
   </div>
 
   <div class="tg-block">
@@ -287,12 +288,12 @@ gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
       <div class="p-badge" data-t="planEntryBadge">START HERE</div>
       <div class="p-name" data-t="planEntryName">Entry — First Month</div>
       <div class="p-price-wrap">
-        <span class="p-price-old" data-cfg="ENTRY_REGULAR_USD">$80</span>
+        <span class="p-price-old" data-cfg="ENTRY_REGULAR_USD">$100</span>
         <span class="p-price" id="pEntryPrice">$30</span>
       </div>
-      <div class="p-save-badge" data-t="priceSave">SAVE $50 — 62% OFF</div>
+      <div class="p-save-badge" data-t="priceSave">SAVE $70 — 70% OFF</div>
       <div class="p-freq" data-t="planEntryFreq">One-time payment</div>
-      <div class="p-bdt local-price"><span class="local-old" data-cfg="ENTRY_REGULAR_BDT">৳১০,৪৮০</span> <span data-cfg="ENTRY_BDT">৳৩,৯৩০</span></div>
+      <div class="p-bdt local-price"><span class="local-old" data-cfg="ENTRY_REGULAR_BDT">৳১৩,১০০</span> <span data-cfg="ENTRY_BDT">৳৩,৯৩০</span></div>
       <div class="p-feats">
         <div class="p-feat"><span class="chk">✓</span><span data-t="ef1"></span></div>
         <div class="p-feat"><span class="chk">✓</span><span data-t="ef2"></span></div>
@@ -317,6 +318,12 @@ gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
       </div>
       <a href="#order" class="p-btn outline" data-t="btnSubscribe">Subscribe</a>
     </div>
+  </div>
+
+  <!-- A2: Upsell explainer box -->
+  <div class="upsell-box">
+    <div class="upsell-title" data-t="upsellTitle">Why $30 first, then $15?</div>
+    <div class="upsell-text" data-t="upsellText"></div>
   </div>
 
   <p class="price-note">
@@ -353,7 +360,7 @@ gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
       <label class="lbl" data-t="lblPlan">Select Plan</label>
       <div class="plan-row">
         <button class="plan-opt sel" onclick="selectPlan(this,'entry')">
-          <span class="plan-ic">🚀</span><span data-t="optEntry">Entry <s class="plan-old">$80</s> $30</span>
+          <span class="plan-ic">🚀</span><span data-t="optEntry">Entry <s class="plan-old">$100</s> $30</span>
         </button>
         <button class="plan-opt" onclick="selectPlan(this,'monthly')">
           <span class="plan-ic">🔄</span><span data-t="optMonthly">Monthly $15</span>
@@ -374,6 +381,15 @@ gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
 
     <button class="submit-btn" id="submitBtn" onclick="submitOrder()" data-t="btnSubmit">Submit Order</button>
     <p class="form-footer" data-t="formFooter"></p>
+
+    <!-- A1/A5: Next steps after ordering -->
+    <div class="next-steps-box" style="margin-top:18px">
+      <div class="next-steps-title" data-t="nextStepsTitle">✅ What happens next</div>
+      <div class="next-step" data-t="nextStep1"></div>
+      <div class="next-step" data-t="nextStep2"></div>
+      <div class="next-step" data-t="nextStep3"></div>
+      <div class="next-steps-note" data-t="nextStepsNote"></div>
+    </div>
   </div>
 </section>
 
@@ -401,10 +417,13 @@ gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
   <h2 class="sec-title" data-t="faqTitle">Common Questions</h2>
   <div class="faq">
     <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span data-t="q1"></span><span class="faq-ic">+</span></button><div class="faq-a" data-t="a1"></div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span data-t="q11"></span><span class="faq-ic">+</span></button><div class="faq-a" data-t="a11"></div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span data-t="q13"></span><span class="faq-ic">+</span></button><div class="faq-a" data-t="a13"></div></div>
     <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span data-t="q2"></span><span class="faq-ic">+</span></button><div class="faq-a" data-t="a2"></div></div>
     <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span data-t="q3"></span><span class="faq-ic">+</span></button><div class="faq-a" data-t="a3"></div></div>
     <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span data-t="q4"></span><span class="faq-ic">+</span></button><div class="faq-a" data-t="a4"></div></div>
     <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span data-t="q5"></span><span class="faq-ic">+</span></button><div class="faq-a" data-t="a5"></div></div>
+    <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span data-t="q12"></span><span class="faq-ic">+</span></button><div class="faq-a" data-t="a12"></div></div>
     <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span data-t="q6"></span><span class="faq-ic">+</span></button><div class="faq-a" data-t="a6"></div></div>
     <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span data-t="q7"></span><span class="faq-ic">+</span></button><div class="faq-a" data-t="a7"></div></div>
     <div class="faq-item"><button class="faq-q" onclick="toggleFaq(this)"><span data-t="q8"></span><span class="faq-ic">+</span></button><div class="faq-a" data-t="a8"></div></div>
@@ -417,10 +436,10 @@ gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
 <!-- ══ FINAL CTA ══ -->
 <section class="final-cta reveal">
   <div class="final-inner">
-    <img src="images/logo.jpg" alt="" class="final-logo">
+    <img src="images/logo.jpg" alt="" class="final-logo" loading="lazy">
     <h2 class="sec-title" data-t="finalTitle">Ready When You Are</h2>
     <p class="final-text" data-t="finalText"></p>
-    <a href="#order" class="cta-lg"><span data-t="finalBtn">Join Premium Group</span> — <span class="price-old" data-cfg="ENTRY_REGULAR_USD">$80</span> <span data-cfg="ENTRY_USD">$30</span> <span class="price-save" data-t="priceSaveShort">SAVE 62%</span></a>
+    <a href="#order" class="cta-lg"><span data-t="finalBtn">Join Premium Group</span> — <span class="price-old" data-cfg="ENTRY_REGULAR_USD">$100</span> <span data-cfg="ENTRY_USD">$30</span> <span class="price-save" data-t="priceSaveShort">SAVE 70%</span></a>
     <div class="final-or" data-t="finalOr">or</div>
     <a class="tg-btn" data-href="PUBLIC_CHANNEL" target="_blank" rel="noopener">
       ✈️ <span data-t="tgBtn">Join Free Channel</span>
@@ -430,7 +449,7 @@ gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
 
 <!-- ══ FOOTER ══ -->
 <footer>
-  <img src="images/logo.jpg" alt="The Method Mafia" class="ft-logo-img">
+  <img src="images/logo.jpg" alt="The Method Mafia" class="ft-logo-img" loading="lazy">
   <div class="ft-name">THE METHOD MAFIA</div>
   <div class="ft-tag" data-t="footerTag">Premium VIP Community</div>
   <div class="ft-links">
@@ -443,6 +462,13 @@ gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
     <a href="privacy.html" data-t="ftPrivacy">Privacy</a>
     <a href="refund.html" data-t="ftRefund">Refund</a>
   </div>
+  <!-- E4: Blog teaser pages in footer -->
+  <div class="ft-links" style="margin-top:10px">
+    <a href="blog/vip-access.html">📦 What's Inside VIP</a>
+    <a href="blog/how-payment-works.html">💳 How Payment Works</a>
+    <a href="blog/freelancer-tools.html">💻 For Freelancers</a>
+    <a href="blog/getting-started.html">🚀 Getting Started</a>
+  </div>
   <div class="ft-copy">
     © 2026 The Method Mafia. <span data-t="ftRights">All rights reserved.</span><br>
     <span data-cfg="EMAIL">info@themethodmafia.com</span>
@@ -454,6 +480,11 @@ gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
 <button class="scroll-top" id="scrollTop" onclick="scrollToTop()">↑</button>
 <div class="toast" id="toast"></div>
 <div class="live-pop" id="livePop"></div>
+
+<!-- A3: Mobile sticky CTA -->
+<a href="#order" class="sticky-cta" id="stickyCta">
+  🔒 <span data-t="heroCta">Join The Mafia</span> — <span data-cfg="ENTRY_USD">$30</span> <span style="font-size:11px;opacity:.75" data-t="priceSaveShort">SAVE 70%</span>
+</a>
 
 <!-- ══ EXIT POPUP ══ -->
 <div class="exit-overlay" id="exitPop">

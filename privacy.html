@@ -4,16 +4,24 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Privacy Policy — The Method Mafia</title>
-<meta name="description" content="Privacy policy for The Method Mafia">
+<meta name="description" content="Privacy policy for The Method Mafia. What data we collect, how we use it, and your rights.">
+<link rel="canonical" href="https://themethodmafia.com/privacy.html">
 <link rel="icon" href="images/logo.jpg">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Hind+Siliguri:wght@400;600;700&family=Inter:wght@700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <script src="config.js"></script>
 <script>try{var L=localStorage.getItem('mm_lang');if(L)document.documentElement.lang=L;}catch(e){}</script>
-<script async src="https://www.googletagmanager.com/gtag/js"></script>
+<!-- Google Analytics — B1 -->
 <script>
-window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}
-gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
+(function(GA_ID){
+  var s=document.createElement('script');s.async=true;
+  s.src='https://www.googletagmanager.com/gtag/js?id='+GA_ID;
+  document.head.appendChild(s);
+  window.dataLayer=window.dataLayer||[];
+  function gtag(){dataLayer.push(arguments)}
+  window.gtag=gtag;
+  gtag('js',new Date());gtag('config',GA_ID);
+})(CONFIG.GA_ID);
 </script>
 </head>
 <body>
@@ -22,7 +30,7 @@ gtag('js',new Date()); gtag('config', CONFIG.GA_ID);
 <header>
   <div class="hdr-left">
     <a href="index.html" style="display:flex;align-items:center;gap:11px">
-      <div class="hdr-logo"><img src="images/logo.jpg" alt="The Method Mafia"></div>
+      <div class="hdr-logo"><img src="images/logo.jpg" alt="The Method Mafia" loading="lazy"></div>
       <div>
         <div class="hdr-name">THE METHOD MAFIA</div>
         <div class="hdr-sub" data-t="footerTag">Premium VIP Community</div>
