@@ -217,7 +217,7 @@ h1.hero-title{
   transition:transform .25s,box-shadow .25s;margin-bottom:11px;
 }
 .cta-lg:hover{transform:translateY(-4px) scale(1.02);box-shadow:0 0 58px rgba(255,165,0,.62)}
-.cta-note{font-size:10.5px;color:var(--gold-dim);letter-spacing:.4px}
+.cta-note{font-size:10.5px;color:rgba(200,168,70,.88);letter-spacing:.4px}
 
 /* ═══ LAYOUT ═══ */
 .divider{height:1px;background:linear-gradient(90deg,transparent,var(--line-2),transparent);position:relative;z-index:1}
@@ -527,7 +527,7 @@ footer{
 .ft-links{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-bottom:14px}
 .ft-links a{font-size:11.5px;color:var(--gold-dim);transition:.2s}
 .ft-links a:hover{color:var(--gold)}
-.ft-copy{font-size:10.5px;color:rgba(128,104,32,.32);line-height:1.7}
+.ft-copy{font-size:10.5px;color:rgba(160,132,55,.65);line-height:1.7}
 
 /* ═══ FLOATING ═══ */
 .float-tg{
@@ -677,6 +677,14 @@ footer{
   .float-tg{width:46px;height:46px;font-size:21px;bottom:18px;right:18px}
   .live-pop{max-width:230px;bottom:18px;left:18px;padding:9px 12px}
   .toast{bottom:76px;right:18px;max-width:250px}
+  /* Fix 3: hero/final CTA — clean 2-line layout on mobile */
+  .cta-lg{
+    display:flex;flex-direction:column;align-items:center;
+    gap:5px;padding:14px 28px;
+    font-size:14px;letter-spacing:.9px;
+  }
+  .cta-dash{display:none}
+  .cta-price-line{display:flex;align-items:center;gap:5px}
 }
 @media(max-width:380px){
   .hdr-sub{display:none}
@@ -751,12 +759,14 @@ footer{
   transform:translateY(0);opacity:1;
 }
 @media(max-width:700px){
-  .sticky-cta{display:flex}
-  /* push overlapping elements above sticky bar (~48px tall) */
+  .sticky-cta{display:flex;flex-wrap:wrap}
+  /* push overlapping elements above sticky bar */
   .toast{bottom:80px}
   .float-tg{bottom:74px}
   body.sticky-visible .scroll-top{bottom:80px}
-  body.sticky-visible .live-pop{bottom:80px}
+  body.sticky-visible .live-pop{bottom:88px}
+  /* prevent last content cards from hiding under sticky bar */
+  body.sticky-visible{padding-bottom:72px}
 }
 
 /* ═══ UPSELL BOX (A2) ═══ */
