@@ -124,8 +124,8 @@ en: {
   phTelegram: "@yourusername",
   optEntry: "Entry <s class='plan-old'>$100</s> $30",
   optMonthly: "Monthly $15",
-  orderTotal: "Total",
-  orderThen: "Then monthly",
+  orderTotal: "Pay today",
+  orderThen: "From month 2",
   btnSubmit: "Submit Order",
   formFooter: "After submitting, message us on Telegram to complete payment",
 
@@ -334,8 +334,8 @@ bn: {
   phTelegram: "@yourusername",
   optEntry: "এন্ট্রি <s class='plan-old'>$১০০</s> $৩০",
   optMonthly: "মাসিক $১৫",
-  orderTotal: "সর্বমোট",
-  orderThen: "এরপর মাসিক",
+  orderTotal: "আজ পরিশোধ",
+  orderThen: "দ্বিতীয় মাস থেকে",
   btnSubmit: "অর্ডার সাবমিট করুন",
   formFooter: "সাবমিট করার পর পেমেন্ট সম্পন্ন করতে টেলিগ্রামে মেসেজ করুন",
 
@@ -536,8 +536,8 @@ hi: {
   phTelegram: "@yourusername",
   optEntry: "एंट्री <s class='plan-old'>$100</s> $30",
   optMonthly: "मासिक $15",
-  orderTotal: "कुल",
-  orderThen: "फिर मासिक",
+  orderTotal: "आज भुगतान",
+  orderThen: "दूसरे महीने से",
   btnSubmit: "ऑर्डर सबमिट करें",
   formFooter: "सबमिट करने के बाद पेमेंट पूरा करने के लिए टेलीग्राम पर मैसेज करें",
 

@@ -352,6 +352,7 @@ function updateOrderBox(){
   const amt = document.getElementById('oAmount');
   const tot = document.getElementById('oTotal');
   const thn = document.getElementById('oThen');
+  const thnRow = document.getElementById('oThenRow');
   if(!lbl) return;
 
   const showBDT = (LANG === 'bn');
@@ -363,16 +364,20 @@ function updateOrderBox(){
       : CONFIG.ENTRY_USD;
     const oldText = showBDT ? CONFIG.ENTRY_REGULAR_USD + ' / ' + CONFIG.ENTRY_REGULAR_BDT : CONFIG.ENTRY_REGULAR_USD;
     amt.innerHTML = '<s class="price-old">'+oldText+'</s> '+amountText;
-    tot.innerHTML = '<s class="price-old">'+CONFIG.ENTRY_REGULAR_USD+'</s> '+CONFIG.ENTRY_USD;
+    /* Pay today: just the discounted price — no repeated strike on total row */
+    tot.textContent = CONFIG.ENTRY_USD;
+    /* "From month 2" row: show with /mo suffix so it's clear it's not added today */
+    if(thnRow) thnRow.style.display = '';
+    if(thn) thn.textContent = CONFIG.MONTHLY_USD + t('planPerMonth');
   } else {
     lbl.textContent = t('planMonthlyName');
     amt.textContent = showBDT
       ? CONFIG.MONTHLY_USD + ' / ' + CONFIG.MONTHLY_BDT
       : CONFIG.MONTHLY_USD;
     tot.textContent = CONFIG.MONTHLY_USD;
+    /* Hide the "From month 2" row — irrelevant for monthly plan */
+    if(thnRow) thnRow.style.display = 'none';
   }
-
-  if(thn) thn.textContent = CONFIG.MONTHLY_USD;
 }
 
 /* ─── Order ID তৈরি ─── */
