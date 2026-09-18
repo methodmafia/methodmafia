@@ -264,29 +264,66 @@ function switchTab(btn, cat){
   btn.classList.add('active');
 }
 
-/* ─── রিভিউ রেন্ডার ─── */
+/* ─── রিভিউ রেন্ডার (প্রগ্রেসিভ reveal) ─── */
+const TESTI_INITIAL = 10;
+const TESTI_BATCH   = 12;
+const TESTI_COLORS  = [
+  'linear-gradient(135deg,#FFD700,#FFA500)',
+  'linear-gradient(135deg,#ef4444,#f59e0b)',
+  'linear-gradient(135deg,#10b981,#3b82f6)',
+  'linear-gradient(135deg,#8b5cf6,#ec4899)'
+];
+let _testiShown = 0;
+let _testiList  = [];
+
+function _testiCardHtml(item, absIdx){
+  const [ini,name,date,text,stars] = item;
+  const s = (stars === 4) ? '★★★★<span class="t-star-dim">★</span>' : '★★★★★';
+  return `<div class="t-card">
+    <div class="t-head">
+      <div class="t-av" style="background:${TESTI_COLORS[absIdx%4]}">${ini}</div>
+      <div><div class="t-name">${name}</div><div class="t-date">${date}</div></div>
+    </div>
+    <div class="t-stars">${s}</div>
+    <div class="t-text">${text}</div>
+  </div>`;
+}
+
+function _updateTestiBtn(){
+  const btn = document.getElementById('testiMoreBtn');
+  if(!btn) return;
+  if(_testiShown >= _testiList.length){
+    btn.textContent = t('testiAllShown');
+    btn.disabled = true;
+  } else {
+    btn.textContent = t('testiSeeMore');
+    btn.disabled = false;
+  }
+}
+
 function renderReviews(){
   const box = document.getElementById('reviewGrid');
   if(!box) return;
-  const list = REVIEWS[LANG] || REVIEWS.en;
-  const colors = [
-    'linear-gradient(135deg,#FFD700,#FFA500)',
-    'linear-gradient(135deg,#ef4444,#f59e0b)',
-    'linear-gradient(135deg,#10b981,#3b82f6)',
-    'linear-gradient(135deg,#8b5cf6,#ec4899)'
-  ];
-  box.innerHTML = list.map(([ini,name,date,text,stars],i)=>{
-    const s = (stars === 4) ? '★★★★<span class="t-star-dim">★</span>' : '★★★★★';
-    return `
-    <div class="t-card">
-      <div class="t-head">
-        <div class="t-av" style="background:${colors[i%4]}">${ini}</div>
-        <div><div class="t-name">${name}</div><div class="t-date">${date}</div></div>
-      </div>
-      <div class="t-stars">${s}</div>
-      <div class="t-text">${text}</div>
-    </div>`;
-  }).join('');
+  _testiList  = REVIEWS[LANG] || REVIEWS.en;
+  _testiShown = 0;
+  box.innerHTML = '';
+  const first = Math.min(TESTI_INITIAL, _testiList.length);
+  let html = '';
+  for(let i = 0; i < first; i++) html += _testiCardHtml(_testiList[i], i);
+  box.innerHTML = html;
+  _testiShown = first;
+  _updateTestiBtn();
+}
+
+function loadMoreReviews(){
+  const box = document.getElementById('reviewGrid');
+  if(!box || _testiShown >= _testiList.length) return;
+  const end = Math.min(_testiShown + TESTI_BATCH, _testiList.length);
+  let html = '';
+  for(let i = _testiShown; i < end; i++) html += _testiCardHtml(_testiList[i], i);
+  box.insertAdjacentHTML('beforeend', html);
+  _testiShown = end;
+  _updateTestiBtn();
 }
 
 /* ─── স্থানীয় মুদ্রা (৳) শুধু বাংলায় দেখাবে ─── */
