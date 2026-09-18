@@ -356,6 +356,15 @@ html[lang="bn"] h2.sec-title,html[lang="hi"] h2.sec-title{letter-spacing:.8px}
 .t-stars{color:var(--gold);font-size:11px;margin-bottom:7px;letter-spacing:2.5px}
 .t-star-dim{color:#3a2e14;opacity:.65}
 .t-text{font-size:12px;color:var(--gold-dim);line-height:1.7}
+.testi-more-wrap{text-align:center;margin-top:22px}
+.testi-more-btn{
+  background:transparent;border:1px solid var(--gold);color:var(--gold);
+  padding:11px 38px;border-radius:6px;cursor:pointer;font-size:12.5px;
+  letter-spacing:1.2px;text-transform:uppercase;font-weight:600;
+  transition:background .2s,color .2s,opacity .2s;
+}
+.testi-more-btn:hover:not(:disabled){background:var(--gold);color:#000}
+.testi-more-btn:disabled{opacity:.45;cursor:default}
 
 /* ═══ PRICING ═══ */
 .price-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(275px,1fr));gap:20px;max-width:700px;margin:0 auto}
