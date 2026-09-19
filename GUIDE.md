@@ -271,7 +271,7 @@ ai: [
 
 ## যখন কেউ অর্ডার করে
 
-**১. Google Sheet-এ নতুন সারি আসবে** — নাম, ইমেইল, টেলিগ্রাম, প্ল্যান, পেমেন্ট মেথড, সোর্স
+**১. Google Sheet-এ নতুন সারি আসবে** — নাম, ইমেইল, টেলিগ্রাম, প্ল্যান, পেমেন্ট মেথড, সোর্স, **Language (EN/BN/HI)**
 
 **২. তোমার Telegram-এ মেসেজ আসবে** এভাবে:
 
@@ -550,9 +550,11 @@ Frontend-এ `ADMIN_TOKEN` যাবে না। শুধু `{ok, found, orde
 
 **ধাপ ৪: Sheet headers সেটআপ**
 Apps Script editor-এ `setupSheetHeaders` ফাংশন সিলেক্ট করে ▶ Run চাপো।
-Sheet-এ কলাম তৈরি হবে: Timestamp, Order ID, Name, Email, Telegram, Plan, Amount, Payment, **Source, Medium, Campaign**, Status, Expiry, Days Left, Notes, **FBclid, TTclid**
+Sheet-এ কলাম তৈরি হবে: Timestamp, Order ID, Name, Email, Telegram, Plan, Amount, Payment, **Source, Medium, Campaign**, Status, Expiry, Days Left, Notes, **FBclid, TTclid, Language**
 
-আগে থেকে Sheet চালু থাকলে শেষে দুটো কলাম যোগ করো: `FBclid` আর `TTclid` (Notes-এর পরে)। অথবা `setupSheetHeaders` আবার Run করো — শুধু হেডার রো আপডেট হবে।
+আগে থেকে Sheet চালু থাকলে শেষে **Language** কলাম যোগ করো (`TTclid`-এর পরে, সাধারণত কলাম **R**)। ভ্যালু হবে **EN / BN / HI** (ফর্ম থেকে `language=en|bn|hi`) — রিনিউ ইমেইল ও টেলিগ্রাম এই ভাষায় যাবে। অথবা `setupSheetHeaders` আবার Run করো — শুধু হেডার রো আপডেট হবে।
+
+আগে থেকে FBclid/TTclid না থাকলে সেগুলোও শেষে যোগ করো: `FBclid` আর `TTclid` (Notes-এর পরে), তারপর `Language`।
 
 ---
 
@@ -687,7 +689,7 @@ Ads শুধু **Entry** টার্গেট করে। Purchase value **�
 
 Google Sheet → **Extensions** → **Apps Script**
 
-- Keep `OrderProcessor.gs` (replace with the repo file — it now has FBclid / TTclid columns)
+- Keep `OrderProcessor.gs` (replace with the repo file — it now has FBclid / TTclid / Language columns)
 - **+** → Script → name it `CapiPurchase` → paste `apps-script/CapiPurchase.gs`
 
 Save (Ctrl+S).
