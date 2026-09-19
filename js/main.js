@@ -379,8 +379,14 @@ function selectPrefLang(el, code){
   const lang = (typeof MMSheet !== 'undefined')
     ? MMSheet.normalizeOrderLanguage(code)
     : (code === 'bn' || code === 'hi' ? code : 'en');
-  document.querySelectorAll('.lang-pref-opt').forEach(b=>b.classList.remove('sel'));
-  if(el) el.classList.add('sel');
+  document.querySelectorAll('.lang-pref-opt').forEach(b=>{
+    b.classList.remove('sel');
+    b.setAttribute('aria-pressed', 'false');
+  });
+  if(el){
+    el.classList.add('sel');
+    el.setAttribute('aria-pressed', 'true');
+  }
   SELECTED_PREF_LANG = lang;
   const hidden = document.getElementById('iLanguage');
   if(hidden) hidden.value = lang;
@@ -527,13 +533,14 @@ function submitOrder(){
   const track = (typeof MMTracking !== 'undefined')
     ? MMTracking.buildSheetTrackingFields(utmData)
     : {source:utmData.utm_source, medium:utmData.utm_medium, campaign:utmData.utm_campaign, fbclid:utmData.fbclid||'', ttclid:utmData.ttclid||''};
+  const prefLangInput = document.getElementById('iLanguage');
   const payload = {
     orderId: orderId,
     name: name.value.trim(),
     email: email.value.trim(),
     telegram: handle,
     language: (typeof MMSheet !== 'undefined')
-      ? MMSheet.normalizeOrderLanguage(SELECTED_PREF_LANG)
+      ? MMSheet.normalizeOrderLanguage(prefLangInput ? prefLangInput.value : SELECTED_PREF_LANG)
       : (SELECTED_PREF_LANG === 'bn' || SELECTED_PREF_LANG === 'hi' ? SELECTED_PREF_LANG : 'en'),
     plan: SELECTED_PLAN === 'entry' ? 'Entry' : 'Monthly',
     amount: SELECTED_PLAN === 'entry' ? CONFIG.ENTRY_USD : CONFIG.MONTHLY_USD,

@@ -136,6 +136,7 @@
     return 'en';
   }
 
+  /* Sheet column stores EN/BN/HI. Keep in sync with OrderProcessor.gs → sheetLanguageLabel_ */
   function sheetLanguageLabel(code){
     return normalizeOrderLanguage(code).toUpperCase();
   }

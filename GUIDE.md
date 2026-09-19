@@ -282,6 +282,7 @@ Order ID : MM-2026-4821
 Name     : রাকিব হাসান
 Email    : rakib@gmail.com
 Telegram : @rakib_h
+Language : BN
 ━━━━━━━━━━━━━━
 Plan     : Entry
 Amount   : $30
@@ -552,7 +553,7 @@ Frontend-এ `ADMIN_TOKEN` যাবে না। শুধু `{ok, found, orde
 Apps Script editor-এ `setupSheetHeaders` ফাংশন সিলেক্ট করে ▶ Run চাপো।
 Sheet-এ কলাম তৈরি হবে: Timestamp, Order ID, Name, Email, Telegram, Plan, Amount, Payment, **Source, Medium, Campaign**, Status, Expiry, Days Left, Notes, **FBclid, TTclid, Language**
 
-আগে থেকে Sheet চালু থাকলে শেষে **Language** কলাম যোগ করো (`TTclid`-এর পরে, সাধারণত কলাম **R**)। ভ্যালু হবে **EN / BN / HI** (ফর্ম থেকে `language=en|bn|hi`) — রিনিউ ইমেইল ও টেলিগ্রাম এই ভাষায় যাবে। অথবা `setupSheetHeaders` আবার Run করো — শুধু হেডার রো আপডেট হবে।
+আগে থেকে Sheet চালু থাকলে শেষে **Language** কলাম যোগ করো (`TTclid`-এর পরে, সাধারণত কলাম **R**)। ভ্যালু হবে **EN / BN / HI** (ফর্ম থেকে `language=en|bn|hi`) — পরে রিনিউ ইমেইল ও টেলিগ্রাম এই ভাষায় পাঠানোর জন্য Sheet-এ সেভ হয়। এখনো অটো-রিনিউ মেসেজ এই কলাম পড়ে না; সাপোর্ট/রিনিউ লেখার সময় এই কলাম দেখে ভাষা বেছে নাও। অথবা `setupSheetHeaders` আবার Run করো — শুধু হেডার রো আপডেট হবে।
 
 আগে থেকে FBclid/TTclid না থাকলে সেগুলোও শেষে যোগ করো: `FBclid` আর `TTclid` (Notes-এর পরে), তারপর `Language`।
 
