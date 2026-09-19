@@ -30,10 +30,11 @@ methodmafia/
 │   └── pixels.js       ← Meta + TikTok pixel (সব পেজে)
 │
 ├── apps-script/
-│   ├── OrderProcessor.gs  ← Sheet orders + FBclid/TTclid
+│   ├── OrderProcessor.gs  ← Orders + status/CAPI + Master/Archive doPost + @MM_OrdersBot webhook
 │   ├── CapiPurchase.gs    ← Status→Active Purchase (CAPI)
 │   ├── SheetOrganize.gs   ← Master / Archive_Rejected / YYYY-MM
-│   └── Lifecycle.gs       ← Pending 24h nudge, Auto Expired, Renew +30
+│   ├── Lifecycle.gs       ← Pending 24h nudge, Auto Expired, Renew +30
+│   └── TelegramBot.gs     ← @MM_OrdersBot (confirm / VIP invite / pay-renew / kick)
 │
 └── images/
     ├── logo.jpg
@@ -946,4 +947,79 @@ cleanupLifecycleTests_   → deletes TEST_* tabs
 **ধাপ ৪:** Renew — `?action=renew&orderId=…&token=…` অথবা editor-এ `renewOrder("MM-…")`। আজ বা বর্তমান Expiry যেটা পরে, সেখান থেকে +৩০ দিন। Purchase যাবে না।
 
 Days Left: কলাম **K** সূত্র কলাম **J** (Expiry) দেখে — `=IF(J2="","",J2-TODAY())`।
+
+---
+
+# 🤖 PART 13 — @MM_OrdersBot (ONE bot only)
+
+Option A (Swa). **Only @MM_OrdersBot** — do not add another bot for reminders. Human support stays `@MMHQ_Support`. The bot DMs admin chat **7581392046** for ✅ confirm / kick confirm. Token is never in GitHub.
+
+Bot ✅ after you verify the payment screenshot (SS) → Sheet **Status Active** → existing CAPI Entry **$30** (`trySendPurchaseForRow_`) → **one-time** VIP invite (`createChatInviteLink` `member_limit=1`). The invite is DMed to the customer (or to 7581392046 to forward privately). **Never post a public VIP link.**
+
+Pay/renew TG runs after the existing 10am lifecycle job (`expiryLifecycleTrigger` → `runTelegramLifecycleHook_`). **Email path stays in Lifecycle.gs.** Kick is confirm-first: bot asks, then `banChatMember` only after you tap ✅.
+
+**Paste warning:** Live Apps Script already has Sheet organize + Lifecycle. This repo `OrderProcessor.gs` is that stack **plus** the Telegram webhook branch (`update_id`). It still dual-writes Master / current month via `upsertNewOrderToOrganizeTabs_`. Do **not** paste a pre-organize OrderProcessor (old Payment/Medium/Campaign-before-Status layout).
+
+## English — Swa must click
+
+### 1) Paste + Script Properties
+
+Sheet → Extensions → Apps Script
+
+1. Replace **OrderProcessor** with `apps-script/OrderProcessor.gs` from this branch (organize + public status + lifecycle routes + webhook). Keep **SheetOrganize**, **Lifecycle**, **CapiPurchase**.
+2. **+** → Script → name `TelegramBot` → paste `apps-script/TelegramBot.gs`
+3. ⚙️ Project Settings → Script properties:
+
+| Property | Value |
+|---|---|
+| `TELEGRAM_BOT_TOKEN` | BotFather token for **@MM_OrdersBot** (or run `setupAdminBotToken_("…")`) |
+| `TELEGRAM_VIP_CHAT_ID` | VIP channel numeric id (starts with `-100…`) |
+| `TELEGRAM_WEBHOOK_SECRET` | optional long random string |
+
+Never paste the token into this GUIDE, GitHub, or `config.js`. `DIGEST_EMAIL` stays `methodmafia.hq@gmail.com`.
+
+### 2) VIP channel — admin the bot
+
+VIP channel → Administrators → Add **@MM_OrdersBot**:
+
+- ✅ Invite users via link
+- ✅ Ban users
+
+If invite fails, Executions log: *VIP invite failed… Manager/Swa: add @MM_OrdersBot as admin…*
+
+### 3) Deploy Web App + setWebhook
+
+1. Deploy → Manage deployments → **New version** (same URL as `config.js` → `SHEET_URL`)
+2. Editor: function `setTelegramWebhook` → ▶ Run (or browser):
+
+```
+https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=<SHEET_URL>
+```
+
+Use the real token only in BotFather / the address bar — not in the repo. If you set `TELEGRAM_WEBHOOK_SECRET`, pass it as Telegram `secret_token` (the `setTelegramWebhook` helper does this).
+
+3. Message @MM_OrdersBot `/start` from the customer account so the bot can DM the invite.
+4. Admin chat **7581392046**: open @MM_OrdersBot once so DMs are allowed.
+
+### 4) Test
+
+1. Submit a test order → row on **Orders + Master**; admin 7581392046 gets NEW ORDER + ✅
+2. Verify SS with @MMHQ_Support → tap **✅ Confirm (SS verified)**
+3. Sheet Status `Active`; Entry Notes `PURCHASE_SENT`; customer (or admin) gets a **one-time** `t.me/+` link — not in the VIP channel
+4. Expired row (after auto-expire) → bot asks kick → only after ✅ is the member banned
+
+## বাংলা — Swa যা ক্লিক করবে
+
+**ধাপ ১:** `OrderProcessor.gs` পেস্ট করো — এটা **organize + lifecycle + webhook**। পুরোনো pre-organize ফাইল পেস্ট করবে না (Master/Archive মুছবে)। `TelegramBot.gs` নতুন ফাইল। `SheetOrganize` + `Lifecycle` + `CapiPurchase` রাখো। Script properties: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_VIP_CHAT_ID`। চাইলে `setupAdminBotToken_("…")` Run করো।
+
+**ধাপ ২:** VIP চ্যানেলে **@MM_OrdersBot** অ্যাডমিন করো — *Invite users via link* + *Ban users*।
+
+**ধাপ ৩:** Web App **New version**। তারপর `setTelegramWebhook` Run, অথবা:
+
+```
+https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=<SHEET_URL>
+```
+
+**ধাপ ৪:** কাস্টমার `@MM_OrdersBot`-এ `/start`। অ্যাডমিন চ্যাট 7581392046-এ বট ওপেন। SS যাচাইয়ের পর বটের ✅ — Active + CAPI $30 + একবারের VIP লিংক। পাবলিক VIP লিংক পোস্ট করবে না।
+
 

@@ -1,0 +1,1104 @@
+/**
+ * THE METHOD MAFIA — @MM_OrdersBot (Option A, Swa locked)
+ * ========================================================
+ * ONE bot only. Bound to the same Apps Script project as OrderProcessor.gs
+ * + CapiPurchase.gs (and Lifecycle.gs / SheetOrganize.gs when those are pasted).
+ *
+ * Token: Script Properties TELEGRAM_BOT_TOKEN only (or process env in tests).
+ *        Never hardcode. Run setupAdminBotToken_("token-from-BotFather").
+ *
+ * Admin confirm chat: 7581392046 (bot DMs this chat). @MMHQ_Support is human
+ * support — humans verify the payment screenshot, then tap bot ✅.
+ *
+ * Flows:
+ *   1) New Pending order → admin DM with ✅. Confirm → Status Active
+ *      + trySendPurchaseForRow_ (Entry $30 CAPI) + one-time VIP invite
+ *      (createChatInviteLink member_limit=1). NEVER post the link in VIP/public.
+ *   2) Pay/renew reminders → customer Telegram (email path stays in Lifecycle.gs).
+ *   3) Kick → confirm-first, then banChatMember.
+ *
+ * See GUIDE.md → PART 13.
+ */
+
+var TELEGRAM_ADMIN_CHAT_ID = '7581392046';
+var TELEGRAM_BOT_USERNAME = 'MM_OrdersBot';
+var TELEGRAM_API = 'https://api.telegram.org/bot';
+var PAY_TG_MARKER = 'PAY_TG_SENT';
+var RENEW_TG_MARKERS = { 3: 'RENEW_TG_3', 2: 'RENEW_TG_2', 1: 'RENEW_TG_1' };
+var KICK_ASKED_MARKER = 'KICK_ASKED';
+var KICKED_MARKER = 'KICKED';
+var VIP_SENT_MARKER = 'VIP_INVITE_SENT';
+var BOT_CONFIRMED_MARKER = 'BOT_CONFIRMED';
+var PAY_TG_MS = 24 * 60 * 60 * 1000;
+
+var TG_HEADER_ALIASES = {
+  'timestamp': 'TIMESTAMP',
+  'order id': 'ORDER_ID',
+  'orderid': 'ORDER_ID',
+  'name': 'NAME',
+  'email': 'EMAIL',
+  'telegram': 'TELEGRAM',
+  'plan': 'PLAN',
+  'amount': 'AMOUNT',
+  'source': 'SOURCE',
+  'status': 'STATUS',
+  'expiry': 'EXPIRY',
+  'days left': 'DAYS_LEFT',
+  'payment': 'PAYMENT',
+  'notes': 'NOTES',
+  'fbclid': 'FBCLID',
+  'ttclid': 'TTCLID',
+  'medium': 'MEDIUM',
+  'campaign': 'CAMPAIGN'
+};
+
+/* ── Token (never hardcode) ─────────────────────────────── */
+
+function isUsableTelegramToken_(token) {
+  var t = String(token == null ? '' : token).trim();
+  if (!t) return false;
+  if (/change[_-]?me/i.test(t)) return false;
+  return true;
+}
+
+function resolveTelegramBotToken_(scriptPropValue, envValue) {
+  if (isUsableTelegramToken_(scriptPropValue)) return String(scriptPropValue).trim();
+  if (isUsableTelegramToken_(envValue)) return String(envValue).trim();
+  return '';
+}
+
+function getTelegramBotTokenFromSources_(props, env) {
+  props = props || {};
+  env = env || {};
+  return resolveTelegramBotToken_(props.TELEGRAM_BOT_TOKEN, env.TELEGRAM_BOT_TOKEN);
+}
+
+function getTelegramBotToken_() {
+  var stored = '';
+  try {
+    stored = PropertiesService.getScriptProperties().getProperty('TELEGRAM_BOT_TOKEN');
+  } catch (err) {
+    stored = '';
+  }
+  var env = {};
+  try {
+    if (typeof process === 'object' && process && process.env) env = process.env;
+  } catch (envErr) {
+    env = {};
+  }
+  return getTelegramBotTokenFromSources_({ TELEGRAM_BOT_TOKEN: stored }, env);
+}
+
+function setupAdminBotToken_(token) {
+  var value = String(arguments.length ? token : '').trim();
+  if (!isUsableTelegramToken_(value)) {
+    throw new Error(
+      'TELEGRAM_BOT_TOKEN missing or placeholder. Set Project Settings → Script properties → TELEGRAM_BOT_TOKEN ' +
+      'to the BotFather token for @MM_OrdersBot, or run setupAdminBotToken_("token-from-BotFather"). ' +
+      'Never commit the token to GitHub.'
+    );
+  }
+  PropertiesService.getScriptProperties().setProperty('TELEGRAM_BOT_TOKEN', value);
+  Logger.log('TELEGRAM_BOT_TOKEN stored in Script Properties. Do not paste it into GitHub or frontend JS.');
+}
+
+function getTelegramProp_(key) {
+  try {
+    return PropertiesService.getScriptProperties().getProperty(key) || '';
+  } catch (err) {
+    return '';
+  }
+}
+
+function getTelegramWebhookSecret_() {
+  return String(getTelegramProp_('TELEGRAM_WEBHOOK_SECRET') || '').trim();
+}
+
+function getTelegramVipChatId_() {
+  return String(getTelegramProp_('TELEGRAM_VIP_CHAT_ID') || '').trim();
+}
+
+function telegramWebhookAuthorized_(providedSecret, storedSecret) {
+  var stored = String(storedSecret == null ? '' : storedSecret).trim();
+  if (!stored) return true;
+  return String(providedSecret == null ? '' : providedSecret) === stored;
+}
+
+function telegramSecretFromEvent_(e) {
+  e = e || {};
+  var headers = e.headers || {};
+  var keys = Object.keys(headers);
+  for (var i = 0; i < keys.length; i++) {
+    if (String(keys[i]).toLowerCase() === 'x-telegram-bot-api-secret-token') {
+      return headers[keys[i]];
+    }
+  }
+  if (e.parameter && e.parameter.tg_secret) return e.parameter.tg_secret;
+  return '';
+}
+
+/* ── Identity / parsing ─────────────────────────────────── */
+
+function isTelegramUpdate_(body) {
+  return !!(body && typeof body === 'object' && body.update_id != null);
+}
+
+function isTelegramAdminChat_(id) {
+  return String(id == null ? '' : id) === String(TELEGRAM_ADMIN_CHAT_ID);
+}
+
+function authorizeAdminCallback_(ids) {
+  ids = ids || {};
+  if (isTelegramAdminChat_(ids.fromId) || isTelegramAdminChat_(ids.chatId)) {
+    return { ok: true };
+  }
+  return { ok: false, reason: 'not-admin' };
+}
+
+function parseCallbackData_(data) {
+  var m = /^(c|x|k|n):([A-Za-z0-9_-]+)$/.exec(String(data || ''));
+  if (!m) return null;
+  var names = { c: 'confirm', x: 'dismiss', k: 'kick', n: 'kick-cancel' };
+  return { action: names[m[1]], orderId: m[2].toUpperCase() };
+}
+
+function parseStartCommand_(text) {
+  var m = /^\/start(?:@\w+)?(?:\s+(.+))?$/i.exec(String(text || '').trim());
+  if (!m) return null;
+  var payload = String(m[1] || '').trim().replace(/_/g, '-').toUpperCase();
+  return { orderId: payload };
+}
+
+function tgNotesHasMarker_(notes, marker) {
+  var hay = String(notes || '').toUpperCase();
+  var needle = String(marker || '').toUpperCase();
+  if (!needle) return false;
+  return hay.indexOf(needle) !== -1;
+}
+
+function tgNotesAppendMarker_(notes, marker) {
+  var mark = String(marker || '').trim();
+  if (!mark) return String(notes == null ? '' : notes);
+  if (tgNotesHasMarker_(notes, mark)) return String(notes == null ? '' : notes);
+  var cur = String(notes == null ? '' : notes).trim();
+  return cur ? (cur + ' | ' + mark) : mark;
+}
+
+function telegramBuildColMap_(headers) {
+  var map = {
+    TIMESTAMP: -1, ORDER_ID: -1, NAME: -1, EMAIL: -1, TELEGRAM: -1,
+    PLAN: -1, AMOUNT: -1, SOURCE: -1, STATUS: -1, EXPIRY: -1,
+    DAYS_LEFT: -1, PAYMENT: -1, NOTES: -1, FBCLID: -1, TTCLID: -1,
+    MEDIUM: -1, CAMPAIGN: -1
+  };
+  headers = headers || [];
+  for (var i = 0; i < headers.length; i++) {
+    var key = TG_HEADER_ALIASES[String(headers[i] || '').replace(/\s+/g, ' ').trim().toLowerCase()];
+    if (key) map[key] = i;
+  }
+  return map;
+}
+
+function applyTelegramColToGlobal_(map) {
+  if (typeof COL === 'undefined' || !map) return map;
+  var keys = Object.keys(map);
+  for (var i = 0; i < keys.length; i++) {
+    if (map[keys[i]] >= 0) COL[keys[i]] = map[keys[i]];
+  }
+  return map;
+}
+
+function resolveCustomerChatId_(telegramField, notes, usernameMap) {
+  var t = String(telegramField || '').trim();
+  if (/^-?\d{3,}$/.test(t)) return t;
+  var m = String(notes || '').match(/TG_CHAT:(-?\d+)/i);
+  if (m) return m[1];
+  var uname = t.replace(/^@/, '').toLowerCase();
+  if (uname && usernameMap && usernameMap[uname]) return String(usernameMap[uname]);
+  return '';
+}
+
+/* ── Confirm / VIP / kick plans ─────────────────────────── */
+
+function planActivateFromBotConfirm_(row) {
+  row = row || {};
+  var st = String(row.status || '').trim().toLowerCase();
+  if (st === 'active') {
+    return { ok: false, reason: 'already-active', callCapi: false, createVipInvite: false };
+  }
+  if (st !== 'pending' && st !== 'verifying') {
+    return { ok: false, reason: 'not-pending', callCapi: false, createVipInvite: false };
+  }
+  return { ok: true, newStatus: 'Active', callCapi: true, createVipInvite: true };
+}
+
+function buildCreateChatInviteLinkPayload_(vipChatId, orderId) {
+  return {
+    chat_id: vipChatId,
+    name: String(orderId || '').slice(0, 32),
+    member_limit: 1
+  };
+}
+
+function isPublicOrVipChat_(chatId, vipChatId, publicChannelId) {
+  var c = String(chatId || '');
+  if (!c) return false;
+  if (vipChatId && c === String(vipChatId)) return true;
+  var pub = String(publicChannelId || '');
+  if (pub && c === pub) return true;
+  var pubName = pub.replace(/^@/, '').toLowerCase();
+  if (pubName && c.replace(/^@/, '').toLowerCase() === pubName) return true;
+  return false;
+}
+
+function buildCustomerVipTelegramMessage_(name, inviteLink) {
+  var who = String(name || 'there').trim() || 'there';
+  return 'Hi ' + who + ',\n\n' +
+    'Your Method Mafia VIP access is ready. This invite works once — do not share it.\n\n' +
+    inviteLink + '\n\n' +
+    'আপনার VIP ইনভাইট রেডি। লিংক একবারই কাজ করবে — শেয়ার করবেন না।\n\n' +
+    '— Method Mafia / @' + TELEGRAM_BOT_USERNAME;
+}
+
+function planVipInviteDelivery_(opts) {
+  opts = opts || {};
+  var invite = String(opts.inviteLink || '');
+  var customer = String(opts.customerChatId || '');
+  var admin = String(opts.adminChatId || TELEGRAM_ADMIN_CHAT_ID);
+  var vip = String(opts.vipChatId || '');
+  var pub = String(opts.publicChannelId || '');
+  var chatId = customer || admin;
+  if (!invite) return { ok: false, reason: 'missing-invite' };
+  if (isPublicOrVipChat_(chatId, vip, pub)) {
+    return { ok: false, reason: 'refused-public-vip' };
+  }
+  var text = customer
+    ? buildCustomerVipTelegramMessage_(opts.name, invite)
+    : ('One-time VIP invite (member_limit=1) for the customer. Forward privately — do NOT post in VIP or the public channel.\n' +
+       'Customer should tap /start @' + TELEGRAM_BOT_USERNAME + ' so the next invite can be DMed.\n\n' +
+       invite);
+  return { ok: true, chatId: chatId, text: text };
+}
+
+function formatVipInviteFailure_(err) {
+  err = err || {};
+  var desc = err.description || err.message || String(err);
+  return 'VIP invite failed: ' + desc +
+    ' — @' + TELEGRAM_BOT_USERNAME + ' is not an admin of the VIP channel (or missing Invite users via link). ' +
+    'Manager/Swa: VIP channel → Administrators → Add @' + TELEGRAM_BOT_USERNAME +
+    ' → enable Invite users via link + Ban users. Then retry the ✅ confirm.';
+}
+
+function planKickExecute_(row) {
+  row = row || {};
+  var st = String(row.status || '').trim().toLowerCase();
+  if (st !== 'expired') {
+    return { ok: false, reason: 'not-expired' };
+  }
+  if (!tgNotesHasMarker_(row.notes, KICK_ASKED_MARKER)) {
+    return { ok: false, reason: 'confirm-first' };
+  }
+  var uid = String(row.telegramUserId || '');
+  if (!/^-?\d{3,}$/.test(uid)) {
+    return { ok: false, reason: 'missing-telegram-user-id' };
+  }
+  return { ok: true, method: 'banChatMember', userId: uid };
+}
+
+function buildPendingConfirmKeyboard_(orderId) {
+  var oid = String(orderId || '').toUpperCase();
+  return {
+    inline_keyboard: [[
+      { text: '✅ Confirm (SS verified)', callback_data: 'c:' + oid },
+      { text: 'Skip', callback_data: 'x:' + oid }
+    ]]
+  };
+}
+
+function buildKickConfirmKeyboard_(orderId) {
+  var oid = String(orderId || '').toUpperCase();
+  return {
+    inline_keyboard: [[
+      { text: '✅ Confirm kick', callback_data: 'k:' + oid },
+      { text: 'Cancel', callback_data: 'n:' + oid }
+    ]]
+  };
+}
+
+function buildAdminPendingOrderMessage_(item) {
+  item = item || {};
+  return '🧾 NEW ORDER — @' + TELEGRAM_BOT_USERNAME + '\n' +
+    '━━━━━━━━━━━━━━\n' +
+    'Order ID : ' + (item.orderId || '') + '\n' +
+    'Name     : ' + (item.name || '') + '\n' +
+    'Email    : ' + (item.email || '') + '\n' +
+    'Telegram : ' + (item.telegram || '') + '\n' +
+    '━━━━━━━━━━━━━━\n' +
+    'Plan     : ' + (item.plan || '') + '\n' +
+    'Amount   : ' + (item.amount || '') + '\n' +
+    'Payment  : ' + (item.payment || '') + '\n' +
+    '━━━━━━━━━━━━━━\n' +
+    'Human: verify the payment screenshot with @MMHQ_Support first.\n' +
+    'Bot ✅ (after SS verified) sets Status Active + Entry $30 CAPI + one-time VIP invite.\n' +
+    'Do not post a public VIP link.';
+}
+
+function buildAdminKickAskMessage_(item) {
+  item = item || {};
+  return '⚠️ Kick confirm — @' + TELEGRAM_BOT_USERNAME + '\n' +
+    'Order ' + (item.orderId || '') + ' is Expired (' + (item.telegram || '') + ' / ' + (item.name || '') + ').\n' +
+    'Tap ✅ to banChatMember from VIP, or Cancel. Confirm-first — bot will not kick until you tap.';
+}
+
+function buildCustomerPayTelegramMessage_(item) {
+  item = item || {};
+  var who = String(item.name || 'there').trim() || 'there';
+  return 'Hi ' + who + ',\n\n' +
+    'Your Method Mafia order ' + (item.orderId || '') + ' is still waiting for payment.\n' +
+    'Please send the screenshot to @MMHQ_Support so we can confirm.\n\n' +
+    'আপনার অর্ডার এখনও পেমেন্টের অপেক্ষায়। স্ক্রিনশট @MMHQ_Support-এ পাঠান।\n\n' +
+    '— Method Mafia';
+}
+
+function buildCustomerRenewTelegramMessage_(item) {
+  item = item || {};
+  var n = Number(item.daysLeft);
+  var dayWord = n === 1 ? '1 day' : (n + ' days');
+  var who = String(item.name || 'there').trim() || 'there';
+  var expiry = String(item.expiry || '');
+  return 'Hi ' + who + ',\n\n' +
+    'Your Method Mafia membership expires on ' + expiry + ' (' + dayWord + ' left).\n' +
+    'Reply to @MMHQ_Support if you would like another 30 days.\n\n' +
+    'আপনার মেম্বারশিপ ' + expiry + ' তারিখে শেষ (' + dayWord + ')। রিনিউ করতে @MMHQ_Support-এ মেসেজ করুন।\n\n' +
+    '— Method Mafia';
+}
+
+/* ── Lifecycle planners (email stays in Lifecycle.gs) ───── */
+
+function tgPad2_(n) {
+  n = String(n);
+  return n.length < 2 ? '0' + n : n;
+}
+
+function tgParseDate_(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (value instanceof Date) return isNaN(value.getTime()) ? null : new Date(value.getTime());
+  var d = new Date(value);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function tgDhakaYmd_(date) {
+  if (typeof lifecycleDhakaYmd_ === 'function') return lifecycleDhakaYmd_(date);
+  if (typeof dhakaYmd_ === 'function') return dhakaYmd_(date);
+  var offset = (typeof ORGANIZE_TZ_OFFSET_MS !== 'undefined') ? ORGANIZE_TZ_OFFSET_MS : (6 * 60 * 60 * 1000);
+  var shifted = new Date(date.getTime() + offset);
+  return shifted.getUTCFullYear() + '-' + tgPad2_(shifted.getUTCMonth() + 1) + '-' + tgPad2_(shifted.getUTCDate());
+}
+
+function tgYmdToUtcMs_(ymd) {
+  var p = String(ymd || '').split('-');
+  if (p.length < 3) return NaN;
+  return Date.UTC(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+}
+
+function tgCalendarDaysUntil_(expiry, today) {
+  if (typeof calendarDaysUntil_ === 'function') return calendarDaysUntil_(expiry, today);
+  var e = tgParseDate_(expiry);
+  var t = tgParseDate_(today);
+  if (!e || !t) return null;
+  return Math.round((tgYmdToUtcMs_(tgDhakaYmd_(e)) - tgYmdToUtcMs_(tgDhakaYmd_(t))) / 86400000);
+}
+
+function shouldSendPayTg_(status, timestamp, notes, now) {
+  if (String(status || '').trim().toLowerCase() !== 'pending') return false;
+  if (tgNotesHasMarker_(notes, PAY_TG_MARKER)) return false;
+  var ts = tgParseDate_(timestamp);
+  var n = tgParseDate_(now);
+  if (!ts || !n) return false;
+  return (n.getTime() - ts.getTime()) >= PAY_TG_MS;
+}
+
+function planTelegramPayReminders_(rows, col, now) {
+  var out = [];
+  now = now || new Date();
+  for (var i = 1; i < rows.length; i++) {
+    if (!shouldSendPayTg_(rows[i][col.STATUS], rows[i][col.TIMESTAMP], col.NOTES >= 0 ? rows[i][col.NOTES] : '', now)) {
+      continue;
+    }
+    out.push({
+      rowIndex0: i,
+      orderId: String(rows[i][col.ORDER_ID] || ''),
+      name: String(rows[i][col.NAME] || ''),
+      telegram: String(rows[i][col.TELEGRAM] || ''),
+      notes: col.NOTES >= 0 ? rows[i][col.NOTES] : '',
+      marker: PAY_TG_MARKER
+    });
+  }
+  return out;
+}
+
+function planTelegramRenewReminders_(rows, col, today) {
+  var out = [];
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][col.STATUS] || '').trim().toLowerCase() !== 'active') continue;
+    var days = tgCalendarDaysUntil_(rows[i][col.EXPIRY], today);
+    var marker = RENEW_TG_MARKERS[days] || '';
+    if (!marker) continue;
+    if (tgNotesHasMarker_(rows[i][col.NOTES], marker)) continue;
+    out.push({
+      rowIndex0: i,
+      orderId: String(rows[i][col.ORDER_ID] || ''),
+      name: String(rows[i][col.NAME] || ''),
+      telegram: String(rows[i][col.TELEGRAM] || ''),
+      notes: rows[i][col.NOTES],
+      daysLeft: days,
+      expiry: rows[i][col.EXPIRY],
+      marker: marker
+    });
+  }
+  return out;
+}
+
+function shouldAskKick_(status, expiry, notes, today) {
+  if (tgNotesHasMarker_(notes, KICK_ASKED_MARKER) || tgNotesHasMarker_(notes, KICKED_MARKER)) return false;
+  var st = String(status || '').trim().toLowerCase();
+  if (st === 'expired') return true;
+  if (st === 'active') {
+    var d = tgCalendarDaysUntil_(expiry, today);
+    return d !== null && d < 0;
+  }
+  return false;
+}
+
+function planTelegramKickAsks_(rows, col, today) {
+  var out = [];
+  for (var i = 1; i < rows.length; i++) {
+    if (!shouldAskKick_(rows[i][col.STATUS], rows[i][col.EXPIRY], rows[i][col.NOTES], today)) continue;
+    out.push({
+      rowIndex0: i,
+      orderId: String(rows[i][col.ORDER_ID] || ''),
+      name: String(rows[i][col.NAME] || ''),
+      telegram: String(rows[i][col.TELEGRAM] || ''),
+      notes: rows[i][col.NOTES],
+      executeKick: false
+    });
+  }
+  return out;
+}
+
+/* ── Webhook planner (pure) ─────────────────────────────── */
+
+function processTelegramUpdate_(update, ctx) {
+  ctx = ctx || {};
+  update = update || {};
+  if (!telegramWebhookAuthorized_(ctx.secretProvided, ctx.secretStored)) {
+    return { ok: false, reason: 'unauthorized-webhook', actions: [] };
+  }
+  if (update.callback_query) return processTelegramCallback_(update.callback_query, ctx);
+  if (update.message) return processTelegramMessage_(update.message, ctx);
+  return { ok: true, actions: [] };
+}
+
+function processTelegramCallback_(cq, ctx) {
+  cq = cq || {};
+  var fromId = cq.from && cq.from.id;
+  var chatId = cq.message && cq.message.chat && cq.message.chat.id;
+  var auth = authorizeAdminCallback_({ fromId: fromId, chatId: chatId });
+  var parsed = parseCallbackData_(cq.data);
+  if (!auth.ok) {
+    return {
+      ok: false,
+      reason: auth.reason,
+      actions: [{ type: 'answerCallback', callbackId: cq.id, text: 'Admin only', alert: true }]
+    };
+  }
+  if (!parsed) {
+    return { ok: false, reason: 'bad-callback', actions: [{ type: 'answerCallback', callbackId: cq.id, text: 'Unknown button' }] };
+  }
+  var getOrder = ctx.getOrder || function () { return null; };
+  var order = getOrder(parsed.orderId);
+  if (!order) {
+    return {
+      ok: false,
+      reason: 'not-found',
+      actions: [{ type: 'answerCallback', callbackId: cq.id, text: 'Order not found', alert: true }]
+    };
+  }
+
+  if (parsed.action === 'dismiss' || parsed.action === 'kick-cancel') {
+    return {
+      ok: true,
+      actions: [
+        { type: 'answerCallback', callbackId: cq.id, text: 'Cancelled' },
+        { type: 'editMessage', chatId: chatId, messageId: cq.message && cq.message.message_id, text: 'Cancelled ' + parsed.orderId }
+      ]
+    };
+  }
+
+  if (parsed.action === 'confirm') {
+    var act = planActivateFromBotConfirm_(order);
+    if (!act.ok) {
+      return {
+        ok: false,
+        reason: act.reason,
+        actions: [{ type: 'answerCallback', callbackId: cq.id, text: act.reason, alert: true }]
+      };
+    }
+    var actions = [
+      { type: 'answerCallback', callbackId: cq.id, text: 'Activating ' + parsed.orderId },
+      { type: 'activate', orderId: parsed.orderId, row1: order.row1, newStatus: act.newStatus }
+    ];
+    if (act.callCapi) actions.push({ type: 'capi', row1: order.row1, orderId: parsed.orderId });
+    if (act.createVipInvite) {
+      actions.push({
+        type: 'vipInvite',
+        orderId: parsed.orderId,
+        name: order.name,
+        telegram: order.telegram,
+        notes: order.notes,
+        row1: order.row1
+      });
+    }
+    return { ok: true, actions: actions };
+  }
+
+  if (parsed.action === 'kick') {
+    var userId = resolveCustomerChatId_(order.telegram, order.notes, ctx.usernameMap);
+    var kick = planKickExecute_({
+      status: order.status,
+      notes: order.notes,
+      telegramUserId: userId
+    });
+    if (!kick.ok) {
+      return {
+        ok: false,
+        reason: kick.reason,
+        actions: [{ type: 'answerCallback', callbackId: cq.id, text: kick.reason, alert: true }]
+      };
+    }
+    return {
+      ok: true,
+      actions: [
+        { type: 'answerCallback', callbackId: cq.id, text: 'Kicking ' + parsed.orderId },
+        { type: 'kick', orderId: parsed.orderId, userId: kick.userId, method: kick.method, row1: order.row1 }
+      ]
+    };
+  }
+
+  return { ok: false, reason: 'unhandled', actions: [] };
+}
+
+function processTelegramMessage_(msg, ctx) {
+  msg = msg || {};
+  var start = parseStartCommand_(msg.text);
+  if (!start) {
+    if (isTelegramAdminChat_(msg.chat && msg.chat.id) && /^\/id\b/i.test(String(msg.text || ''))) {
+      return {
+        ok: true,
+        actions: [{ type: 'sendMessage', chatId: String(msg.chat.id), text: 'chat_id ' + msg.chat.id }]
+      };
+    }
+    return { ok: true, actions: [] };
+  }
+  var chatId = msg.chat && msg.chat.id;
+  var username = ((msg.from && msg.from.username) || '').toLowerCase();
+  return {
+    ok: true,
+    actions: [{
+      type: 'saveChatId',
+      chatId: String(chatId || ''),
+      username: username,
+      orderId: start.orderId
+    }]
+  };
+}
+
+/* ── Apps Script I/O ────────────────────────────────────── */
+
+function telegramJson_(obj) {
+  if (typeof ContentService !== 'undefined') {
+    return ContentService.createTextOutput(JSON.stringify(obj))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  return obj;
+}
+
+function handleTelegramWebhook_(update, opts) {
+  opts = opts || {};
+  var token = getTelegramBotToken_();
+  if (!token) {
+    Logger.log('TELEGRAM_BOT_TOKEN missing. Run setupAdminBotToken_(token) or set Script property TELEGRAM_BOT_TOKEN.');
+    return telegramJson_({ ok: false, error: 'bot-token-missing' });
+  }
+  var ctx = {
+    secretProvided: opts.secret || '',
+    secretStored: getTelegramWebhookSecret_(),
+    getOrder: function (orderId) { return loadOrderSnapshot_(orderId); }
+  };
+  var plan = processTelegramUpdate_(update, ctx);
+  try {
+    executeTelegramPlan_(plan, token);
+  } catch (err) {
+    Logger.log('telegram execute: ' + err.message);
+  }
+  return telegramJson_({ ok: true, handled: plan.ok });
+}
+
+function telegramOrdersSheet_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var name = (typeof SHEET_NAME !== 'undefined') ? SHEET_NAME : 'Orders';
+  return ss.getSheetByName(name) || ss.getSheets()[0];
+}
+
+function telegramResolveCol_(sheet) {
+  if (typeof applyColMapFromSheet_ === 'function' && sheet) {
+    try {
+      return applyTelegramColToGlobal_(applyColMapFromSheet_(sheet));
+    } catch (err) {
+      Logger.log('telegram colmap organize: ' + err.message);
+    }
+  }
+  if (sheet && typeof sheet.getLastColumn === 'function') {
+    var last = sheet.getLastColumn();
+    var headers = last > 0 ? sheet.getRange(1, 1, 1, last).getValues()[0] : [];
+    return applyTelegramColToGlobal_(telegramBuildColMap_(headers));
+  }
+  if (typeof COL !== 'undefined') return COL;
+  return telegramBuildColMap_([]);
+}
+
+function telegramFindRow_(sheet, orderId, col) {
+  col = col || telegramResolveCol_(sheet);
+  if (typeof findOrderRow === 'function') {
+    var found = findOrderRow(sheet, orderId, col);
+    if (found) return found;
+  }
+  var want = String(orderId || '').toUpperCase();
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][col.ORDER_ID] || '').toUpperCase() === want) return i + 1;
+  }
+  return null;
+}
+
+function loadOrderSnapshot_(orderId) {
+  var oid = String(orderId || '').toUpperCase();
+  if (!oid) return null;
+  var sheet = telegramOrdersSheet_();
+  var col = telegramResolveCol_(sheet);
+  var row1 = telegramFindRow_(sheet, oid, col);
+  if (!row1) {
+    try {
+      var masterName = (typeof TAB_MASTER !== 'undefined') ? TAB_MASTER : 'Master';
+      var master = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(masterName);
+      if (master) {
+        col = telegramResolveCol_(master);
+        row1 = telegramFindRow_(master, oid, col);
+        if (row1) sheet = master;
+      }
+    } catch (err) {
+      row1 = null;
+    }
+  }
+  if (!row1) return null;
+  return {
+    orderId: oid,
+    row1: row1,
+    sheetName: sheet.getName(),
+    status: sheet.getRange(row1, col.STATUS + 1).getValue(),
+    plan: col.PLAN >= 0 ? sheet.getRange(row1, col.PLAN + 1).getValue() : '',
+    notes: col.NOTES >= 0 ? sheet.getRange(row1, col.NOTES + 1).getValue() : '',
+    telegram: col.TELEGRAM >= 0 ? String(sheet.getRange(row1, col.TELEGRAM + 1).getValue() || '') : '',
+    name: col.NAME >= 0 ? String(sheet.getRange(row1, col.NAME + 1).getValue() || '') : '',
+    email: col.EMAIL >= 0 ? String(sheet.getRange(row1, col.EMAIL + 1).getValue() || '') : '',
+    expiry: col.EXPIRY >= 0 ? sheet.getRange(row1, col.EXPIRY + 1).getValue() : ''
+  };
+}
+
+function telegramApi_(method, payload, token) {
+  token = token || getTelegramBotToken_();
+  if (!token) {
+    Logger.log('telegramApi_ skipped: TELEGRAM_BOT_TOKEN missing');
+    return { ok: false, error: 'bot-token-missing' };
+  }
+  var url = TELEGRAM_API + token + '/' + method;
+  var res = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(payload || {}),
+    muteHttpExceptions: true
+  });
+  var code = res.getResponseCode();
+  var text = res.getContentText();
+  var body = {};
+  try { body = JSON.parse(text); } catch (err) { body = { ok: false, description: text }; }
+  if (!body.ok) {
+    Logger.log('Telegram ' + method + ' ' + code + ' ' + String(body.description || text).slice(0, 300));
+  }
+  return body;
+}
+
+function executeTelegramPlan_(plan, token) {
+  plan = plan || {};
+  var actions = plan.actions || [];
+  for (var i = 0; i < actions.length; i++) {
+    executeTelegramAction_(actions[i], token);
+  }
+}
+
+function executeTelegramAction_(action, token) {
+  if (!action || !action.type) return;
+  if (action.type === 'answerCallback') {
+    telegramApi_('answerCallbackQuery', {
+      callback_query_id: action.callbackId,
+      text: action.text || '',
+      show_alert: !!action.alert
+    }, token);
+    return;
+  }
+  if (action.type === 'editMessage') {
+    telegramApi_('editMessageText', {
+      chat_id: action.chatId,
+      message_id: action.messageId,
+      text: action.text || 'Updated'
+    }, token);
+    return;
+  }
+  if (action.type === 'sendMessage') {
+    telegramSend_(action.chatId, action.text, action.replyMarkup, token);
+    return;
+  }
+  if (action.type === 'activate') {
+    telegramActivateRow_(action);
+    return;
+  }
+  if (action.type === 'capi') {
+    telegramFireCapi_(action);
+    return;
+  }
+  if (action.type === 'vipInvite') {
+    telegramSendVipInvite_(action, token);
+    return;
+  }
+  if (action.type === 'kick') {
+    telegramExecuteKick_(action, token);
+    return;
+  }
+  if (action.type === 'saveChatId') {
+    telegramSaveChatId_(action);
+  }
+}
+
+function telegramActivateRow_(action) {
+  var sheet = telegramOrdersSheet_();
+  var col = telegramResolveCol_(sheet);
+  var row1 = action.row1 || telegramFindRow_(sheet, action.orderId, col);
+  if (!row1 || col.STATUS < 0) {
+    Logger.log('telegram activate: row not found ' + action.orderId);
+    return;
+  }
+  sheet.getRange(row1, col.STATUS + 1).setValue(action.newStatus || 'Active');
+  if (col.NOTES >= 0) {
+    var notes = sheet.getRange(row1, col.NOTES + 1).getValue();
+    var stamped = tgNotesAppendMarker_(notes, BOT_CONFIRMED_MARKER);
+    stamped = tgNotesAppendMarker_(stamped, 'Activated: ' + new Date().toLocaleString());
+    sheet.getRange(row1, col.NOTES + 1).setValue(stamped);
+  }
+  try {
+    if (typeof syncOrderRowToOrganizeTabs_ === 'function') syncOrderRowToOrganizeTabs_(sheet, row1);
+  } catch (orgErr) {
+    Logger.log('telegram activate organize: ' + orgErr.message);
+  }
+}
+
+function telegramFireCapi_(action) {
+  var sheet = telegramOrdersSheet_();
+  telegramResolveCol_(sheet);
+  var row1 = action.row1;
+  if (!row1) return;
+  try {
+    if (typeof trySendPurchaseForRow_ === 'function') {
+      trySendPurchaseForRow_(sheet, row1);
+    } else {
+      Logger.log('telegram CAPI skipped: trySendPurchaseForRow_ missing');
+    }
+  } catch (err) {
+    Logger.log('telegram CAPI: ' + err.message);
+  }
+}
+
+function telegramSendVipInvite_(action, token) {
+  var vipChat = getTelegramVipChatId_();
+  var admin = TELEGRAM_ADMIN_CHAT_ID;
+  if (!vipChat) {
+    var missing = formatVipInviteFailure_({
+      description: 'TELEGRAM_VIP_CHAT_ID Script property is empty'
+    });
+    Logger.log(missing);
+    telegramSend_(admin, missing, null, token);
+    return;
+  }
+  var created = telegramApi_('createChatInviteLink', buildCreateChatInviteLinkPayload_(vipChat, action.orderId), token);
+  if (!created || !created.ok || !created.result || !created.result.invite_link) {
+    var fail = formatVipInviteFailure_(created || { description: 'empty createChatInviteLink response' });
+    Logger.log(fail);
+    telegramSend_(admin, fail, null, token);
+    return;
+  }
+  var invite = created.result.invite_link;
+  var sheet = telegramOrdersSheet_();
+  var col = telegramResolveCol_(sheet);
+  var row1 = action.row1;
+  var notes = row1 && col.NOTES >= 0 ? sheet.getRange(row1, col.NOTES + 1).getValue() : (action.notes || '');
+  var customerChat = resolveCustomerChatId_(action.telegram, notes, null);
+  var delivery = planVipInviteDelivery_({
+    inviteLink: invite,
+    customerChatId: customerChat,
+    adminChatId: admin,
+    vipChatId: vipChat,
+    publicChannelId: '@TheMethodMafia',
+    name: action.name
+  });
+  if (!delivery.ok) {
+    Logger.log('VIP delivery refused: ' + delivery.reason);
+    telegramSend_(admin, formatVipInviteFailure_({ description: delivery.reason }), null, token);
+    return;
+  }
+  if (isPublicOrVipChat_(delivery.chatId, vipChat, '@TheMethodMafia')) {
+    Logger.log('Refusing to post VIP invite to public/VIP chat ' + delivery.chatId);
+    return;
+  }
+  var sent = telegramSend_(delivery.chatId, delivery.text, null, token);
+  if (row1 && col.NOTES >= 0) {
+    var marker = customerChat ? VIP_SENT_MARKER : 'VIP_INVITE_ADMIN';
+    var next = tgNotesAppendMarker_(sheet.getRange(row1, col.NOTES + 1).getValue(), marker);
+    sheet.getRange(row1, col.NOTES + 1).setValue(next);
+  }
+  if (!sent || sent.ok === false) {
+    Logger.log('VIP DM failed; invite was not posted publicly. Admin chat was used or customer must /start @' + TELEGRAM_BOT_USERNAME);
+  }
+}
+
+function telegramExecuteKick_(action, token) {
+  var vipChat = getTelegramVipChatId_();
+  if (!vipChat) {
+    telegramSend_(TELEGRAM_ADMIN_CHAT_ID, formatVipInviteFailure_({
+      description: 'Cannot kick: TELEGRAM_VIP_CHAT_ID missing'
+    }), null, token);
+    return;
+  }
+  var result = telegramApi_(action.method || 'banChatMember', {
+    chat_id: vipChat,
+    user_id: action.userId,
+    revoke_messages: false
+  }, token);
+  var sheet = telegramOrdersSheet_();
+  var col = telegramResolveCol_(sheet);
+  var row1 = action.row1;
+  if (result && result.ok && row1 && col.NOTES >= 0) {
+    var notes = tgNotesAppendMarker_(sheet.getRange(row1, col.NOTES + 1).getValue(), KICKED_MARKER);
+    sheet.getRange(row1, col.NOTES + 1).setValue(notes);
+    try {
+      if (typeof syncOrderRowToOrganizeTabs_ === 'function') syncOrderRowToOrganizeTabs_(sheet, row1);
+    } catch (err) {
+      Logger.log('kick organize: ' + err.message);
+    }
+  } else {
+    var desc = (result && result.description) || 'banChatMember failed';
+    telegramSend_(TELEGRAM_ADMIN_CHAT_ID,
+      'Kick failed for ' + action.orderId + ': ' + desc +
+      ' — Manager/Swa: @' + TELEGRAM_BOT_USERNAME + ' needs Ban users permission in the VIP channel.',
+      null, token);
+  }
+}
+
+function telegramSaveChatId_(action) {
+  var sheet = telegramOrdersSheet_();
+  var col = telegramResolveCol_(sheet);
+  var data = sheet.getDataRange().getValues();
+  var uname = String(action.username || '').replace(/^@/, '').toLowerCase();
+  var oid = String(action.orderId || '').toUpperCase();
+  for (var i = 1; i < data.length; i++) {
+    var rowOid = String(data[i][col.ORDER_ID] || '').toUpperCase();
+    var rowTg = String(data[i][col.TELEGRAM] || '').replace(/^@/, '').toLowerCase();
+    var match = (oid && rowOid === oid) || (uname && rowTg === uname);
+    if (!match) continue;
+    if (col.NOTES >= 0) {
+      var notes = String(data[i][col.NOTES] || '');
+      if (!/TG_CHAT:-?\d+/i.test(notes)) {
+        notes = tgNotesAppendMarker_(notes, 'TG_CHAT:' + action.chatId);
+        sheet.getRange(i + 1, col.NOTES + 1).setValue(notes);
+      }
+    }
+    telegramSend_(action.chatId,
+      'Saved. @' + TELEGRAM_BOT_USERNAME + ' can now DM your VIP invite after admin confirms payment.\nইনভাইট কনফার্মের পর এখানেই পাঠানো হবে।',
+      null);
+    return;
+  }
+  telegramSend_(action.chatId,
+    'Hi. After @MMHQ_Support verifies payment, Swa taps ✅ and your one-time VIP invite arrives here.\nপেমেন্ট কনফার্মের পর VIP ইনভাইট এখানে আসবে।',
+    null);
+}
+
+function telegramSend_(chatId, text, replyMarkup, token) {
+  if (!chatId || !text) return { ok: false };
+  var vip = getTelegramVipChatId_();
+  if (isPublicOrVipChat_(chatId, vip, '@TheMethodMafia') && /t\.me\/\+/.test(String(text))) {
+    Logger.log('Blocked sending a VIP invite link to VIP/public chat ' + chatId);
+    return { ok: false, error: 'refused-public-vip' };
+  }
+  var payload = { chat_id: chatId, text: text };
+  if (replyMarkup) payload.reply_markup = replyMarkup;
+  return telegramApi_('sendMessage', payload, token);
+}
+
+function notifyAdminNewPendingOrder_(sheet, row1) {
+  var col = telegramResolveCol_(sheet);
+  if (!row1 || col.ORDER_ID < 0) return;
+  var item = {
+    orderId: sheet.getRange(row1, col.ORDER_ID + 1).getValue(),
+    name: col.NAME >= 0 ? sheet.getRange(row1, col.NAME + 1).getValue() : '',
+    email: col.EMAIL >= 0 ? sheet.getRange(row1, col.EMAIL + 1).getValue() : '',
+    telegram: col.TELEGRAM >= 0 ? sheet.getRange(row1, col.TELEGRAM + 1).getValue() : '',
+    plan: col.PLAN >= 0 ? sheet.getRange(row1, col.PLAN + 1).getValue() : '',
+    amount: col.AMOUNT >= 0 ? sheet.getRange(row1, col.AMOUNT + 1).getValue() : '',
+    payment: col.PAYMENT >= 0 ? sheet.getRange(row1, col.PAYMENT + 1).getValue() : ''
+  };
+  telegramSend_(
+    TELEGRAM_ADMIN_CHAT_ID,
+    buildAdminPendingOrderMessage_(item),
+    buildPendingConfirmKeyboard_(item.orderId)
+  );
+}
+
+function runTelegramLifecycleHook_(opts) {
+  opts = opts || {};
+  var sheet = opts.sheet || telegramOrdersSheet_();
+  var col = telegramResolveCol_(sheet);
+  var data = sheet.getDataRange().getValues();
+  var now = opts.now || new Date();
+  var today = opts.today || now;
+  var token = getTelegramBotToken_();
+  if (!token) {
+    Logger.log('telegram lifecycle skipped: TELEGRAM_BOT_TOKEN missing');
+    return { pay: [], renew: [], kickAsks: [] };
+  }
+
+  var pay = planTelegramPayReminders_(data, col, now);
+  var renew = planTelegramRenewReminders_(data, col, today);
+  var kicks = planTelegramKickAsks_(data, col, today);
+  var i;
+  var row1;
+  var notes;
+
+  for (i = 0; i < pay.length; i++) {
+    row1 = pay[i].rowIndex0 + 1;
+    notes = col.NOTES >= 0 ? sheet.getRange(row1, col.NOTES + 1).getValue() : '';
+    var payChat = resolveCustomerChatId_(pay[i].telegram, notes, null);
+    var payText = buildCustomerPayTelegramMessage_(pay[i]);
+    var paySent = false;
+    if (payChat) {
+      var pRes = telegramSend_(payChat, payText, null, token);
+      paySent = !!(pRes && pRes.ok);
+    } else {
+      telegramSend_(TELEGRAM_ADMIN_CHAT_ID,
+        'Pay reminder for ' + pay[i].orderId + ' (' + pay[i].telegram + ') — customer has not /start @' +
+        TELEGRAM_BOT_USERNAME + ' yet. Email path (Lifecycle) still applies.\n\n' + payText,
+        null, token);
+    }
+    if (col.NOTES >= 0 && (paySent || !payChat)) {
+      sheet.getRange(row1, col.NOTES + 1).setValue(tgNotesAppendMarker_(notes, PAY_TG_MARKER));
+    }
+  }
+
+  for (i = 0; i < renew.length; i++) {
+    row1 = renew[i].rowIndex0 + 1;
+    notes = col.NOTES >= 0 ? sheet.getRange(row1, col.NOTES + 1).getValue() : '';
+    var renewChat = resolveCustomerChatId_(renew[i].telegram, notes, null);
+    var renewText = buildCustomerRenewTelegramMessage_(renew[i]);
+    var renewSent = false;
+    if (renewChat) {
+      var rRes = telegramSend_(renewChat, renewText, null, token);
+      renewSent = !!(rRes && rRes.ok);
+    }
+    if (renewSent && col.NOTES >= 0) {
+      sheet.getRange(row1, col.NOTES + 1).setValue(tgNotesAppendMarker_(notes, renew[i].marker));
+    }
+  }
+
+  for (i = 0; i < kicks.length; i++) {
+    row1 = kicks[i].rowIndex0 + 1;
+    var kRes = telegramSend_(
+      TELEGRAM_ADMIN_CHAT_ID,
+      buildAdminKickAskMessage_(kicks[i]),
+      buildKickConfirmKeyboard_(kicks[i].orderId),
+      token
+    );
+    if (kRes && kRes.ok && col.NOTES >= 0) {
+      notes = sheet.getRange(row1, col.NOTES + 1).getValue();
+      sheet.getRange(row1, col.NOTES + 1).setValue(tgNotesAppendMarker_(notes, KICK_ASKED_MARKER));
+    }
+  }
+
+  Logger.log('telegram lifecycle pay=' + pay.length + ' renew=' + renew.length + ' kickAsks=' + kicks.length);
+  return { pay: pay, renew: renew, kickAsks: kicks };
+}
+
+function buildSetWebhookPayload_(webAppUrl, secret) {
+  var payload = {
+    url: String(webAppUrl || ''),
+    allowed_updates: ['message', 'callback_query']
+  };
+  if (secret) payload.secret_token = String(secret);
+  return payload;
+}
+
+function setTelegramWebhook() {
+  var token = getTelegramBotToken_();
+  if (!token) {
+    throw new Error('Set TELEGRAM_BOT_TOKEN first (setupAdminBotToken_).');
+  }
+  var url = ScriptApp.getService().getUrl();
+  var secret = getTelegramWebhookSecret_();
+  var payload = buildSetWebhookPayload_(url, secret);
+  var result = telegramApi_('setWebhook', payload, token);
+  Logger.log('setWebhook ' + url + ' → ' + JSON.stringify(result));
+  return result;
+}
+
+if (typeof module === 'object' && module.exports) {
+  module.exports = {
+    TELEGRAM_ADMIN_CHAT_ID: TELEGRAM_ADMIN_CHAT_ID,
+    TELEGRAM_BOT_USERNAME: TELEGRAM_BOT_USERNAME,
+    isUsableTelegramToken_: isUsableTelegramToken_,
+    resolveTelegramBotToken_: resolveTelegramBotToken_,
+    getTelegramBotTokenFromSources_: getTelegramBotTokenFromSources_,
+    telegramWebhookAuthorized_: telegramWebhookAuthorized_,
+    isTelegramUpdate_: isTelegramUpdate_,
+    isTelegramAdminChat_: isTelegramAdminChat_,
+    authorizeAdminCallback_: authorizeAdminCallback_,
+    parseCallbackData_: parseCallbackData_,
+    parseStartCommand_: parseStartCommand_,
+    telegramBuildColMap_: telegramBuildColMap_,
+    resolveCustomerChatId_: resolveCustomerChatId_,
+    planActivateFromBotConfirm_: planActivateFromBotConfirm_,
+    buildCreateChatInviteLinkPayload_: buildCreateChatInviteLinkPayload_,
+    isPublicOrVipChat_: isPublicOrVipChat_,
+    planVipInviteDelivery_: planVipInviteDelivery_,
+    formatVipInviteFailure_: formatVipInviteFailure_,
+    planKickExecute_: planKickExecute_,
+    buildPendingConfirmKeyboard_: buildPendingConfirmKeyboard_,
+    buildKickConfirmKeyboard_: buildKickConfirmKeyboard_,
+    buildAdminPendingOrderMessage_: buildAdminPendingOrderMessage_,
+    buildAdminKickAskMessage_: buildAdminKickAskMessage_,
+    buildCustomerPayTelegramMessage_: buildCustomerPayTelegramMessage_,
+    buildCustomerRenewTelegramMessage_: buildCustomerRenewTelegramMessage_,
+    planTelegramPayReminders_: planTelegramPayReminders_,
+    planTelegramRenewReminders_: planTelegramRenewReminders_,
+    planTelegramKickAsks_: planTelegramKickAsks_,
+    processTelegramUpdate_: processTelegramUpdate_,
+    buildSetWebhookPayload_: buildSetWebhookPayload_,
+    tgNotesHasMarker_: tgNotesHasMarker_,
+    tgNotesAppendMarker_: tgNotesAppendMarker_
+  };
+}

@@ -4,7 +4,7 @@
  * Drop this entire file into a new Apps Script project bound to
  * the same Google Sheet that receives orders from the website.
  *
- * SETUP (see GUIDE.md → PART 8 + PART 11 + PART 12):
+ * SETUP (see GUIDE.md → PART 8 + PART 11 + PART 12 + PART 13):
  *  1. Extensions → Apps Script → paste this code
  *  2. Project Settings → Script properties → ADMIN_TOKEN (long random secret)
  *     or run setupAdminToken_("your-long-random-secret")
@@ -24,6 +24,7 @@
  *    (Lifecycle.gs — pendingNudgeTrigger / expiryLifecycleTrigger / renewOrder)
  *  • CAPI: Status → Active (Entry) sends Purchase via CapiPurchase.gs
  *  • Organize: doPost also upserts Master + current YYYY-MM (SheetOrganize.gs)
+ *  • Telegram @MM_OrdersBot webhook (TelegramBot.gs) — same doPost, distinguished by update_id
  * ──────────────────────────────────────────────────────────────
  *
  * CRITICAL: Column order MUST match the LIVE Google Sheet CSV header:
@@ -183,11 +184,21 @@ function buildActivateLink_(baseUrl, orderId, token) {
 }
 
 /* ────────────────────────────────────────────────────────────
-   doPost — receives order form submission from website
+   doPost — website order JSON, or @MM_OrdersBot webhook (update_id)
    ──────────────────────────────────────────────────────────── */
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
+
+    if (typeof isTelegramUpdate_ === 'function' && isTelegramUpdate_(data)) {
+      var tgSecret = (typeof telegramSecretFromEvent_ === 'function')
+        ? telegramSecretFromEvent_(e)
+        : '';
+      if (typeof handleTelegramWebhook_ === 'function') {
+        return handleTelegramWebhook_(data, { secret: tgSecret });
+      }
+    }
+
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME)
                   || SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
 
@@ -242,6 +253,14 @@ function doPost(e) {
       organizeOk = false;
       organizeError = orgErr.message;
       Logger.log('doPost organize: ' + orgErr.message);
+    }
+
+    try {
+      if (typeof notifyAdminNewPendingOrder_ === 'function') {
+        notifyAdminNewPendingOrder_(sheet, newRowNum);
+      }
+    } catch (tgErr) {
+      Logger.log('telegram new order notify: ' + tgErr.message);
     }
 
     return ContentService.createTextOutput(JSON.stringify({
@@ -361,14 +380,10 @@ function doGet(e) {
     return htmlResponse('<h2>✅ Digest sent to ' + DIGEST_EMAIL + '</h2>');
   }
 
-  /* ── Expiry check on demand (customer 3/2/1 + auto-expire + admin digest) ── */
+  /* ── Expiry check on demand (customer 3/2/1 + auto-expire + admin digest + Telegram hook) ── */
   if (route.kind === 'expiry') {
-    if (typeof expiryLifecycleTrigger === 'function') {
-      expiryLifecycleTrigger();
-    } else {
-      sendExpiryReminders();
-    }
-    return htmlResponse('<h2>✅ Expiry lifecycle ran (customer mail + auto-expire + admin digest)</h2>');
+    expiryReminderTrigger();
+    return htmlResponse('<h2>✅ Expiry lifecycle ran (customer mail + auto-expire + admin digest + Telegram)</h2>');
   }
 
   /* ── Renew +30 (Active/Expired only). Does NOT send CAPI Purchase. ── */
@@ -569,6 +584,11 @@ function expiryReminderTrigger() {
     return;
   }
   sendExpiryReminders();
+  try {
+    if (typeof runTelegramLifecycleHook_ === 'function') runTelegramLifecycleHook_();
+  } catch (tgErr) {
+    Logger.log('telegram lifecycle: ' + tgErr.message);
+  }
 }
 
 function sendExpiryReminders() {

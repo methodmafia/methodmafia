@@ -11,8 +11,10 @@
  * Notes markers (dedupe, never wipe PURCHASE_SENT):
  *   PENDING_NUDGED, RENEW_MAIL_3, RENEW_MAIL_2, RENEW_MAIL_1
  *
- * NO Telegram bot sends. CAPI Purchase is NOT sent on renew (Entry $30 stays first Active only).
- * See GUIDE.md → PART 12.
+ * Email path only in this file. After customer mail + Auto Expired, OrderProcessor
+ * expiryReminderTrigger calls runTelegramLifecycleHook_ if present (pay/renew/kick).
+ * CAPI Purchase is NOT sent on renew (Entry $30 stays first Active only).
+ * See GUIDE.md → PART 12 + PART 13.
  */
 
 var LIFECYCLE_ADMIN_EMAIL = (typeof DIGEST_EMAIL !== 'undefined')
@@ -524,6 +526,11 @@ function expiryLifecycleTrigger() {
     if (typeof sendExpiryReminders === 'function') sendExpiryReminders();
   } catch (err3) {
     Logger.log('expiryLifecycle admin digest: ' + err3.message);
+  }
+  try {
+    if (typeof runTelegramLifecycleHook_ === 'function') runTelegramLifecycleHook_();
+  } catch (err4) {
+    Logger.log('expiryLifecycle telegram: ' + err4.message);
   }
 }
 

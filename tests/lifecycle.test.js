@@ -263,7 +263,7 @@ test('classifyDoGetRequest_ routes renew as admin-token action; status still pub
   assert.equal(op.classifyDoGetRequest_({ action: 'status', orderId: 'MM-2026-3007' }, '').kind, 'status');
 });
 
-test('Lifecycle.gs has triggers, renewOrder, TEST_ helpers, and no Telegram bot sends', () => {
+test('Lifecycle.gs has triggers, renewOrder, TEST_ helpers, and no Telegram HTTP', () => {
   const gs = fs.readFileSync(LIFE_PATH, 'utf8');
   assert.match(gs, /function pendingNudgeTrigger/);
   assert.match(gs, /function installPendingNudgeTrigger/);
@@ -277,6 +277,7 @@ test('Lifecycle.gs has triggers, renewOrder, TEST_ helpers, and no Telegram bot 
   assert.match(gs, /function testRenewPlus30_/);
   assert.match(gs, /function testCustomerRenewMail_/);
   assert.match(gs, /TEST_/);
+  assert.match(gs, /runTelegramLifecycleHook_/);
   assert.doesNotMatch(gs, /api\.telegram\.org/);
   assert.doesNotMatch(gs, /sendTelegram|TelegramBot|bot token/i);
   assert.doesNotMatch(gs, /trySendPurchaseForRow_/);
