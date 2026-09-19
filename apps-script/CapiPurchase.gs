@@ -207,6 +207,11 @@ function onOrderStatusEdit(e) {
   if (!e || !e.range) return;
   var sheet = e.range.getSheet();
   if (typeof SHEET_NAME !== 'undefined' && sheet.getName() !== SHEET_NAME) return;
+  if (typeof applyColMapFromSheet_ === 'function') {
+    try { applyColMapFromSheet_(sheet); } catch (mapErr) {
+      Logger.log('onOrderStatusEdit colmap: ' + mapErr.message);
+    }
+  }
   var startCol = e.range.getColumn();
   var endCol = startCol + e.range.getNumColumns() - 1;
   var statusCol = COL.STATUS + 1;
@@ -220,6 +225,14 @@ function onOrderStatusEdit(e) {
       trySendPurchaseForRow_(sheet, r);
     } catch (err) {
       Logger.log('onOrderStatusEdit row ' + r + ': ' + err.message);
+    }
+    /* Reject stays on Orders the same calendar day — midnight job archives. */
+    try {
+      if (typeof syncOrderRowToOrganizeTabs_ === 'function') {
+        syncOrderRowToOrganizeTabs_(sheet, r);
+      }
+    } catch (orgErr) {
+      Logger.log('onOrderStatusEdit organize row ' + r + ': ' + orgErr.message);
     }
   }
 }

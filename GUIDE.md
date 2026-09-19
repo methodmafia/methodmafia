@@ -31,7 +31,8 @@ methodmafia/
 │
 ├── apps-script/
 │   ├── OrderProcessor.gs  ← Sheet orders + FBclid/TTclid
-│   └── CapiPurchase.gs    ← Status→Active Purchase (CAPI)
+│   ├── CapiPurchase.gs    ← Status→Active Purchase (CAPI)
+│   └── SheetOrganize.gs   ← Master / Archive_Rejected / YYYY-MM
 │
 └── images/
     ├── logo.jpg
@@ -399,7 +400,7 @@ https://themethodmafia.com/?utm_source=tiktok
 https://themethodmafia.com/?utm_source=telegram
 ```
 
-Google Sheet-এর **Source** কলামে দেখবে কোথা থেকে এসেছে।
+Google Sheet-এর **Source** কলামে দেখবে কোথা থেকে এসেছে। (লাইভ sheet-এ Medium/Campaign কলাম নেই — চাইলে PART 10-এর `appendOptionalUtmHeaders` শেষে যোগ করে।)
 
 **যেটা বেশি বিক্রি দিচ্ছে, সেখানে বেশি টাকা দাও।**
 
@@ -513,10 +514,12 @@ const DIGEST_EMAIL = 'info@themethodmafia.com';  // digest email ঠিকান
 6. সেই URL → `config.js`-এ `SHEET_URL:` লাইনে বসাও
 
 **ধাপ ৪: Sheet headers সেটআপ**
-Apps Script editor-এ `setupSheetHeaders` ফাংশন সিলেক্ট করে ▶ Run চাপো।
-Sheet-এ কলাম তৈরি হবে: Timestamp, Order ID, Name, Email, Telegram, Plan, Amount, Payment, **Source, Medium, Campaign**, Status, Expiry, Days Left, Notes, **FBclid, TTclid**
+Apps Script editor-এ `setupSheetHeaders` ফাংশন সিলেক্ট করে ▶ Run চাপো — **শুধু খালি sheet-এ**। লাইভ Orders-এ আগে থেকে সারি থাকলে হেডার বদলাবে না (স্ক্র্যাম্বল রোধ)।
 
-আগে থেকে Sheet চালু থাকলে শেষে দুটো কলাম যোগ করো: `FBclid` আর `TTclid` (Notes-এর পরে)। অথবা `setupSheetHeaders` আবার Run করো — শুধু হেডার রো আপডেট হবে।
+লাইভ কলাম অর্ডার:
+Timestamp, Order ID, Name, Email, Telegram, Plan, Amount, **Source, Status, Expiry, Days Left, Payment**, Notes, **FBclid, TTclid**
+
+নতুন ট্যাব (`Master`, `Archive_Rejected`, `YYYY-MM`) আর midnight reject-archive: **PART 10**।
 
 ---
 
@@ -614,7 +617,7 @@ https://themethodmafia.com/order-status.html?orderId=MM-XXXX&confirmed=1&plan=En
 
 ## 🔗 UTM Tracking
 
-এখন ad লিংকে UTM যোগ করলে Sheet-এ **Source, Medium, Campaign** কলামে যাবে:
+এখন ad লিংকে UTM যোগ করলে Sheet-এ **Source** কলামে যাবে (লাইভ layout)। Medium/Campaign কলাম নেই — চাইলে PART 10 `appendOptionalUtmHeaders` শেষে যোগ করে:
 ```
 https://themethodmafia.com/?utm_source=facebook&utm_medium=paid&utm_campaign=entry_sep26
 https://themethodmafia.com/?utm_source=tiktok&utm_medium=paid&utm_campaign=promo_oct
@@ -726,5 +729,92 @@ If Notes never gets `PURCHASE_SENT`: tokens missing, trigger not installed, or P
 - `event_id` = Order ID — browser backup আর CAPI একই conversion হিসেবে গণনা হবে
 - FBclid / TTclid কলাম Swa ignore করতে পারো — ads matching-এর জন্য
 - Pixel ID বদলাতে `config.js` → `META_PIXEL` / `TIKTOK_PIXEL` (সাইট) **এবং** Script Properties (CAPI) দুটো জায়গায়
+
+---
+
+# 📂 PART 10 — Sheet organize (Orders / Master / Archive / monthly)
+
+Keep the live sheet clean for AI/Drive totals. **Never hard-delete orders.** Rejects stay on `Orders` the same calendar day (Swa may flip back to Active), then move to `Archive_Rejected` after Dhaka midnight.
+
+Live header order (do not rearrange):
+`Timestamp, Order ID, Name, Email, Telegram, Plan, Amount, Source, Status, Expiry, Days Left, Payment, Notes, FBclid, TTclid`
+
+Backup already taken (2026-09-19):
+- Live: https://docs.google.com/spreadsheets/d/1b-XGKfxIOnTJ5AVJr2beAyg4j14i6YzbgAI2VfVwXnM
+- Copy: https://docs.google.com/spreadsheets/d/1ffSBXNNTSDrFWAHOY0yq9qCSfwgx-D12UBU2ohm-mMk
+
+---
+
+## English — install (Developer + Swa)
+
+### 1) Paste the new Apps Script files
+
+Google Sheet → **Extensions** → **Apps Script**
+
+- Replace `OrderProcessor.gs` with repo `apps-script/OrderProcessor.gs` (keep your real `ADMIN_TOKEN`)
+- Keep `CapiPurchase.gs` — replace with repo file (CAPI unchanged: Entry + Active → Purchase $30, `PURCHASE_SENT` dedupe)
+- **+** → Script → name it `SheetOrganize` → paste `apps-script/SheetOrganize.gs`
+
+Save (Ctrl+S). **Do not change column order on the live sheet.**
+
+### 2) Project timezone = Asia/Dhaka
+
+Apps Script → ⚙️ **Project Settings** → **Time zone** → `(GMT+06:00) Dhaka`
+
+### 3) One-time migrator (safe copy, does not delete Orders)
+
+Function dropdown → `setupOrganizeSheets` → ▶ **Run** → Authorize.
+
+Creates missing tabs and copies existing `Orders` rows into `Master` + current `YYYY-MM`. Rejects stay on `Orders` until midnight.
+
+### 4) Midnight reject-cleanup trigger
+
+Apps Script → ⏰ **Triggers** → **Add Trigger**:
+
+```
+Function:       midnightOrganizeTrigger
+Event source:   Time-driven
+Type:           Day timer
+Time of day:    Midnight to 1am
+```
+
+Or run `installMidnightOrganizeTrigger` once from the editor (same job, timezone Asia/Dhaka).
+
+After 00:00 Asia/Dhaka: any row still `reject` / `Reject` / `rejected` on `Orders` is **moved** (not destroyed) to `Archive_Rejected`, and `Master` status is updated.
+
+### 5) Safe tests (TEST_ tabs only — will not delete real orders)
+
+Run in this order, then `cleanupOrganizeTests_`:
+
+```
+testOrganizePendingMaster_   → TEST- row on TEST_Orders AND TEST_Master
+testRejectStaysSameDay_      → reject stays on TEST_Orders (no archive)
+testMidnightRejectMove_      → reject moves to TEST_Archive_Rejected; Master keeps the row
+cleanupOrganizeTests_        → deletes TEST_* tabs
+```
+
+---
+
+## বাংলা — Swa একবারের সেটআপ
+
+**ধাপ ১:** Sheet → Extensions → Apps Script। তিনটা ফাইল পেস্ট করো: `OrderProcessor.gs`, `CapiPurchase.gs`, নতুন `SheetOrganize.gs`। `ADMIN_TOKEN` আগেরটাই রাখো। কলাম এদিক-ওদিক কোরো না।
+
+**ধাপ ২:** ⚙️ Project Settings → Time zone: **Dhaka**।
+
+**ধাপ ৩:** Function `setupOrganizeSheets` ▶ Run। `Master`, `Archive_Rejected`, আর এই মাসের `YYYY-MM` ট্যাব তৈরি হবে। `Orders`-এর সারি মুছবে না।
+
+**ধাপ ৪:** ⏰ Triggers → `midnightOrganizeTrigger` → Time-driven → Day timer → **Midnight to 1am**। Authorize দাও।
+
+**ধাপ ৫ (Developer):** `testOrganizePendingMaster_`, `testRejectStaysSameDay_`, `testMidnightRejectMove_` Run করো। শেষে `cleanupOrganizeTests_`।
+
+### প্রতিদিনের নিয়ম
+
+- নতুন ওয়েবসাইট অর্ডার → `Orders` + `Master` (+ এই মাসের ট্যাব)
+- Status `reject` লিখলে **আজকে** `Orders`-এই থাকবে (ভুলে Active করে দিতে পারবে)
+- রাত ১২টার পরও reject থাকলে → `Archive_Rejected` (ইতিহাস মুছে যায় না)
+- `PURCHASE_SENT` Notes মুছবে না — CAPI আগের মতো Entry Active-এ একবারই যাবে
+
+`setupSheetHeaders` এখন লাইভ হেডার স্ক্র্যাম্বল করবে না। Medium/Campaign লাগলে শুধু `appendOptionalUtmHeaders` Run করো — কলাম **শেষে** যোগ হয়, মাঝখানে নয়।
+
 
 

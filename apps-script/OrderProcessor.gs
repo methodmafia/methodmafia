@@ -19,7 +19,13 @@
  *  • C3: Daily digest email to DIGEST_EMAIL
  *  • C4: Expiry reminder email (members expiring in ≤3 days)
  *  • CAPI: Status → Active (Entry) sends Purchase via CapiPurchase.gs
+ *  • Organize: doPost also upserts Master + current YYYY-MM (SheetOrganize.gs)
  * ──────────────────────────────────────────────────────────────
+ *
+ * CRITICAL: Column order MUST match the LIVE Google Sheet header:
+ *   Timestamp, Order ID, Name, Email, Telegram, Plan, Amount,
+ *   Source, Status, Expiry, Days Left, Payment, Notes, FBclid, TTclid
+ * Wrong indices scramble rows. SheetOrganize.gs re-reads headers at runtime.
  */
 
 /* ── CONFIG ───────────────────────────────────────────────── */
@@ -27,8 +33,8 @@ const SHEET_NAME   = 'Orders';          // Tab name in Google Sheet
 const ADMIN_TOKEN  = 'CHANGE_ME_NOW';   // Replace with a long random string (e.g. from random.org)
 const DIGEST_EMAIL = 'info@themethodmafia.com';
 
-/* Column indices (0-based).
-   Matches sheet columns: A=0 … update if you add/move columns */
+/* Column indices (0-based) — LIVE production layout (2026-09-19).
+   Medium/Campaign are optional and stay -1 unless those headers exist. */
 const COL = {
   TIMESTAMP  : 0,   // A
   ORDER_ID   : 1,   // B
@@ -37,16 +43,16 @@ const COL = {
   TELEGRAM   : 4,   // E
   PLAN       : 5,   // F
   AMOUNT     : 6,   // G
-  PAYMENT    : 7,   // H
-  SOURCE     : 8,   // I
-  MEDIUM     : 9,   // J  ← new (utm_medium)
-  CAMPAIGN   : 10,  // K  ← new (utm_campaign)
-  STATUS     : 11,  // L
-  EXPIRY     : 12,  // M
-  DAYS_LEFT  : 13,  // N  ← formula-driven
-  NOTES      : 14,  // O
-  FBCLID     : 15,  // P  ← Facebook click id (ads)
-  TTCLID     : 16   // Q  ← TikTok click id (ads)
+  SOURCE     : 7,   // H  ← live (NOT Payment)
+  STATUS     : 8,   // I
+  EXPIRY     : 9,   // J
+  DAYS_LEFT  : 10,  // K  ← formula-driven
+  PAYMENT    : 11,  // L  ← live (after Days Left)
+  NOTES      : 12,  // M
+  FBCLID     : 13,  // N  ← Facebook click id (ads)
+  TTCLID     : 14,  // O  ← TikTok click id (ads)
+  MEDIUM     : -1,  // optional
+  CAMPAIGN   : -1   // optional
 };
 
 /* ────────────────────────────────────────────────────────────
@@ -58,39 +64,29 @@ function doPost(e) {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME)
                   || SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
 
-    /* C2: Duplicate detection */
+    var headers = readHeaders_(sheet);
+    var headerDecision = planHeaderWrite_(headers, LIVE_HEADERS, sheet.getLastRow() > 1);
+    if (headerDecision.write) {
+      sheet.getRange(1, 1, 1, LIVE_HEADERS.length).setValues([LIVE_HEADERS]);
+      sheet.setFrozenRows(1);
+      headers = LIVE_HEADERS.slice();
+    }
+    const col = applyColMapFromSheet_(sheet);
+
+    /* C2: Duplicate detection (Orders + Master so archived rejects still flag) */
     const isDupe = checkDuplicate(sheet, data.telegram, data.email);
 
-    const now   = new Date();
-    const expiry = new Date(now.getTime() + 30 * 24 * 3600 * 1000);
+    const now = new Date();
+    const row = buildOrderRowValues_(headers, col, data, now, isDupe);
 
-    const row = [
-      now.toISOString(),          // A: Timestamp
-      data.orderId || '',         // B: Order ID
-      data.name    || '',         // C: Name
-      data.email   || '',         // D: Email
-      data.telegram || '',        // E: Telegram
-      data.plan    || '',         // F: Plan
-      data.amount  || '',         // G: Amount
-      data.payment || '',         // H: Payment method
-      data.source  || 'direct',   // I: utm_source
-      data.medium  || '',         // J: utm_medium
-      data.campaign || '',        // K: utm_campaign
-      'Pending',                  // L: Status
-      expiry.toISOString().split('T')[0],  // M: Expiry (30 days)
-      '',                         // N: Days Left (formula added below)
-      isDupe ? '⚠️ DUPLICATE' : '',        // O: Notes
-      data.fbclid || '',          // P: FBclid
-      data.ttclid || ''           // Q: TTclid
-    ];
-
-    const lastRow = sheet.getLastRow();
     sheet.appendRow(row);
-
-    /* Set Days Left formula in column N (index 13 → col N) */
     const newRowNum = sheet.getLastRow();
-    sheet.getRange(newRowNum, COL.DAYS_LEFT + 1)
-         .setFormula('=IF(M' + newRowNum + '="","",DATEDIF(TODAY(),M' + newRowNum + ',"D"))');
+    applyDaysLeftFormulaOnSheet_(sheet, newRowNum, col);
+
+    /* Master + current YYYY-MM. CAPI still only fires on Active/Entry. */
+    try { upsertNewOrderToOrganizeTabs_(sheet, newRowNum); } catch (orgErr) {
+      Logger.log('doPost organize: ' + orgErr.message);
+    }
 
     return ContentService.createTextOutput(JSON.stringify({ok: true, dupe: isDupe}))
                          .setMimeType(ContentService.MimeType.JSON);
@@ -118,6 +114,7 @@ function doGet(e) {
 
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME)
                 || SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
+  applyColMapFromSheet_(sheet);
 
   /* ── C1: Mark order Active ── */
   if (action === 'activate' && orderId) {
@@ -135,6 +132,9 @@ function doGet(e) {
     /* Primary Purchase: Meta CAPI + TikTok Events API (Entry only, $30) */
     try { trySendPurchaseForRow_(sheet, row); } catch (err) {
       Logger.log('activate CAPI: ' + err.message);
+    }
+    try { syncOrderRowToOrganizeTabs_(sheet, row); } catch (orgErr) {
+      Logger.log('activate organize: ' + orgErr.message);
     }
 
     /* Optional backup: confirmed URL still fires browser Purchase if the customer opens it */
@@ -175,17 +175,17 @@ function doGet(e) {
    C2: Duplicate detection
    ──────────────────────────────────────────────────────────── */
 function checkDuplicate(sheet, telegram, email) {
-  const data      = sheet.getDataRange().getValues();
-  const tgLower   = (telegram || '').toLowerCase().replace(/^@/, '');
-  const emlLower  = (email    || '').toLowerCase();
-  for (let i = 1; i < data.length; i++) {
-    const rowTg  = (data[i][COL.TELEGRAM] || '').toLowerCase().replace(/^@/, '');
-    const rowEml = (data[i][COL.EMAIL]    || '').toLowerCase();
-    if ((tgLower && rowTg === tgLower) || (emlLower && rowEml === emlLower)) {
-      return true;
+  const tables = [sheet.getDataRange().getValues()];
+  try {
+    const master = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TAB_MASTER);
+    if (master && master.getSheetId() !== sheet.getSheetId()) {
+      tables.push(master.getDataRange().getValues());
     }
+  } catch (err) {
+    Logger.log('checkDuplicate Master: ' + err.message);
   }
-  return false;
+  const col = (typeof applyColMapFromSheet_ === 'function') ? applyColMapFromSheet_(sheet) : COL;
+  return checkDuplicateInTables_(tables, col, telegram, email);
 }
 
 /* ────────────────────────────────────────────────────────────
@@ -199,6 +199,7 @@ function dailyDigestTrigger() {
 function sendDailyDigest() {
   const sheet    = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME)
                    || SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
+  applyColMapFromSheet_(sheet);
   const data     = sheet.getDataRange().getValues();
   const today    = new Date();
   today.setHours(0,0,0,0);
@@ -232,7 +233,8 @@ function sendDailyDigest() {
       body += '<tr><td>' + r[COL.ORDER_ID] + '</td><td>' + r[COL.NAME] + '</td>'
             + '<td>' + r[COL.TELEGRAM] + '</td><td>' + r[COL.PLAN] + '</td>'
             + '<td>' + r[COL.PAYMENT] + '</td><td>' + (r[COL.SOURCE]||'direct') + '</td>'
-            + '<td>' + (r[COL.MEDIUM]||'') + '</td><td>' + (r[COL.CAMPAIGN]||'') + '</td></tr>';
+            + '<td>' + (COL.MEDIUM >= 0 ? (r[COL.MEDIUM]||'') : '') + '</td>'
+            + '<td>' + (COL.CAMPAIGN >= 0 ? (r[COL.CAMPAIGN]||'') : '') + '</td></tr>';
     });
     body += '</table>';
   }
@@ -276,6 +278,7 @@ function expiryReminderTrigger() {
 function sendExpiryReminders() {
   const sheet  = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME)
                  || SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
+  applyColMapFromSheet_(sheet);
   const data   = sheet.getDataRange().getValues();
   const today  = new Date();
   today.setHours(0,0,0,0);
@@ -331,9 +334,10 @@ function sendExpiryReminders() {
    Helpers
    ──────────────────────────────────────────────────────────── */
 function findOrderRow(sheet, orderId) {
+  const want = String(orderId || '').toUpperCase();
   const data = sheet.getDataRange().getValues();
   for (let i = 1; i < data.length; i++) {
-    if ((data[i][COL.ORDER_ID] || '').toString().toUpperCase() === orderId) return i + 1;
+    if ((data[i][COL.ORDER_ID] || '').toString().toUpperCase() === want) return i + 1;
   }
   return null;
 }
@@ -356,11 +360,19 @@ function setupSheetHeaders() {
   let sheet   = ss.getSheetByName(SHEET_NAME);
   if (!sheet) sheet = ss.insertSheet(SHEET_NAME);
 
-  const headers = [
+  const headers = (typeof LIVE_HEADERS !== 'undefined') ? LIVE_HEADERS.slice() : [
     'Timestamp','Order ID','Name','Email','Telegram',
-    'Plan','Amount','Payment','Source','Medium','Campaign',
-    'Status','Expiry','Days Left','Notes','FBclid','TTclid'
+    'Plan','Amount','Source','Status','Expiry','Days Left',
+    'Payment','Notes','FBclid','TTclid'
   ];
+
+  const existing = sheet.getLastRow() > 0 ? sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0] : [];
+  const hasData = sheet.getLastRow() > 1;
+  const decision = planHeaderWrite_(existing, headers, hasData);
+  if (!decision.write) {
+    Logger.log('setupSheetHeaders skipped (' + decision.reason + '). Live header order kept.');
+    return;
+  }
 
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   sheet.setFrozenRows(1);
