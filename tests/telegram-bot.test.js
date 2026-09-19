@@ -251,54 +251,63 @@ test('pay/renew TG jobs select Pending>24h and Active 3/2/1 without double-send 
   assert.equal(renew.filter((p) => p.orderId === 'MM-R1')[0].marker, 'RENEW_TG_1');
 });
 
-test('customer pay/renew Telegram copy is Bangla-first FOMO, private, no public VIP link', () => {
+test('customer pay/renew Telegram copy is tone B Premium VIP, one language, no public VIP link', () => {
   const pay = tg.buildCustomerPayTelegramMessage_({
     name: 'Rakib',
     orderId: 'MM-2026-4821',
-    telegram: '@rakib_h'
+    telegram: '@rakib_h',
+    notes: ''
   });
-  assert.match(pay, /Rakib|MM-2026-4821|@MMHQ_Support/i);
-  assert.match(pay, /[ঀ-৿]/);
-  assert.match(pay, /VIP|মেথড|ড্রপ|অ্যাক্সেস/);
+  assert.match(pay, /ভাইয়া\/আপু/);
+  assert.match(pay, /MM-2026-4821|@MMHQ_Support/i);
+  assert.match(pay, /Premium VIP/);
+  assert.match(pay, /👋/);
   assert.doesNotMatch(pay, /t\.me\/\+/);
   assert.doesNotMatch(pay, /TheMethodmafia1/i);
   assert.doesNotMatch(pay, /\$15/);
+  assert.doesNotMatch(pay.replace(/Premium VIP/g, ''), /VIP/);
 
   const renew = tg.buildCustomerRenewTelegramMessage_({
     name: 'Felix',
     daysLeft: 3,
-    expiry: '2026-09-22'
+    expiry: '2026-09-22',
+    notes: ''
   });
-  assert.match(renew, /Felix/);
-  assert.match(renew, /3|৩/);
-  assert.match(renew, /Method Mafia/i);
-  assert.match(renew, /রিনিউ/);
-  assert.match(renew, /ড্রপ|মেথড/);
-  assert.match(renew, /অ্যাক্সেস|বন্ধ/);
+  assert.equal(renew.split('\n')[0], 'ভাইয়া/আপু 👋');
+  assert.match(renew, /Premium VIP/);
+  assert.match(renew, /মাত্র ৩ দিন/);
   assert.match(renew, /\$15/);
   assert.match(renew, /@MMHQ_Support/);
-  const bnIdx = renew.search(/[ঀ-৿]/);
-  const enIdx = renew.search(/Only |days left|Just \$15/i);
-  assert.ok(bnIdx >= 0 && (enIdx === -1 || bnIdx < enIdx));
+  assert.match(renew, /📚|💎|😢|🙏|⏳/);
+  assert.doesNotMatch(renew.replace(/Premium VIP/g, ''), /VIP/);
+  assert.doesNotMatch(renew, /Your Method Mafia Premium VIP ends/);
   assert.doesNotMatch(renew, /t\.me\/\+/);
   assert.doesNotMatch(renew, /kick|ban/i);
   assert.doesNotMatch(renew, /\$30/);
 });
 
-test('Telegram renew templates snapshot Bangla FOMO keywords for 3/2/1', () => {
+test('Telegram renew tone B snapshots BN ৩/২/১ and LANG_EN / LANG_HI isolation', () => {
   [3, 2, 1].forEach(function (n) {
+    const bnDigit = ({ 3: '৩', 2: '২', 1: '১' })[n];
     const text = tg.buildCustomerRenewTelegramMessage_({
-      name: 'Rakib',
       daysLeft: n,
-      expiry: '2026-09-22'
+      notes: 'LANG_BN'
     });
-    assert.match(text, /রিনিউ/);
-    assert.match(text, /VIP/);
+    assert.match(text, /Premium VIP/);
+    assert.match(text, new RegExp('মাত্র ' + bnDigit + ' দিন'));
     assert.match(text, /\$15/);
-    assert.match(text, /@MMHQ_Support/);
-    assert.match(text, /ড্রপ|মেথড/);
-    assert.match(text, /অ্যাক্সেস|বন্ধ/);
+    assert.match(text, /👋/);
   });
+  const en = tg.buildCustomerRenewTelegramMessage_({ daysLeft: 1, notes: 'LANG_EN' });
+  assert.match(en, /Bhaiya\/Apu 👋/);
+  assert.match(en, /just 1 day/i);
+  assert.match(en, /Premium VIP/);
+  assert.doesNotMatch(en, /[ঀ-৿]/);
+  const hi = tg.buildCustomerRenewTelegramMessage_({ daysLeft: 3, notes: 'LANG_HI' });
+  assert.match(hi, /भैया\/आपु/);
+  assert.match(hi, /Premium VIP/);
+  assert.doesNotMatch(hi, /ভাইয়া/);
+  assert.equal(tg.resolveCustomerCopyLang_('', ''), 'bn');
 });
 
 test('kick is confirm-first: job only asks admin; ban runs only after admin k: callback', () => {

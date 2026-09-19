@@ -262,6 +262,7 @@ function planCustomerRenewMails_(rows, col, today) {
       email: email,
       daysLeft: days,
       expiry: rows[i][col.EXPIRY],
+      notes: rows[i][col.NOTES],
       marker: marker
     });
   }
@@ -274,46 +275,94 @@ function formatExpiryLabel_(expiry) {
   return lifecycleDhakaYmd_(d);
 }
 
-function lifecycleBnDaysLeft_(n) {
-  n = Number(n);
-  var map = { 1: '১', 2: '২', 3: '৩' };
-  var bn = map[n] || String(n);
-  if (n === 1) return '১ দিন';
-  return bn + ' দিন';
+function resolveCustomerCopyLang_(notes, locale) {
+  var blob = String(notes || '').toUpperCase();
+  var loc = String(locale || '').trim().toUpperCase();
+  if (blob.indexOf('LANG_EN') !== -1 || loc === 'EN' || loc === 'ENGLISH') return 'en';
+  if (blob.indexOf('LANG_HI') !== -1 || loc === 'HI' || loc === 'HINDI' || loc === 'HN') return 'hi';
+  if (blob.indexOf('LANG_BN') !== -1 || loc === 'BN' || loc === 'BANGLA' || loc === 'BD') return 'bn';
+  return 'bn';
 }
 
-function lifecycleEnDaysLeft_(n) {
+function mmBnDayDigit_(n) {
+  var map = { 1: '১', 2: '২', 3: '৩' };
+  return map[Number(n)] || String(n);
+}
+
+function mmEnDayPhrase_(n) {
   n = Number(n);
   return n === 1 ? '1 day' : (n + ' days');
 }
 
+function buildToneBRenewCopy_(lang, daysLeft) {
+  var n = Number(daysLeft);
+  var dBn = mmBnDayDigit_(n);
+  var dEn = mmEnDayPhrase_(n);
+  lang = String(lang || 'bn').toLowerCase();
+  if (lang === 'en') {
+    return {
+      subject: 'Method Mafia — Premium VIP ends in ' + dEn + ' · $15',
+      body:
+        'Bhaiya/Apu 👋\n' +
+        'Your Method Mafia Premium VIP ends in just ' + dEn + ' ⏳\n\n' +
+        'The library, new method drops, and support you have this month 📚✨\n' +
+        'If you don\'t renew, those can pause.\n\n' +
+        'Keep the same access another month for just $15 💎\n' +
+        'Otherwise this month\'s new drops can slip away 😢\n\n' +
+        'To renew: pay, then send Order ID + screenshot\n' +
+        '👉 @MMHQ_Support\n\n' +
+        'We want to keep your access going 🙏'
+    };
+  }
+  if (lang === 'hi') {
+    return {
+      subject: 'Method Mafia — Premium VIP खत्म होने में ' + n + ' दिन · $15',
+      body:
+        'भैया/आपु 👋\n' +
+        'आपका Method Mafia Premium VIP खत्म होने में बस ' + n + ' दिन बचे हैं ⏳\n\n' +
+        'इस एक महीने में जो लाइब्रेरी, नए मेथड ड्रॉप और सपोर्ट मिल रहा है 📚✨\n' +
+        'रिन्यू न करने पर वो रुक सकते हैं।\n\n' +
+        'सिर्फ $15 में एक और महीना वही सुविधा चालू रखें 💎\n' +
+        'नहीं तो इस महीने के नए ड्रॉप मिस हो सकते हैं 😢\n\n' +
+        'रिन्यू करने के लिए: पेमेंट करके Order ID + स्क्रीनशॉट भेजें\n' +
+        '👉 @MMHQ_Support\n\n' +
+        'हम आपका एक्सेस लगातार रखना चाहते हैं 🙏'
+    };
+  }
+  return {
+    subject: 'Method Mafia — Premium VIP শেষ হতে মাত্র ' + dBn + ' দিন · $15',
+    body:
+      'ভাইয়া/আপু 👋\n' +
+      'আপনার Method Mafia Premium VIP শেষ হতে আর মাত্র ' + dBn + ' দিন বাকি ⏳\n\n' +
+      'এই এক মাসে আপনি যে লাইব্রেরি, নতুন মেথড ড্রপ আর সাপোর্ট পাচ্ছেন 📚✨\n' +
+      'রিনিউ না করলে সেগুলো থেমে যেতে পারে।\n\n' +
+      'মাত্র $15 এ আরেক মাস একই সুবিধা চালু রাখুন 💎\n' +
+      'না করলে এ মাসের নতুন ড্রপগুলো মিস হয়ে যেতে পারে 😢\n\n' +
+      'রিনিউ করতে: পেমেন্ট করে Order ID + স্ক্রিনশট পাঠান\n' +
+      '👉 @MMHQ_Support\n\n' +
+      'আমরা আপনার এক্সেস একটানা রাখতে চাই 🙏'
+  };
+}
+
+function lifecycleTextToHtml_(text) {
+  var blocks = String(text || '').split(/\n\n+/);
+  var html = '';
+  var i;
+  for (i = 0; i < blocks.length; i++) {
+    html += '<p>' + lifecycleEscape_(blocks[i]).replace(/\n/g, '<br>') + '</p>';
+  }
+  return html;
+}
+
 function buildCustomerRenewMessage_(item) {
   item = item || {};
-  var n = Number(item.daysLeft);
-  var bnDays = lifecycleBnDaysLeft_(n);
-  var enDays = lifecycleEnDaysLeft_(n);
-  var expiryLabel = formatExpiryLabel_(item.expiry);
-  var name = String(item.name || 'there').trim() || 'there';
-  var subject = 'Method Mafia — VIP শেষ হতে ' + bnDays + ' (renew $15)';
-  var textBody =
-    name + ',\n\n' +
-    'VIP শেষ হতে আর মাত্র ' + bnDays + ' বাকি (' + expiryLabel + ')।\n' +
-    'রিনিউ করলে VIP মেথড, নতুন আপডেট আর সাপোর্ট চালু থাকবে। না করলে নতুন মেথড ড্রপ মিস — অ্যাক্সেস বন্ধ হয়ে যাবে।\n\n' +
-    'মাসিক রিনিউ মাত্র $15। পেমেন্ট করে স্ক্রিনশট @MMHQ_Support-এ পাঠান।\n\n' +
-    'Only ' + enDays + ' left. Renew to keep VIP methods, updates & support. Miss new method drops if you don\'t — access stops. Just $15. Pay + send SS to @MMHQ_Support.\n\n' +
-    '— Method Mafia\n';
-  var htmlBody =
-    '<p>' + lifecycleEscape_(name) + ',</p>' +
-    '<p>VIP শেষ হতে আর মাত্র <strong>' + lifecycleEscape_(bnDays) + '</strong> বাকি (' +
-    lifecycleEscape_(expiryLabel) + ')। রিনিউ করলে VIP মেথড, নতুন আপডেট আর সাপোর্ট চালু থাকবে। না করলে নতুন মেথড ড্রপ মিস — অ্যাক্সেস বন্ধ হয়ে যাবে।</p>' +
-    '<p>মাসিক রিনিউ মাত্র <strong>$15</strong>। পেমেন্ট করে স্ক্রিনশট @MMHQ_Support-এ পাঠান।</p>' +
-    '<p>Only ' + lifecycleEscape_(enDays) + ' left. Renew to keep VIP methods, updates &amp; support. Miss new method drops if you don\'t — access stops. Just $15. Pay + send SS to @MMHQ_Support.</p>' +
-    '<p>— Method Mafia</p>';
+  var lang = resolveCustomerCopyLang_(item.notes, item.locale || item.lang || item.language);
+  var copy = buildToneBRenewCopy_(lang, item.daysLeft);
   return {
     to: String(item.email || '').trim(),
-    subject: subject,
-    textBody: textBody,
-    htmlBody: htmlBody
+    subject: copy.subject,
+    textBody: copy.body + '\n',
+    htmlBody: lifecycleTextToHtml_(copy.body)
   };
 }
 
@@ -756,6 +805,8 @@ if (typeof module === 'object' && module.exports) {
     applyRenewToRow_: applyRenewToRow_,
     planCustomerRenewMails_: planCustomerRenewMails_,
     buildCustomerRenewMessage_: buildCustomerRenewMessage_,
+    resolveCustomerCopyLang_: resolveCustomerCopyLang_,
+    buildToneBRenewCopy_: buildToneBRenewCopy_,
     applyCustomerRenewMarkers_: applyCustomerRenewMarkers_
   };
 }

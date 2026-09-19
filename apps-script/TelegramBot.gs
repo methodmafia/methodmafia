@@ -614,37 +614,115 @@ function buildAdminKickAskMessage_(item) {
     'Tap ✅ to banChatMember from VIP, or Cancel. Confirm-first — bot will not kick until you tap.';
 }
 
-function tgBnDaysLeft_(n) {
-  n = Number(n);
+function resolveCustomerCopyLang_(notes, locale) {
+  var blob = String(notes || '').toUpperCase();
+  var loc = String(locale || '').trim().toUpperCase();
+  if (blob.indexOf('LANG_EN') !== -1 || loc === 'EN' || loc === 'ENGLISH') return 'en';
+  if (blob.indexOf('LANG_HI') !== -1 || loc === 'HI' || loc === 'HINDI' || loc === 'HN') return 'hi';
+  if (blob.indexOf('LANG_BN') !== -1 || loc === 'BN' || loc === 'BANGLA' || loc === 'BD') return 'bn';
+  return 'bn';
+}
+
+function mmBnDayDigit_(n) {
   var map = { 1: '১', 2: '২', 3: '৩' };
-  var bn = map[n] || String(n);
-  if (n === 1) return '১ দিন';
-  return bn + ' দিন';
+  return map[Number(n)] || String(n);
+}
+
+function mmEnDayPhrase_(n) {
+  n = Number(n);
+  return n === 1 ? '1 day' : (n + ' days');
+}
+
+function buildToneBRenewCopy_(lang, daysLeft) {
+  var n = Number(daysLeft);
+  var dBn = mmBnDayDigit_(n);
+  var dEn = mmEnDayPhrase_(n);
+  lang = String(lang || 'bn').toLowerCase();
+  if (lang === 'en') {
+    return {
+      subject: 'Method Mafia — Premium VIP ends in ' + dEn + ' · $15',
+      body:
+        'Bhaiya/Apu 👋\n' +
+        'Your Method Mafia Premium VIP ends in just ' + dEn + ' ⏳\n\n' +
+        'The library, new method drops, and support you have this month 📚✨\n' +
+        'If you don\'t renew, those can pause.\n\n' +
+        'Keep the same access another month for just $15 💎\n' +
+        'Otherwise this month\'s new drops can slip away 😢\n\n' +
+        'To renew: pay, then send Order ID + screenshot\n' +
+        '👉 @MMHQ_Support\n\n' +
+        'We want to keep your access going 🙏'
+    };
+  }
+  if (lang === 'hi') {
+    return {
+      subject: 'Method Mafia — Premium VIP खत्म होने में ' + n + ' दिन · $15',
+      body:
+        'भैया/आपु 👋\n' +
+        'आपका Method Mafia Premium VIP खत्म होने में बस ' + n + ' दिन बचे हैं ⏳\n\n' +
+        'इस एक महीने में जो लाइब्रेरी, नए मेथड ड्रॉप और सपोर्ट मिल रहा है 📚✨\n' +
+        'रिन्यू न करने पर वो रुक सकते हैं।\n\n' +
+        'सिर्फ $15 में एक और महीना वही सुविधा चालू रखें 💎\n' +
+        'नहीं तो इस महीने के नए ड्रॉप मिस हो सकते हैं 😢\n\n' +
+        'रिन्यू करने के लिए: पेमेंट करके Order ID + स्क्रीनशॉट भेजें\n' +
+        '👉 @MMHQ_Support\n\n' +
+        'हम आपका एक्सेस लगातार रखना चाहते हैं 🙏'
+    };
+  }
+  return {
+    subject: 'Method Mafia — Premium VIP শেষ হতে মাত্র ' + dBn + ' দিন · $15',
+    body:
+      'ভাইয়া/আপু 👋\n' +
+      'আপনার Method Mafia Premium VIP শেষ হতে আর মাত্র ' + dBn + ' দিন বাকি ⏳\n\n' +
+      'এই এক মাসে আপনি যে লাইব্রেরি, নতুন মেথড ড্রপ আর সাপোর্ট পাচ্ছেন 📚✨\n' +
+      'রিনিউ না করলে সেগুলো থেমে যেতে পারে।\n\n' +
+      'মাত্র $15 এ আরেক মাস একই সুবিধা চালু রাখুন 💎\n' +
+      'না করলে এ মাসের নতুন ড্রপগুলো মিস হয়ে যেতে পারে 😢\n\n' +
+      'রিনিউ করতে: পেমেন্ট করে Order ID + স্ক্রিনশট পাঠান\n' +
+      '👉 @MMHQ_Support\n\n' +
+      'আমরা আপনার এক্সেস একটানা রাখতে চাই 🙏'
+  };
+}
+
+function buildToneBPayCopy_(lang, orderId) {
+  var oid = String(orderId || '');
+  lang = String(lang || 'bn').toLowerCase();
+  if (lang === 'en') {
+    return 'Bhaiya/Apu 👋\n' +
+      'Your Method Mafia order ' + oid + ' is still waiting on payment ⏳\n\n' +
+      'Premium VIP library, new method drops, and support are ready for you 📚✨\n' +
+      'Finish payment and access can start.\n\n' +
+      'Send the screenshot\n' +
+      '👉 @MMHQ_Support\n\n' +
+      'We want to keep your access going 🙏';
+  }
+  if (lang === 'hi') {
+    return 'भैया/आपु 👋\n' +
+      'आपका Method Mafia ऑर्डर ' + oid + ' अभी पेमेंट का इंतज़ार कर रहा है ⏳\n\n' +
+      'Premium VIP लाइब्रेरी, नए मेथड ड्रॉप और सपोर्ट आपके लिए तैयार हैं 📚✨\n' +
+      'पेमेंट पूरा होते ही एक्सेस चालू हो सकता है।\n\n' +
+      'स्क्रीनशॉट भेजें\n' +
+      '👉 @MMHQ_Support\n\n' +
+      'हम आपका एक्सेस लगातार रखना चाहते हैं 🙏';
+  }
+  return 'ভাইয়া/আপু 👋\n' +
+    'আপনার Method Mafia অর্ডার ' + oid + ' এখনও পেমেন্টের অপেক্ষায় ⏳\n\n' +
+    'Premium VIP লাইব্রেরি, নতুন মেথড ড্রপ আর সাপোর্ট আপনার জন্য রেডি 📚✨\n' +
+    'পেমেন্ট শেষ করলেই এক্সেস চালু।\n\n' +
+    'স্ক্রিনশট পাঠান\n' +
+    '👉 @MMHQ_Support\n\n' +
+    'আমরা আপনার এক্সেস একটানা রাখতে চাই 🙏';
 }
 
 function buildCustomerPayTelegramMessage_(item) {
   item = item || {};
-  var who = String(item.name || 'there').trim() || 'there';
-  var oid = String(item.orderId || '');
-  return who + ',\n\n' +
-    'অর্ডার ' + oid + ' — পেমেন্ট এখনও হয়নি। এখনই শেষ করুন: VIP মেথড, নতুন ড্রপ আর সাপোর্ট অপেক্ষা করছে। দেরি = সুযোগ হাতছাড়া।\n' +
-    'স্ক্রিনশট @MMHQ_Support-এ পাঠান। (Entry আলাদা; এটা মাসিক রিনিউ নয়।)\n\n' +
-    'Payment still waiting on ' + oid + '. Finish now so VIP methods, new drops & support don\'t pass you by. Send SS to @MMHQ_Support.\n\n' +
-    '— Method Mafia';
+  var lang = resolveCustomerCopyLang_(item.notes, item.locale || item.lang || item.language);
+  return buildToneBPayCopy_(lang, item.orderId);
 }
 
 function buildCustomerRenewTelegramMessage_(item) {
   item = item || {};
-  var n = Number(item.daysLeft);
-  var bnDays = tgBnDaysLeft_(n);
-  var enDays = n === 1 ? '1 day' : (n + ' days');
-  var who = String(item.name || 'there').trim() || 'there';
-  var expiry = String(item.expiry || '');
-  return who + ',\n\n' +
-    'VIP শেষ হতে আর মাত্র ' + bnDays + ' বাকি (' + expiry + ')। রিনিউ করলে VIP মেথড, আপডেট আর সাপোর্ট চালু থাকবে। না করলে নতুন মেথড ড্রপ মিস — অ্যাক্সেস বন্ধ হয়ে যাবে।\n' +
-    'মাসিক রিনিউ মাত্র $15। পেমেন্ট করে স্ক্রিনশট @MMHQ_Support-এ পাঠান।\n\n' +
-    'Only ' + enDays + ' left. Renew to keep VIP methods, updates & support. Miss new method drops if you don\'t — access stops. Just $15. Pay + send SS to @MMHQ_Support.\n\n' +
-    '— Method Mafia';
+  var lang = resolveCustomerCopyLang_(item.notes, item.locale || item.lang || item.language);
+  return buildToneBRenewCopy_(lang, item.daysLeft).body;
 }
 
 /* ── Lifecycle planners (email stays in Lifecycle.gs) ───── */
@@ -1526,6 +1604,7 @@ if (typeof module === 'object' && module.exports) {
     buildAdminKickAskMessage_: buildAdminKickAskMessage_,
     buildCustomerPayTelegramMessage_: buildCustomerPayTelegramMessage_,
     buildCustomerRenewTelegramMessage_: buildCustomerRenewTelegramMessage_,
+    resolveCustomerCopyLang_: resolveCustomerCopyLang_,
     planTelegramPayReminders_: planTelegramPayReminders_,
     planTelegramRenewReminders_: planTelegramRenewReminders_,
     planTelegramKickAsks_: planTelegramKickAsks_,

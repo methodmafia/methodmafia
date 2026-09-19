@@ -908,7 +908,7 @@ Time of day:  10am to 11am
 
 Each run:
 
-1. Emails the **customer Email** (not only the admin digest) 3 / 2 / 1 days before Expiry. **Bangla-first FOMO** (VIP methods / new drops / access stops; monthly renew **$15**; pay + SS to `@MMHQ_Support`). Notes markers `RENEW_MAIL_3`, `RENEW_MAIL_2`, `RENEW_MAIL_1` (one each).
+1. Emails the **customer Email** (not only the admin digest) 3 / 2 / 1 days before Expiry. **Tone B** (Premium VIP, emoji, one language from `LANG_BN` / `LANG_EN` / `LANG_HI`, default BN; monthly renew **$15**; SS to `@MMHQ_Support`). Notes markers `RENEW_MAIL_3`, `RENEW_MAIL_2`, `RENEW_MAIL_1` (one each).
 2. Active rows **past** Expiry → Status `Expired` (row stays; never deleted). Syncs Master / month tab. Re-applies Days Left on column **J**.
 3. Admin expiry digest still goes to `methodmafia.hq@gmail.com`.
 
@@ -956,7 +956,7 @@ Option A (Swa). **Only @MM_OrdersBot** — do not add another bot for reminders.
 
 Bot ✅ after you verify the payment screenshot (SS) → Sheet **Status Active** → existing CAPI Entry **$30** (`trySendPurchaseForRow_`) → **one-time** VIP invite (`createChatInviteLink` `member_limit=1`). The invite is DMed to the customer (or to 7581392046 to forward privately). **Never post a public VIP link.**
 
-Pay/renew TG runs after the existing 10am lifecycle job (`expiryLifecycleTrigger` → `runTelegramLifecycleHook_`). **Email path stays in Lifecycle.gs.** Renew copy is Bangla-first FOMO (monthly **$15**; Entry stays separate). Kick jobs always build a **confirm list** (names / ids / reasons) and wait for admin ✅ — `banChatMember` never runs without that tap.
+Pay/renew TG runs after the existing 10am lifecycle job (`expiryLifecycleTrigger` → `runTelegramLifecycleHook_`). **Email path stays in Lifecycle.gs.** Renew copy is **tone B** (Premium VIP; one language; monthly **$15**; Entry pay DMs stay separate). Kick jobs always build a **confirm list** (names / ids / reasons) and wait for admin ✅ — `banChatMember` never runs without that tap.
 
 **Kick policy (Swa, final):** ALL existing VIP channel members (~3000 social-proof) stay **untouched forever**. Never mass-sync. Never kick them. **Blind sync is FORBIDDEN forever.**
 

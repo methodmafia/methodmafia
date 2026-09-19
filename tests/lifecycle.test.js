@@ -220,7 +220,7 @@ test('Customer renew emails plan 3/2/1 day Active rows with Email, deduped by RE
   assert.equal(byId['MM-PEND'], undefined);
 });
 
-test('Customer renew mail goes to the row Email, not DIGEST_EMAIL, Bangla-first FOMO tone', () => {
+test('Customer renew mail goes to the row Email, not DIGEST_EMAIL, tone B Premium VIP', () => {
   const msg = life.buildCustomerRenewMessage_({
     orderId: 'MM-2026-3007',
     name: 'Felix',
@@ -230,42 +230,61 @@ test('Customer renew mail goes to the row Email, not DIGEST_EMAIL, Bangla-first 
   });
   assert.equal(msg.to, 'felix@example.com');
   assert.notEqual(msg.to, life.LIFECYCLE_ADMIN_EMAIL);
-  assert.match(msg.subject, /Method Mafia/i);
-  assert.match(msg.subject, /3|৩/);
+  assert.match(msg.subject, /Premium VIP/);
+  assert.match(msg.subject, /৩|3/);
+  assert.match(msg.subject, /\$15/);
   const body = (msg.textBody || '') + (msg.htmlBody || '');
-  assert.match(body, /Felix/);
-  assert.match(body, /3|৩/);
-  assert.match(body, /2026-09-22|22/);
-  assert.match(body, /Method Mafia/);
+  assert.match(body, /ভাইয়া\/আপু/);
+  assert.match(body, /👋/);
+  assert.match(body, /Premium VIP/);
+  assert.match(body, /মাত্র ৩ দিন/);
   assert.match(body, /\$15/);
   assert.match(body, /@MMHQ_Support/);
-  assert.match(body, /রিনিউ|অ্যাক্সেস|ড্রপ|মেথড/);
-  const bnIdx = body.search(/[ঀ-৿]/);
-  const enOnlyIdx = body.search(/Only |days left|Just \$15/i);
-  assert.ok(bnIdx >= 0, 'Bangla body required');
-  assert.ok(enOnlyIdx === -1 || bnIdx < enOnlyIdx, 'Bangla-first');
+  assert.match(body, /📚|💎|😢|🙏|⏳/);
+  assert.doesNotMatch(body.replace(/Premium VIP/g, ''), /VIP/);
+  assert.doesNotMatch(body, /Your Method Mafia Premium VIP ends/);
+  assert.doesNotMatch(body, /भैया/);
   assert.doesNotMatch(body, /kick|ban|bot/i);
   assert.doesNotMatch(body, /\$30/);
 });
 
-test('customer renew email templates carry Bangla FOMO beats for 3/2/1 and $15', () => {
+test('customer renew email tone B: BN day strings ৩/২/১, EN/HI from LANG_* one language each', () => {
   [3, 2, 1].forEach(function (n) {
+    const bnDigit = ({ 3: '৩', 2: '২', 1: '১' })[n];
     const msg = life.buildCustomerRenewMessage_({
       name: 'Rakib',
       email: 'rakib@example.com',
       daysLeft: n,
-      expiry: '2026-09-22'
+      notes: 'LANG_BN | PURCHASE_SENT'
     });
-    const body = (msg.textBody || '') + (msg.htmlBody || '');
-    assert.match(body, /রিনিউ/);
-    assert.match(body, /VIP/);
-    assert.match(body, /ড্রপ|মেথড/);
-    assert.match(body, /অ্যাক্সেস|বন্ধ/);
+    const body = msg.textBody || '';
+    assert.match(body, /Premium VIP/);
+    assert.match(body, new RegExp('মাত্র ' + bnDigit + ' দিন'));
     assert.match(body, /\$15/);
     assert.match(body, /@MMHQ_Support/);
-    assert.match(body, new RegExp(String(n) + '|৩|২|১'));
-    assert.match(msg.subject, /রিনিউ|VIP|দিন|day/i);
+    assert.match(body, /👋/);
+    assert.doesNotMatch(body, /Just \$15|ends in just/);
   });
+  const en = life.buildCustomerRenewMessage_({
+    email: 'a@b.c', daysLeft: 3, notes: 'LANG_EN'
+  });
+  assert.match(en.textBody, /Bhaiya\/Apu/);
+  assert.match(en.textBody, /Premium VIP/);
+  assert.match(en.textBody, /just 3 days/i);
+  assert.match(en.subject, /Premium VIP/);
+  assert.doesNotMatch(en.textBody, /[ঀ-৿]/);
+  assert.doesNotMatch(en.textBody, /[ऀ-ॿ]/);
+  const hi = life.buildCustomerRenewMessage_({
+    email: 'a@b.c', daysLeft: 2, notes: 'LANG_HI'
+  });
+  assert.match(hi.textBody, /भैया\/आपु/);
+  assert.match(hi.textBody, /Premium VIP/);
+  assert.match(hi.textBody, /2 दिन|२ दिन/);
+  assert.doesNotMatch(hi.textBody, /[ঀ-৿]/);
+  assert.doesNotMatch(hi.textBody, /ভাইয়া/);
+  assert.equal(life.resolveCustomerCopyLang_('', ''), 'bn');
+  assert.equal(life.resolveCustomerCopyLang_('LANG_EN | PURCHASE_SENT', ''), 'en');
+  assert.equal(life.resolveCustomerCopyLang_('LANG_HI', ''), 'hi');
 });
 
 test('applyCustomerRenewMarkers_ writes RENEW_MAIL_3/2/1 independently', () => {
@@ -337,6 +356,6 @@ test('GUIDE documents Phase 2A triggers, renew URL, and Days Left on Expiry', ()
   assert.match(guide, /J2-TODAY\(\)|Expiry column J/i);
   assert.match(guide, /repairDaysLeftFormulas/);
   assert.match(guide, /methodmafia\.hq@gmail\.com/);
-  assert.match(guide, /\$15|FOMO|বাংলা-first|Bangla-first/i);
+  assert.match(guide, /\$15|Premium VIP|tone B|LANG_BN/i);
   assert.doesNotMatch(guide, /Telegram bot send|bot\.sendMessage/i);
 });
