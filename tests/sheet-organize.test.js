@@ -239,9 +239,25 @@ test('setup refuses to overwrite existing live headers (no scramble)', () => {
   assert.equal(scramble.reason, 'refuse-scramble');
 });
 
-test('optional Medium/Campaign may only be appended at the far right', () => {
+test('optional Medium/Campaign/Language may only be appended at the far right', () => {
   const next = organize.planAppendOptionalHeaders_(LIVE_HEADER_SNIPPET);
-  assert.deepEqual(next, LIVE_HEADER_SNIPPET.concat(['Medium', 'Campaign']));
+  assert.deepEqual(next, LIVE_HEADER_SNIPPET.concat(['Medium', 'Campaign', 'Language']));
+});
+
+test('Language column maps and new rows default to en', () => {
+  const headers = LIVE_HEADER_SNIPPET.concat(['Language']);
+  const col = organize.buildColMapFromHeaders_(headers);
+  assert.ok(col.LANGUAGE >= 0);
+  const row = organize.buildOrderRowValues_(headers, col, {
+    orderId: 'MM-L', name: 'A', email: 'a@b.c', telegram: '@a'
+  }, new Date(), false);
+  assert.equal(row[col.LANGUAGE], 'en');
+  assert.equal(organize.normalizeOrderLanguage_('BN'), 'bn');
+  assert.equal(organize.normalizeOrderLanguage_('hi'), 'hi');
+  assert.equal(organize.normalizeOrderLanguage_('fr'), 'en');
+  assert.equal(organize.normalizeOrderLanguage_(''), 'en');
+  const bn = organize.buildOrderRowValues_(headers, col, { language: 'bn' }, new Date(), false);
+  assert.equal(bn[col.LANGUAGE], 'bn');
 });
 
 test('setup copies Orders into Master without deleting Orders rows', () => {

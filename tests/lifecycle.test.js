@@ -220,25 +220,161 @@ test('Customer renew emails plan 3/2/1 day Active rows with Email, deduped by RE
   assert.equal(byId['MM-PEND'], undefined);
 });
 
-test('Customer renew mail goes to the row Email, not DIGEST_EMAIL, polite EN Method Mafia tone', () => {
-  const msg = life.buildCustomerRenewMessage_({
-    orderId: 'MM-2026-3007',
+test('Customer renew mail uses pack copy: EN default, Language column, no cross-language leak', () => {
+  const en3 = life.buildCustomerRenewMessage_({
     name: 'Felix',
     email: 'felix@example.com',
-    daysLeft: 3,
-    expiry: '2026-09-22'
+    daysLeft: 3
   });
-  assert.equal(msg.to, 'felix@example.com');
-  assert.notEqual(msg.to, life.LIFECYCLE_ADMIN_EMAIL);
-  assert.match(msg.subject, /Method Mafia/i);
-  assert.match(msg.subject, /3/);
-  const body = (msg.textBody || '') + (msg.htmlBody || '');
-  assert.match(body, /Felix/);
-  assert.match(body, /3 day/);
-  assert.match(body, /2026-09-22|22/);
-  assert.match(body, /Method Mafia/);
-  assert.match(body, /30 days|another 30/i);
-  assert.doesNotMatch(body, /kick|ban|bot/i);
+  assert.equal(en3.to, 'felix@example.com');
+  assert.notEqual(en3.to, life.LIFECYCLE_ADMIN_EMAIL);
+  assert.equal(en3.subject, 'Your Premium VIP access ends in 3 days');
+  assert.match(en3.textBody, /Hey Felix/);
+  assert.match(en3.textBody, /Premium VIP access ends in \*\*3 days\*\*/);
+  assert.match(en3.textBody, /\$15/);
+  assert.match(en3.textBody, /@MMHQ_Support/);
+  assert.doesNotMatch(en3.textBody, /Premium VIP আর ৩ দিন বাকি/);
+  assert.doesNotMatch(en3.textBody, /सिर्फ 3 दिन बाकी/);
+  assert.doesNotMatch(en3.textBody, /\$30/);
+  assert.doesNotMatch(en3.textBody, /kick|ban|bot/i);
+  assert.equal(life.resolveCustomerCopyLang_('', ''), 'en');
+  assert.equal(life.resolveCustomerCopyLang_('', 'bn'), 'bn');
+  assert.equal(life.resolveCustomerCopyLang_('LANG_HI', ''), 'hi');
+
+  const bn3 = life.buildCustomerRenewMessage_({
+    name: 'Rakib', email: 'r@example.com', daysLeft: 3, language: 'bn'
+  });
+  assert.equal(bn3.subject, 'Premium VIP আর ৩ দিন বাকি');
+  assert.match(bn3.textBody, /হ্যালো Rakib/);
+  assert.match(bn3.textBody, /\$15/);
+  assert.doesNotMatch(bn3.textBody, /Your Premium VIP access ends in 3 days/);
+
+  const hi2 = life.buildCustomerRenewMessage_({
+    name: 'Amit', email: 'a@example.com', daysLeft: 2, language: 'HI'
+  });
+  assert.equal(hi2.subject, 'Premium VIP — सिर्फ 2 दिन बचे');
+  assert.match(hi2.textBody, /Amit/);
+  assert.match(hi2.textBody, /\$15/);
+  assert.doesNotMatch(hi2.textBody, /2 days left in Premium VIP/);
+
+  const bn1 = life.buildCustomerRenewMessage_({
+    name: 'Rakib', email: 'r@example.com', daysLeft: 1, notes: 'LANG_BN'
+  });
+  assert.equal(bn1.subject, 'শেষ দিন — আজ রাত Premium VIP বন্ধ');
+
+  const blank = life.buildCustomerRenewMessage_({
+    name: 'Felix', email: 'f@example.com', daysLeft: 3, language: ''
+  });
+  assert.equal(blank.subject, 'Your Premium VIP access ends in 3 days');
+});
+
+test('customer renew send options From info@themethodmafia.com, never HQ Gmail', () => {
+  assert.equal(life.CUSTOMER_MAIL_FROM, 'info@themethodmafia.com');
+  assert.equal(life.CUSTOMER_MAIL_FROM_NAME, 'Method Mafia');
+  assert.notEqual(life.CUSTOMER_MAIL_FROM, life.LIFECYCLE_ADMIN_EMAIL);
+  assert.notEqual(life.CUSTOMER_MAIL_FROM, op.DIGEST_EMAIL);
+
+  const msg = life.buildCustomerRenewMessage_({
+    name: 'Felix',
+    email: 'felix@example.com',
+    daysLeft: 3
+  });
+  const opts = life.buildCustomerRenewMailOptions_(msg);
+  assert.equal(opts.to, 'felix@example.com');
+  assert.equal(opts.from, 'info@themethodmafia.com');
+  assert.equal(opts.name, 'Method Mafia');
+  assert.equal(opts.subject, msg.subject);
+  assert.equal(opts.htmlBody, msg.htmlBody);
+  assert.equal(opts.body, msg.textBody);
+  assert.notEqual(opts.from, 'methodmafia.hq@gmail.com');
+});
+
+test('sendCustomerRenewEmail_ prefers GmailApp with from/name; MailApp fallback keeps from; never HQ retry', () => {
+  const msg = life.buildCustomerRenewMessage_({
+    name: 'Felix',
+    email: 'felix@example.com',
+    daysLeft: 3
+  });
+
+  const gmailCalls = [];
+  const gmail = {
+    sendEmail: function (to, subject, body, options) {
+      gmailCalls.push({ to: to, subject: subject, body: body, options: options });
+    }
+  };
+  const gmailResult = life.sendCustomerRenewEmail_(msg, {
+    GmailApp: gmail,
+    MailApp: { sendEmail: function () { throw new Error('MailApp must not run when GmailApp exists'); } }
+  });
+  assert.equal(gmailResult.ok, true);
+  assert.equal(gmailResult.via, 'GmailApp');
+  assert.equal(gmailCalls.length, 1);
+  assert.equal(gmailCalls[0].to, 'felix@example.com');
+  assert.equal(gmailCalls[0].options.from, 'info@themethodmafia.com');
+  assert.equal(gmailCalls[0].options.name, 'Method Mafia');
+  assert.equal(gmailCalls[0].options.htmlBody, msg.htmlBody);
+
+  const mailCalls = [];
+  const mailResult = life.sendCustomerRenewEmail_(msg, {
+    GmailApp: null,
+    MailApp: {
+      sendEmail: function (payload) {
+        mailCalls.push(payload);
+      }
+    }
+  });
+  assert.equal(mailResult.ok, true);
+  assert.equal(mailResult.via, 'MailApp');
+  assert.equal(mailCalls.length, 1);
+  assert.equal(mailCalls[0].from, 'info@themethodmafia.com');
+  assert.equal(mailCalls[0].name, 'Method Mafia');
+  assert.equal(mailCalls[0].to, 'felix@example.com');
+
+  const logs = [];
+  const failResult = life.sendCustomerRenewEmail_(msg, {
+    GmailApp: {
+      sendEmail: function () { throw new Error('Invalid From address'); }
+    },
+    MailApp: {
+      sendEmail: function () { throw new Error('MailApp must not be a HQ fallback'); }
+    },
+    log: function (line) { logs.push(String(line)); }
+  });
+  assert.equal(failResult.ok, false);
+  assert.equal(failResult.retryWithoutFrom, false);
+  assert.match(String(failResult.reason || logs.join('\n')), /info@themethodmafia\.com|alias|Invalid From/i);
+  assert.equal(logs.some(function (line) {
+    return /info@themethodmafia\.com/.test(line) && /alias|FROM|from/i.test(line);
+  }), true);
+});
+
+test('pending nudge and admin digest stay HQ To; customer From is not used there', () => {
+  const items = [{
+    orderId: 'MM-2026-1111',
+    name: 'Amina',
+    telegram: '@amina',
+    email: 'amina@example.com',
+    hoursOld: 30
+  }];
+  const nudge = life.buildPendingNudgeMessage_(items, {});
+  assert.equal(nudge.to, 'methodmafia.hq@gmail.com');
+  assert.equal(nudge.from, undefined);
+
+  const lifeSrc = fs.readFileSync(LIFE_PATH, 'utf8');
+  const nudgeBlock = lifeSrc.slice(
+    lifeSrc.indexOf('function runPendingNudgeJob_'),
+    lifeSrc.indexOf('function installPendingNudgeTrigger')
+  );
+  assert.doesNotMatch(nudgeBlock, /CUSTOMER_MAIL_FROM/);
+  assert.doesNotMatch(nudgeBlock, /info@themethodmafia\.com/);
+
+  const opSrc = fs.readFileSync(OP_PATH, 'utf8');
+  assert.match(opSrc, /DIGEST_EMAIL\s*=\s*'methodmafia\.hq@gmail\.com'/);
+  assert.doesNotMatch(opSrc, /DIGEST_EMAIL\s*=\s*'info@themethodmafia\.com'/);
+  const digestSends = opSrc.match(/MailApp\.sendEmail\(\{[^}]+\}/g) || [];
+  digestSends.forEach(function (call) {
+    assert.doesNotMatch(call, /from:\s*CUSTOMER_MAIL_FROM|from:\s*'info@themethodmafia\.com'/);
+  });
 });
 
 test('applyCustomerRenewMarkers_ writes RENEW_MAIL_3/2/1 independently', () => {
@@ -263,7 +399,7 @@ test('classifyDoGetRequest_ routes renew as admin-token action; status still pub
   assert.equal(op.classifyDoGetRequest_({ action: 'status', orderId: 'MM-2026-3007' }, '').kind, 'status');
 });
 
-test('Lifecycle.gs has triggers, renewOrder, TEST_ helpers, and no Telegram bot sends', () => {
+test('Lifecycle.gs has triggers, renewOrder, TEST_ helpers, and no Telegram HTTP', () => {
   const gs = fs.readFileSync(LIFE_PATH, 'utf8');
   assert.match(gs, /function pendingNudgeTrigger/);
   assert.match(gs, /function installPendingNudgeTrigger/);
@@ -277,6 +413,7 @@ test('Lifecycle.gs has triggers, renewOrder, TEST_ helpers, and no Telegram bot 
   assert.match(gs, /function testRenewPlus30_/);
   assert.match(gs, /function testCustomerRenewMail_/);
   assert.match(gs, /TEST_/);
+  assert.match(gs, /runTelegramLifecycleHook_/);
   assert.doesNotMatch(gs, /api\.telegram\.org/);
   assert.doesNotMatch(gs, /sendTelegram|TelegramBot|bot token/i);
   assert.doesNotMatch(gs, /trySendPurchaseForRow_/);
@@ -309,5 +446,6 @@ test('GUIDE documents Phase 2A triggers, renew URL, and Days Left on Expiry', ()
   assert.match(guide, /J2-TODAY\(\)|Expiry column J/i);
   assert.match(guide, /repairDaysLeftFormulas/);
   assert.match(guide, /methodmafia\.hq@gmail\.com/);
+  assert.match(guide, /\$15|Premium VIP|Language/i);
   assert.doesNotMatch(guide, /Telegram bot send|bot\.sendMessage/i);
 });

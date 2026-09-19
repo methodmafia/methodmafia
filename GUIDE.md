@@ -30,10 +30,11 @@ methodmafia/
 │   └── pixels.js       ← Meta + TikTok pixel (সব পেজে)
 │
 ├── apps-script/
-│   ├── OrderProcessor.gs  ← Sheet orders + FBclid/TTclid
+│   ├── OrderProcessor.gs  ← Orders + status/CAPI + Master/Archive doPost + @MM_OrdersBot webhook
 │   ├── CapiPurchase.gs    ← Status→Active Purchase (CAPI)
 │   ├── SheetOrganize.gs   ← Master / Archive_Rejected / YYYY-MM
-│   └── Lifecycle.gs       ← Pending 24h nudge, Auto Expired, Renew +30
+│   ├── Lifecycle.gs       ← Pending 24h nudge, Auto Expired, Renew +30
+│   └── TelegramBot.gs     ← @MM_OrdersBot (confirm / VIP invite / pay-renew / kick)
 │
 └── images/
     ├── logo.jpg
@@ -907,7 +908,7 @@ Time of day:  10am to 11am
 
 Each run:
 
-1. Emails the **customer Email** (not only the admin digest) 3 / 2 / 1 days before Expiry. Polite English. Notes markers `RENEW_MAIL_3`, `RENEW_MAIL_2`, `RENEW_MAIL_1` (one each).
+1. Emails the **customer Email** (not only the admin digest) 3 / 2 / 1 days before Expiry. **From `info@themethodmafia.com`** (name Method Mafia; must be a Gmail “Send mail as” alias on the Apps Script owner — never HQ Gmail From). Copy is locked to **RENEW_COPY_PREMIUM_VIP.md** (tone B: Premium VIP, Day3 soft → Day2 mid → Day1 max FOMO, monthly renew **$15**, SS to `@MMHQ_Support`). Language from Sheet column **Language** (`en`|`bn`|`hi`, case-insensitive). **Default EN if blank/missing — never BN default.** Same pack goes out on Telegram the same day. Notes markers `RENEW_MAIL_3`, `RENEW_MAIL_2`, `RENEW_MAIL_1` (one each; Telegram uses `RENEW_TG_3/_2/_1`).
 2. Active rows **past** Expiry → Status `Expired` (row stays; never deleted). Syncs Master / month tab. Re-applies Days Left on column **J**.
 3. Admin expiry digest still goes to `methodmafia.hq@gmail.com`.
 
@@ -946,4 +947,93 @@ cleanupLifecycleTests_   → deletes TEST_* tabs
 **ধাপ ৪:** Renew — `?action=renew&orderId=…&token=…` অথবা editor-এ `renewOrder("MM-…")`। আজ বা বর্তমান Expiry যেটা পরে, সেখান থেকে +৩০ দিন। Purchase যাবে না।
 
 Days Left: কলাম **K** সূত্র কলাম **J** (Expiry) দেখে — `=IF(J2="","",J2-TODAY())`।
+
+---
+
+# 🤖 PART 13 — @MM_OrdersBot (ONE bot only)
+
+Option A (Swa). **Only @MM_OrdersBot** — do not add another bot for reminders. Human support stays `@MMHQ_Support`. The bot DMs admin chat **7581392046** for ✅ confirm / kick confirm. Token is never in GitHub.
+
+Bot ✅ after you verify the payment screenshot (SS) → Sheet **Status Active** → existing CAPI Entry **$30** (`trySendPurchaseForRow_`) → **one-time** VIP invite (`createChatInviteLink` `member_limit=1`). The invite is DMed to the customer (or to 7581392046 to forward privately). **Never post a public VIP link.**
+
+Pay/renew TG runs after the existing 10am lifecycle job (`expiryLifecycleTrigger` → `runTelegramLifecycleHook_`). **Email path stays in Lifecycle.gs.** Renew copy is the locked pack **RENEW_COPY_PREMIUM_VIP.md** (Premium VIP; Language column `en`|`bn`|`hi`, **default EN**; monthly **$15**; Entry pay DMs stay separate — no $15). Kick jobs always build a **confirm list** (names / ids / reasons) and wait for admin ✅ — `banChatMember` never runs without that tap.
+
+**Kick policy (Swa, final):** ALL existing VIP channel members (~3000 social-proof) stay **untouched forever**. Never mass-sync. Never kick them. **Blind sync is FORBIDDEN forever.**
+
+The new bot applies **only** to **new website-order members**: pay → admin ✅ → Sheet **Active** + CAPI Entry **$30** + bot DMs a **one-time** VIP invite. Kick jobs run **only** for those new-system members whose Sheet Status is **Expired** (paid, then expired), always with a confirm list.
+
+Optional, **default OFF:** post-`VIP_BASELINE_DATE` unpaid joiners (`VIP_KICK_UNPAID_JOINERS=1`). Leave this unset. Never touch pre-baseline / legacy members.
+
+Default `VIP_BASELINE_DATE` = **2026-09-19** (Asia/Dhaka go-live). Swa can change it. Single-user kick stays confirm-first and still shows who.
+
+Public username **@Method_Mafia_Vip** is optional context; the bot uses numeric `TELEGRAM_VIP_CHAT_ID`.
+
+**Paste warning:** Live Apps Script already has Sheet organize + Lifecycle. This repo `OrderProcessor.gs` is that stack **plus** the Telegram webhook branch (`update_id`). It still dual-writes Master / current month via `upsertNewOrderToOrganizeTabs_`. Do **not** paste a pre-organize OrderProcessor (old Payment/Medium/Campaign-before-Status layout).
+
+## English — Swa must click
+
+### 1) Paste + Script Properties
+
+Sheet → Extensions → Apps Script
+
+1. Replace **OrderProcessor** with `apps-script/OrderProcessor.gs` from this branch (organize + public status + lifecycle routes + webhook). Keep **SheetOrganize**, **Lifecycle**, **CapiPurchase**.
+2. **+** → Script → name `TelegramBot` → paste `apps-script/TelegramBot.gs`
+3. ⚙️ Project Settings → Script properties:
+
+| Property | Value |
+|---|---|
+| `TELEGRAM_BOT_TOKEN` | BotFather token for **@MM_OrdersBot** (or run `setupAdminBotToken_("…")`) |
+| `TELEGRAM_VIP_CHAT_ID` | VIP channel numeric id (starts with `-100…`) |
+| `TELEGRAM_WEBHOOK_SECRET` | optional long random string |
+| `VIP_BASELINE_DATE` | Default **`2026-09-19`** (Asia/Dhaka go-live). ISO `YYYY-MM-DD`. Optional override: `setupVipBaselineDate_("YYYY-MM-DD")`. Everyone already in VIP before this date stays forever. |
+| `VIP_KICK_UNPAID_JOINERS` | **Leave unset / `0`.** Default OFF. Set `1` only if you explicitly want post-baseline unpaid joiners on the confirm list. Never touch legacy members. |
+
+Never paste the token into this GUIDE, GitHub, or `config.js`. `DIGEST_EMAIL` stays `methodmafia.hq@gmail.com`.
+
+**Never run blind sync.** The ~3000 existing VIP members stay untouched forever. Kick jobs only propose **new-system Expired** rows (bot ✅ / one-time invite / order on or after 2026-09-19), then wait for your ✅ on the confirm list.
+
+### 2) VIP channel — admin the bot
+
+VIP channel → Administrators → Add **@MM_OrdersBot**:
+
+- ✅ Invite users via link
+- ✅ Ban users
+
+If invite fails, Executions log: *VIP invite failed… Manager/Swa: add @MM_OrdersBot as admin…*
+
+### 3) Deploy Web App + setWebhook
+
+1. Deploy → Manage deployments → **New version** (same URL as `config.js` → `SHEET_URL`)
+2. Editor: function `setTelegramWebhook` → ▶ Run (or browser):
+
+```
+https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=<SHEET_URL>
+```
+
+Use the real token only in BotFather / the address bar — not in the repo. If you set `TELEGRAM_WEBHOOK_SECRET`, pass it as Telegram `secret_token` (the `setTelegramWebhook` helper does this).
+
+3. Message @MM_OrdersBot `/start` from the customer account so the bot can DM the invite.
+4. Admin chat **7581392046**: open @MM_OrdersBot once so DMs are allowed.
+
+### 4) Test
+
+1. Submit a test order → row on **Orders + Master**; admin 7581392046 gets NEW ORDER + ✅
+2. Verify SS with @MMHQ_Support → tap **✅ Confirm (SS verified)**
+3. Sheet Status `Active`; Entry Notes `PURCHASE_SENT`; customer (or admin) gets a **one-time** `t.me/+` link — not in the VIP channel
+4. New-system Expired row (after auto-expire) → bot sends a **confirm list** (who + why) → only after ✅ is anyone banned. Legacy / pre-baseline VIP members are never on that list.
+
+## বাংলা — Swa যা ক্লিক করবে
+
+**ধাপ ১:** `OrderProcessor.gs` পেস্ট করো — এটা **organize + lifecycle + webhook**। পুরোনো pre-organize ফাইল পেস্ট করবে না (Master/Archive মুছবে)। `TelegramBot.gs` নতুন ফাইল। `SheetOrganize` + `Lifecycle` + `CapiPurchase` রাখো। Script properties: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_VIP_CHAT_ID`, `VIP_BASELINE_DATE` ডিফল্ট **`2026-09-19`** (Asia/Dhaka, Swa বদলাতে পারে)। `VIP_KICK_UNPAID_JOINERS` খালি রাখো (ডিফল্ট অফ)। চাইলে `setupAdminBotToken_("…")` আর `setupVipBaselineDate_("2026-09-19")` Run করো। **Blind sync চালাবে না — চিরকাল নিষেধ।** আগের ~৩০০০ VIP মেম্বার থাকবে, কিক হবে না। Kick শুধু নতুন সিস্টেমের Expired (পেইড তারপর মেয়াদ শেষ) — কনফার্ম লিস্ট সহ।
+
+**ধাপ ২:** VIP চ্যানেলে **@MM_OrdersBot** অ্যাডমিন করো — *Invite users via link* + *Ban users*। পাবলিক ইউজারনেম `@Method_Mafia_Vip` চাইলে নোট রাখো; বট ব্যবহার করে `TELEGRAM_VIP_CHAT_ID`।
+
+**ধাপ ৩:** Web App **New version**। তারপর `setTelegramWebhook` Run, অথবা:
+
+```
+https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=<SHEET_URL>
+```
+
+**ধাপ ৪:** কাস্টমার `@MM_OrdersBot`-এ `/start`। অ্যাডমিন চ্যাট 7581392046-এ বট ওপেন। SS যাচাইয়ের পর বটের ✅ — Active + CAPI $30 + একবারের VIP লিংক। পাবলিক VIP লিংক পোস্ট করবে না। Kick হলে কনফার্ম লিস্ট দেখে ✅ — অটো-কিক নয়।
+
 

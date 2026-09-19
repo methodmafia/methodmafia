@@ -25,7 +25,8 @@ var TAB_MASTER = 'Master';
 var TAB_ARCHIVE_REJECTED = 'Archive_Rejected';
 var ORGANIZE_TEST_PREFIX = 'TEST_';
 
-/* Confirmed live CSV export (Orders only, 2026-09-19). Do not invent columns. */
+/* Confirmed live CSV export (Orders only, 2026-09-19). Do not invent columns.
+   Medium / Campaign / Language may be appended at the far right only. */
 var LIVE_HEADER_CSV = 'Timestamp,Order ID,Name,Email,Telegram,Plan,Amount,Source,Status,Expiry,Days Left,Payment,Notes,FBclid,TTclid';
 var LIVE_HEADERS = LIVE_HEADER_CSV.split(',');
 
@@ -51,7 +52,9 @@ var HEADER_KEY_ALIASES = {
   'medium': 'MEDIUM',
   'utm_medium': 'MEDIUM',
   'campaign': 'CAMPAIGN',
-  'utm_campaign': 'CAMPAIGN'
+  'utm_campaign': 'CAMPAIGN',
+  'language': 'LANGUAGE',
+  'lang': 'LANGUAGE'
 };
 
 function normalizeHeaderName_(name) {
@@ -63,7 +66,7 @@ function buildColMapFromHeaders_(headers) {
     TIMESTAMP: -1, ORDER_ID: -1, NAME: -1, EMAIL: -1, TELEGRAM: -1,
     PLAN: -1, AMOUNT: -1, SOURCE: -1, STATUS: -1, EXPIRY: -1,
     DAYS_LEFT: -1, PAYMENT: -1, NOTES: -1, FBCLID: -1, TTCLID: -1,
-    MEDIUM: -1, CAMPAIGN: -1
+    MEDIUM: -1, CAMPAIGN: -1, LANGUAGE: -1
   };
   headers = headers || [];
   for (var i = 0; i < headers.length; i++) {
@@ -142,6 +145,13 @@ function daysLeftFormula_(row1, col) {
   return '=IF(' + letter + row1 + '="","",' + letter + row1 + '-TODAY())';
 }
 
+function normalizeOrderLanguage_(value) {
+  var s = String(value == null ? '' : value).trim().toLowerCase();
+  if (s === 'bn' || s === 'bangla' || s === 'bengali' || s === 'bd') return 'bn';
+  if (s === 'hi' || s === 'hindi' || s === 'hn') return 'hi';
+  return 'en';
+}
+
 function buildOrderRowValues_(headers, col, data, now, isDupe) {
   data = data || {};
   now = now || new Date();
@@ -165,6 +175,7 @@ function buildOrderRowValues_(headers, col, data, now, isDupe) {
   if (col.TTCLID >= 0) row[col.TTCLID] = data.ttclid || '';
   if (col.MEDIUM >= 0) row[col.MEDIUM] = data.medium || '';
   if (col.CAMPAIGN >= 0) row[col.CAMPAIGN] = data.campaign || '';
+  if (col.LANGUAGE >= 0) row[col.LANGUAGE] = normalizeOrderLanguage_(data.language);
   return row;
 }
 
@@ -308,6 +319,7 @@ function planAppendOptionalHeaders_(headers) {
   for (var i = 0; i < next.length; i++) names[normalizeHeaderName_(next[i])] = true;
   if (!names.medium) next.push('Medium');
   if (!names.campaign) next.push('Campaign');
+  if (!names.language) next.push('Language');
   return next;
 }
 
@@ -537,7 +549,7 @@ function runMidnightOrganize_(opts) {
 }
 
 /**
- * Optional: append Medium + Campaign as new columns on the FAR RIGHT.
+ * Optional: append Medium + Campaign + Language as new columns on the FAR RIGHT.
  * Never inserts in the middle (would scramble live data). Not run by setup.
  */
 function appendOptionalUtmHeaders() {
@@ -547,7 +559,7 @@ function appendOptionalUtmHeaders() {
   var headers = readHeaders_(orders);
   var next = planAppendOptionalHeaders_(headers);
   if (headersEqual_(headers, next)) {
-    Logger.log('Medium/Campaign already present');
+    Logger.log('Medium/Campaign/Language already present');
     return;
   }
   var added = next.slice(headers.length).join(',');
@@ -755,6 +767,7 @@ if (typeof module === 'object' && module.exports) {
     daysLeftFormula_: daysLeftFormula_,
     colLetter_: colLetter_,
     buildOrderRowValues_: buildOrderRowValues_,
+    normalizeOrderLanguage_: normalizeOrderLanguage_,
     checkDuplicateInTables_: checkDuplicateInTables_,
     mergeNotesPreservePurchaseSent_: mergeNotesPreservePurchaseSent_,
     upsertRowsByOrderId_: upsertRowsByOrderId_,
