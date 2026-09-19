@@ -15,9 +15,16 @@
  *      + trySendPurchaseForRow_ (Entry $30 CAPI) + one-time VIP invite
  *      (createChatInviteLink member_limit=1). NEVER post the link in VIP/public.
  *   2) Pay/renew reminders → customer Telegram (email path stays in Lifecycle.gs).
- *   3) Kick → confirm-first, then banChatMember.
+ *   3) Kick → ALWAYS a confirm list (names/ids/reasons) then admin ✅
+ *      before any banChatMember. Never auto-kick. Blind sync is FORBIDDEN.
+ *      ~3000 social-proof members must stay. Eligible proposals only:
+ *        (a) Sheet Status Expired (was paid, expired), or
+ *        (b) joined on/after VIP_BASELINE_DATE (YYYY-MM-DD, Asia/Dhaka)
+ *            AND Sheet has no Active row for that Telegram identity.
+ *      Pre-baseline joins are never mass-kicked by sync jobs. Path (b)
+ *      uses the post-baseline join log (chat_member), never a full VIP dump.
  *
- * See GUIDE.md → PART 13.
+ * See GUIDE.md → PART 13. Run setupVipBaselineDate_("YYYY-MM-DD").
  */
 
 var TELEGRAM_ADMIN_CHAT_ID = '7581392046';
@@ -30,6 +37,8 @@ var KICKED_MARKER = 'KICKED';
 var VIP_SENT_MARKER = 'VIP_INVITE_SENT';
 var BOT_CONFIRMED_MARKER = 'BOT_CONFIRMED';
 var PAY_TG_MS = 24 * 60 * 60 * 1000;
+var TG_JOIN_LOG_PROP = 'TG_VIP_JOIN_LOG';
+var TG_PENDING_KICK_PROP = 'TG_PENDING_KICK_LIST';
 
 var TG_HEADER_ALIASES = {
   'timestamp': 'TIMESTAMP',
@@ -118,6 +127,40 @@ function getTelegramVipChatId_() {
   return String(getTelegramProp_('TELEGRAM_VIP_CHAT_ID') || '').trim();
 }
 
+function parseVipBaselineDate_(value) {
+  var s = String(value == null ? '' : value).trim();
+  if (!s) return { ok: false, reason: 'missing-baseline' };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return { ok: false, reason: 'invalid-baseline' };
+  var y = Number(s.slice(0, 4));
+  var mo = Number(s.slice(5, 7));
+  var d = Number(s.slice(8, 10));
+  var dt = new Date(Date.UTC(y, mo - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) {
+    return { ok: false, reason: 'invalid-baseline' };
+  }
+  return { ok: true, ymd: s };
+}
+
+function setupVipBaselineDate_(ymd) {
+  var parsed = parseVipBaselineDate_(ymd);
+  if (!parsed.ok) {
+    throw new Error(
+      'VIP_BASELINE_DATE must be ISO YYYY-MM-DD on the Asia/Dhaka calendar, e.g. 2026-09-19. ' +
+      'Members who joined before this date are never mass-kicked. Reason: ' + parsed.reason
+    );
+  }
+  PropertiesService.getScriptProperties().setProperty('VIP_BASELINE_DATE', parsed.ymd);
+  Logger.log(
+    'VIP_BASELINE_DATE=' + parsed.ymd +
+    ' (Asia/Dhaka). Blind sync is forbidden — do not kick social-proof members.'
+  );
+  return parsed.ymd;
+}
+
+function getVipBaselineDate_() {
+  return String(getTelegramProp_('VIP_BASELINE_DATE') || '').trim();
+}
+
 function telegramWebhookAuthorized_(providedSecret, storedSecret) {
   var stored = String(storedSecret == null ? '' : storedSecret).trim();
   if (!stored) return true;
@@ -156,7 +199,15 @@ function authorizeAdminCallback_(ids) {
 }
 
 function parseCallbackData_(data) {
-  var m = /^(c|x|k|n):([A-Za-z0-9_-]+)$/.exec(String(data || ''));
+  var s = String(data || '');
+  var list = /^L:(ok|no)$/.exec(s);
+  if (list) {
+    return {
+      action: list[1] === 'ok' ? 'kick-list-confirm' : 'kick-list-cancel',
+      orderId: ''
+    };
+  }
+  var m = /^(c|x|k|n):([A-Za-z0-9_-]+)$/.exec(s);
   if (!m) return null;
   var names = { c: 'confirm', x: 'dismiss', k: 'kick', n: 'kick-cancel' };
   return { action: names[m[1]], orderId: m[2].toUpperCase() };
@@ -216,6 +267,35 @@ function resolveCustomerChatId_(telegramField, notes, usernameMap) {
   var uname = t.replace(/^@/, '').toLowerCase();
   if (uname && usernameMap && usernameMap[uname]) return String(usernameMap[uname]);
   return '';
+}
+
+function telegramIdentityKey_(value) {
+  var s = String(value == null ? '' : value).trim();
+  if (!s) return '';
+  if (/^-?\d{3,}$/.test(s)) return s;
+  return s.replace(/^@/, '').toLowerCase();
+}
+
+function sheetHasActiveRowForIdentity_(rows, col, identity) {
+  var key = telegramIdentityKey_(identity);
+  if (!key || !rows || !col) return false;
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][col.STATUS] || '').trim().toLowerCase() !== 'active') continue;
+    var tgField = col.TELEGRAM >= 0 ? String(rows[i][col.TELEGRAM] || '') : '';
+    var notes = col.NOTES >= 0 ? String(rows[i][col.NOTES] || '') : '';
+    if (telegramIdentityKey_(tgField) === key) return true;
+    var chat = resolveCustomerChatId_(tgField, notes, null);
+    if (chat && telegramIdentityKey_(chat) === key) return true;
+  }
+  return false;
+}
+
+function isGrandfatheredByBaseline_(joinYmd, baselineYmd) {
+  var join = parseVipBaselineDate_(joinYmd);
+  var base = parseVipBaselineDate_(baselineYmd);
+  if (!join.ok) return true;
+  if (!base.ok) return true;
+  return join.ymd < base.ymd;
 }
 
 /* ── Confirm / VIP / kick plans ─────────────────────────── */
@@ -305,6 +385,158 @@ function planKickExecute_(row) {
   return { ok: true, method: 'banChatMember', userId: uid };
 }
 
+function planKickConfirmList_(opts) {
+  opts = opts || {};
+  var rows = opts.rows || [];
+  var col = opts.col || {};
+  var items = [];
+  var seen = {};
+  var i;
+
+  for (i = 1; i < rows.length; i++) {
+    var st = String(rows[i][col.STATUS] || '').trim().toLowerCase();
+    if (st !== 'expired') continue;
+    var notes = col.NOTES >= 0 ? rows[i][col.NOTES] : '';
+    if (tgNotesHasMarker_(notes, KICKED_MARKER) || tgNotesHasMarker_(notes, KICK_ASKED_MARKER)) continue;
+    var telegram = col.TELEGRAM >= 0 ? String(rows[i][col.TELEGRAM] || '') : '';
+    var uid = resolveCustomerChatId_(telegram, notes, null);
+    var ident = telegramIdentityKey_(uid || telegram);
+    if (ident) seen[ident] = true;
+    items.push({
+      reason: 'expired',
+      orderId: col.ORDER_ID >= 0 ? String(rows[i][col.ORDER_ID] || '') : '',
+      name: col.NAME >= 0 ? String(rows[i][col.NAME] || '') : '',
+      telegram: telegram,
+      userId: uid,
+      notes: notes,
+      rowIndex0: i,
+      executeKick: false
+    });
+  }
+
+  var baseline = parseVipBaselineDate_(opts.baselineYmd);
+  var channelScanRefused = !baseline.ok;
+  var joinLog = opts.joinLog || [];
+  if (baseline.ok) {
+    for (i = 0; i < joinLog.length; i++) {
+      var j = joinLog[i] || {};
+      if (isGrandfatheredByBaseline_(j.joinYmd, baseline.ymd)) continue;
+      var uname = String(j.username || '').replace(/^@/, '');
+      if (sheetHasActiveRowForIdentity_(rows, col, j.userId)) continue;
+      if (uname && sheetHasActiveRowForIdentity_(rows, col, '@' + uname)) continue;
+      var identB = telegramIdentityKey_(j.userId || uname);
+      if (identB && seen[identB]) continue;
+      if (identB) seen[identB] = true;
+      items.push({
+        reason: 'post-baseline-no-active',
+        orderId: '',
+        name: String(j.name || ''),
+        telegram: uname ? ('@' + uname) : '',
+        username: uname,
+        userId: String(j.userId || ''),
+        joinYmd: j.joinYmd,
+        executeKick: false
+      });
+    }
+  }
+
+  return {
+    items: items,
+    requiresAdminConfirm: true,
+    executeKick: false,
+    channelScanRefused: channelScanRefused,
+    channelScanReason: channelScanRefused ? (baseline.reason || 'missing-baseline') : '',
+    reason: channelScanRefused ? (baseline.reason || 'missing-baseline') : '',
+    baselineYmd: baseline.ok ? baseline.ymd : ''
+  };
+}
+
+function planKickBatchExecute_(opts) {
+  opts = opts || {};
+  if (!opts.adminConfirmed) {
+    return { ok: false, reason: 'confirm-first', bans: [] };
+  }
+  var items = opts.items || [];
+  if (!items.length) {
+    return { ok: false, reason: 'empty-list', bans: [] };
+  }
+  var bans = [];
+  for (var i = 0; i < items.length; i++) {
+    var uid = String(items[i].userId || '');
+    if (!/^-?\d{3,}$/.test(uid)) continue;
+    var row1 = items[i].row1;
+    if (!row1 && items[i].rowIndex0 != null) row1 = items[i].rowIndex0 + 1;
+    bans.push({
+      method: 'banChatMember',
+      userId: uid,
+      orderId: items[i].orderId || '',
+      reason: items[i].reason || '',
+      name: items[i].name || '',
+      telegram: items[i].telegram || items[i].username || '',
+      row1: row1 || 0
+    });
+  }
+  if (!bans.length) return { ok: false, reason: 'missing-telegram-user-id', bans: [] };
+  return { ok: true, bans: bans };
+}
+
+function planJoinLogEntry_(opts) {
+  opts = opts || {};
+  var newSt = String(opts.newStatus || '').toLowerCase();
+  var oldSt = String(opts.oldStatus || '').toLowerCase();
+  var joined = (newSt === 'member' || newSt === 'restricted') &&
+    oldSt !== 'member' && oldSt !== 'restricted' &&
+    oldSt !== 'administrator' && oldSt !== 'creator';
+  if (!joined) return { ok: true, record: false, reason: 'not-a-join' };
+  var baseline = parseVipBaselineDate_(opts.baselineYmd);
+  if (!baseline.ok) return { ok: false, record: false, reason: baseline.reason || 'missing-baseline' };
+  if (isGrandfatheredByBaseline_(opts.joinYmd, baseline.ymd)) {
+    return { ok: true, record: false, reason: 'pre-baseline' };
+  }
+  var join = parseVipBaselineDate_(opts.joinYmd);
+  return {
+    ok: true,
+    record: true,
+    entry: {
+      userId: String(opts.userId || ''),
+      username: String(opts.username || '').replace(/^@/, ''),
+      name: String(opts.name || ''),
+      joinYmd: join.ok ? join.ymd : ''
+    }
+  };
+}
+
+function buildKickConfirmListKeyboard_() {
+  return {
+    inline_keyboard: [[
+      { text: '✅ Confirm list kick', callback_data: 'L:ok' },
+      { text: 'Cancel', callback_data: 'L:no' }
+    ]]
+  };
+}
+
+function buildKickConfirmListMessage_(list) {
+  list = list || {};
+  var items = list.items || [];
+  var lines = [
+    '⚠️ Kick confirm list — @' + TELEGRAM_BOT_USERNAME,
+    'VIP social-proof members stay. Blind sync is FORBIDDEN.',
+    'Tap ✅ to banChatMember the people below, or Cancel. Confirm-first — bot will not kick until you tap.',
+    '━━━━━━━━━━━━━━'
+  ];
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i] || {};
+    var handle = it.telegram || (it.username ? ('@' + String(it.username).replace(/^@/, '')) : '');
+    var who = (it.name || '') + ' / ' + handle + ' / id ' + (it.userId || 'unknown');
+    var why = it.reason === 'expired'
+      ? ('Expired order ' + (it.orderId || ''))
+      : ('joined ' + (it.joinYmd || '') + ' — no Active Sheet row');
+    lines.push((i + 1) + ') ' + who + ' — ' + why);
+  }
+  if (!items.length) lines.push('(empty — nobody to kick)');
+  return lines.join('\n');
+}
+
 function buildPendingConfirmKeyboard_(orderId) {
   var oid = String(orderId || '').toUpperCase();
   return {
@@ -346,7 +578,8 @@ function buildAdminPendingOrderMessage_(item) {
 function buildAdminKickAskMessage_(item) {
   item = item || {};
   return '⚠️ Kick confirm — @' + TELEGRAM_BOT_USERNAME + '\n' +
-    'Order ' + (item.orderId || '') + ' is Expired (' + (item.telegram || '') + ' / ' + (item.name || '') + ').\n' +
+    'Order ' + (item.orderId || '') + ' is Expired (' + (item.telegram || '') +
+    ' / ' + (item.name || '') + ' / id ' + (item.userId || item.telegramUserId || 'unknown') + ').\n' +
     'Tap ✅ to banChatMember from VIP, or Cancel. Confirm-first — bot will not kick until you tap.';
 }
 
@@ -462,12 +695,7 @@ function planTelegramRenewReminders_(rows, col, today) {
 function shouldAskKick_(status, expiry, notes, today) {
   if (tgNotesHasMarker_(notes, KICK_ASKED_MARKER) || tgNotesHasMarker_(notes, KICKED_MARKER)) return false;
   var st = String(status || '').trim().toLowerCase();
-  if (st === 'expired') return true;
-  if (st === 'active') {
-    var d = tgCalendarDaysUntil_(expiry, today);
-    return d !== null && d < 0;
-  }
-  return false;
+  return st === 'expired';
 }
 
 function planTelegramKickAsks_(rows, col, today) {
@@ -496,7 +724,27 @@ function processTelegramUpdate_(update, ctx) {
   }
   if (update.callback_query) return processTelegramCallback_(update.callback_query, ctx);
   if (update.message) return processTelegramMessage_(update.message, ctx);
+  if (update.chat_member) return processTelegramChatMember_(update.chat_member, ctx);
   return { ok: true, actions: [] };
+}
+
+function processTelegramChatMember_(cm, ctx) {
+  ctx = ctx || {};
+  cm = cm || {};
+  var newM = cm.new_chat_member || {};
+  var oldM = cm.old_chat_member || {};
+  var user = newM.user || {};
+  var planned = planJoinLogEntry_({
+    userId: user.id,
+    username: user.username,
+    name: [user.first_name, user.last_name].filter(Boolean).join(' '),
+    joinYmd: ctx.todayYmd || '',
+    newStatus: newM.status,
+    oldStatus: oldM.status,
+    baselineYmd: ctx.baselineYmd
+  });
+  if (!planned.record) return { ok: true, actions: [] };
+  return { ok: true, actions: [{ type: 'recordJoinLog', entry: planned.entry }] };
 }
 
 function processTelegramCallback_(cq, ctx) {
@@ -515,6 +763,45 @@ function processTelegramCallback_(cq, ctx) {
   if (!parsed) {
     return { ok: false, reason: 'bad-callback', actions: [{ type: 'answerCallback', callbackId: cq.id, text: 'Unknown button' }] };
   }
+
+  if (parsed.action === 'kick-list-cancel') {
+    return {
+      ok: true,
+      actions: [
+        { type: 'answerCallback', callbackId: cq.id, text: 'Cancelled' },
+        { type: 'editMessage', chatId: chatId, messageId: cq.message && cq.message.message_id, text: 'Kick list cancelled' },
+        { type: 'clearPendingKickList' }
+      ]
+    };
+  }
+
+  if (parsed.action === 'kick-list-confirm') {
+    var pending = ctx.pendingKickList;
+    if (!pending || !pending.length) {
+      return {
+        ok: false,
+        reason: 'missing-confirm-list',
+        actions: [{ type: 'answerCallback', callbackId: cq.id, text: 'No pending kick list', alert: true }]
+      };
+    }
+    var batch = planKickBatchExecute_({ items: pending, adminConfirmed: true });
+    if (!batch.ok) {
+      return {
+        ok: false,
+        reason: batch.reason,
+        actions: [{ type: 'answerCallback', callbackId: cq.id, text: batch.reason, alert: true }]
+      };
+    }
+    return {
+      ok: true,
+      actions: [
+        { type: 'answerCallback', callbackId: cq.id, text: 'Kicking ' + batch.bans.length },
+        { type: 'kick-batch', bans: batch.bans },
+        { type: 'clearPendingKickList' }
+      ]
+    };
+  }
+
   var getOrder = ctx.getOrder || function () { return null; };
   var order = getOrder(parsed.orderId);
   if (!order) {
@@ -623,6 +910,57 @@ function telegramJson_(obj) {
   return obj;
 }
 
+function loadJsonProp_(key) {
+  try {
+    var raw = getTelegramProp_(key);
+    if (!raw) return [];
+    var parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    return [];
+  }
+}
+
+function saveJsonProp_(key, value) {
+  PropertiesService.getScriptProperties().setProperty(key, JSON.stringify(value || []));
+}
+
+function loadJoinLog_() {
+  return loadJsonProp_(TG_JOIN_LOG_PROP);
+}
+
+function loadPendingKickList_() {
+  return loadJsonProp_(TG_PENDING_KICK_PROP);
+}
+
+function savePendingKickList_(items) {
+  saveJsonProp_(TG_PENDING_KICK_PROP, items || []);
+}
+
+function clearPendingKickList_() {
+  saveJsonProp_(TG_PENDING_KICK_PROP, []);
+}
+
+function mergeJoinLog_(log, entry) {
+  log = log ? log.slice() : [];
+  entry = entry || {};
+  var uid = String(entry.userId || '');
+  for (var i = 0; i < log.length; i++) {
+    if (uid && String(log[i].userId || '') === uid) {
+      log[i] = entry;
+      return log;
+    }
+  }
+  log.push(entry);
+  return log;
+}
+
+function recordJoinLogEntry_(entry) {
+  if (!entry) return;
+  var next = mergeJoinLog_(loadJoinLog_(), entry);
+  saveJsonProp_(TG_JOIN_LOG_PROP, next);
+}
+
 function handleTelegramWebhook_(update, opts) {
   opts = opts || {};
   var token = getTelegramBotToken_();
@@ -633,7 +971,10 @@ function handleTelegramWebhook_(update, opts) {
   var ctx = {
     secretProvided: opts.secret || '',
     secretStored: getTelegramWebhookSecret_(),
-    getOrder: function (orderId) { return loadOrderSnapshot_(orderId); }
+    getOrder: function (orderId) { return loadOrderSnapshot_(orderId); },
+    pendingKickList: loadPendingKickList_(),
+    baselineYmd: getVipBaselineDate_(),
+    todayYmd: tgDhakaYmd_(new Date())
   };
   var plan = processTelegramUpdate_(update, ctx);
   try {
@@ -782,6 +1123,25 @@ function executeTelegramAction_(action, token) {
   }
   if (action.type === 'kick') {
     telegramExecuteKick_(action, token);
+    return;
+  }
+  if (action.type === 'kick-batch') {
+    var bans = action.bans || [];
+    for (var bi = 0; bi < bans.length; bi++) {
+      telegramExecuteKick_(bans[bi], token);
+    }
+    return;
+  }
+  if (action.type === 'recordJoinLog') {
+    recordJoinLogEntry_(action.entry);
+    return;
+  }
+  if (action.type === 'clearPendingKickList') {
+    clearPendingKickList_();
+    return;
+  }
+  if (action.type === 'savePendingKickList') {
+    savePendingKickList_(action.items || []);
     return;
   }
   if (action.type === 'saveChatId') {
@@ -986,7 +1346,13 @@ function runTelegramLifecycleHook_(opts) {
 
   var pay = planTelegramPayReminders_(data, col, now);
   var renew = planTelegramRenewReminders_(data, col, today);
-  var kicks = planTelegramKickAsks_(data, col, today);
+  var kickList = planKickConfirmList_({
+    rows: data,
+    col: col,
+    baselineYmd: getVipBaselineDate_(),
+    joinLog: loadJoinLog_()
+  });
+  var kicks = kickList.items || [];
   var i;
   var row1;
   var notes;
@@ -1026,28 +1392,34 @@ function runTelegramLifecycleHook_(opts) {
     }
   }
 
-  for (i = 0; i < kicks.length; i++) {
-    row1 = kicks[i].rowIndex0 + 1;
-    var kRes = telegramSend_(
+  if (kicks.length) {
+    var listMsg = telegramSend_(
       TELEGRAM_ADMIN_CHAT_ID,
-      buildAdminKickAskMessage_(kicks[i]),
-      buildKickConfirmKeyboard_(kicks[i].orderId),
+      buildKickConfirmListMessage_(kickList),
+      buildKickConfirmListKeyboard_(),
       token
     );
-    if (kRes && kRes.ok && col.NOTES >= 0) {
-      notes = sheet.getRange(row1, col.NOTES + 1).getValue();
-      sheet.getRange(row1, col.NOTES + 1).setValue(tgNotesAppendMarker_(notes, KICK_ASKED_MARKER));
+    if (listMsg && listMsg.ok) {
+      savePendingKickList_(kicks);
+      for (i = 0; i < kicks.length; i++) {
+        if (kicks[i].reason !== 'expired' || kicks[i].rowIndex0 == null) continue;
+        row1 = kicks[i].rowIndex0 + 1;
+        if (col.NOTES >= 0) {
+          notes = sheet.getRange(row1, col.NOTES + 1).getValue();
+          sheet.getRange(row1, col.NOTES + 1).setValue(tgNotesAppendMarker_(notes, KICK_ASKED_MARKER));
+        }
+      }
     }
   }
 
-  Logger.log('telegram lifecycle pay=' + pay.length + ' renew=' + renew.length + ' kickAsks=' + kicks.length);
-  return { pay: pay, renew: renew, kickAsks: kicks };
+  Logger.log('telegram lifecycle pay=' + pay.length + ' renew=' + renew.length + ' kickList=' + kicks.length);
+  return { pay: pay, renew: renew, kickAsks: kicks, kickList: kickList };
 }
 
 function buildSetWebhookPayload_(webAppUrl, secret) {
   var payload = {
     url: String(webAppUrl || ''),
-    allowed_updates: ['message', 'callback_query']
+    allowed_updates: ['message', 'callback_query', 'chat_member']
   };
   if (secret) payload.secret_token = String(secret);
   return payload;
@@ -1087,6 +1459,15 @@ if (typeof module === 'object' && module.exports) {
     planVipInviteDelivery_: planVipInviteDelivery_,
     formatVipInviteFailure_: formatVipInviteFailure_,
     planKickExecute_: planKickExecute_,
+    parseVipBaselineDate_: parseVipBaselineDate_,
+    telegramIdentityKey_: telegramIdentityKey_,
+    sheetHasActiveRowForIdentity_: sheetHasActiveRowForIdentity_,
+    isGrandfatheredByBaseline_: isGrandfatheredByBaseline_,
+    planKickConfirmList_: planKickConfirmList_,
+    planKickBatchExecute_: planKickBatchExecute_,
+    planJoinLogEntry_: planJoinLogEntry_,
+    buildKickConfirmListMessage_: buildKickConfirmListMessage_,
+    buildKickConfirmListKeyboard_: buildKickConfirmListKeyboard_,
     buildPendingConfirmKeyboard_: buildPendingConfirmKeyboard_,
     buildKickConfirmKeyboard_: buildKickConfirmKeyboard_,
     buildAdminPendingOrderMessage_: buildAdminPendingOrderMessage_,

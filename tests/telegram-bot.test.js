@@ -277,7 +277,7 @@ test('kick is confirm-first: job only asks admin; ban runs only after admin k: c
   const col = liveCol();
   const rows = [
     LIVE_HEADERS,
-    liveRow({ ORDER_ID: 'MM-EXP', STATUS: 'Expired', EXPIRY: '2026-09-18', TELEGRAM: '@gone', NOTES: 'PURCHASE_SENT' }),
+    liveRow({ ORDER_ID: 'MM-EXP', STATUS: 'Expired', EXPIRY: '2026-09-18', TELEGRAM: '@gone', NAME: 'Gone Paid', NOTES: 'PURCHASE_SENT' }),
     liveRow({ ORDER_ID: 'MM-ASKED', STATUS: 'Expired', EXPIRY: '2026-09-01', TELEGRAM: '@asked', NOTES: 'KICK_ASKED' }),
     liveRow({ ORDER_ID: 'MM-LIVE', STATUS: 'Active', EXPIRY: '2026-10-16', TELEGRAM: '@live', NOTES: 'PURCHASE_SENT' })
   ];
@@ -288,6 +288,7 @@ test('kick is confirm-first: job only asks admin; ban runs only after admin k: c
   const askMsg = tg.buildAdminKickAskMessage_(asks[0]);
   assert.match(askMsg, /confirm/i);
   assert.match(askMsg, /MM-EXP/);
+  assert.match(askMsg, /@gone|Gone Paid/);
   const kb = tg.buildKickConfirmKeyboard_('MM-EXP');
   const flat = JSON.stringify(kb);
   assert.match(flat, /k:MM-EXP/);
@@ -304,6 +305,204 @@ test('kick is confirm-first: job only asks admin; ban runs only after admin k: c
   const refuseNoConfirm = tg.planKickExecute_({ status: 'Expired', notes: '', telegramUserId: '555' });
   assert.equal(refuseNoConfirm.ok, false);
   assert.match(refuseNoConfirm.reason, /confirm/i);
+});
+
+test('VIP_BASELINE_DATE is ISO YYYY-MM-DD; missing/invalid baseline is refused', () => {
+  const ok = tg.parseVipBaselineDate_('2026-09-01');
+  assert.equal(ok.ok, true);
+  assert.equal(ok.ymd, '2026-09-01');
+  assert.equal(tg.parseVipBaselineDate_('2026-09-01T00:00:00+06:00').ok, false);
+  assert.equal(tg.parseVipBaselineDate_('').ok, false);
+  assert.match(String(tg.parseVipBaselineDate_('').reason), /missing-baseline/);
+  assert.equal(tg.parseVipBaselineDate_('09/01/2026').ok, false);
+  assert.equal(tg.parseVipBaselineDate_(null).ok, false);
+  const gs = fs.readFileSync(TG_PATH, 'utf8');
+  assert.match(gs, /function setupVipBaselineDate_/);
+  assert.match(gs, /VIP_BASELINE_DATE/);
+});
+
+test('pre-baseline join is grandfathered; unknown join is grandfathered; on/after baseline is not', () => {
+  assert.equal(tg.isGrandfatheredByBaseline_('2026-08-31', '2026-09-01'), true);
+  assert.equal(tg.isGrandfatheredByBaseline_('2026-09-01', '2026-09-01'), false);
+  assert.equal(tg.isGrandfatheredByBaseline_('2026-09-19', '2026-09-01'), false);
+  assert.equal(tg.isGrandfatheredByBaseline_('', '2026-09-01'), true);
+  assert.equal(tg.isGrandfatheredByBaseline_(null, '2026-09-01'), true);
+});
+
+test('Telegram identity key matches username or numeric id; Active row lookup is exact identity', () => {
+  assert.equal(tg.telegramIdentityKey_('@Rakib_H'), 'rakib_h');
+  assert.equal(tg.telegramIdentityKey_('847112233'), '847112233');
+  assert.equal(tg.telegramIdentityKey_(''), '');
+  const col = liveCol();
+  const rows = [
+    LIVE_HEADERS,
+    liveRow({ ORDER_ID: 'MM-A', STATUS: 'Active', TELEGRAM: '@live', NOTES: 'TG_CHAT:111' }),
+    liveRow({ ORDER_ID: 'MM-E', STATUS: 'Expired', TELEGRAM: '@gone', NOTES: '' })
+  ];
+  assert.equal(tg.sheetHasActiveRowForIdentity_(rows, col, '@live'), true);
+  assert.equal(tg.sheetHasActiveRowForIdentity_(rows, col, '111'), true);
+  assert.equal(tg.sheetHasActiveRowForIdentity_(rows, col, '@gone'), false);
+  assert.equal(tg.sheetHasActiveRowForIdentity_(rows, col, '@nobody'), false);
+});
+
+test('kick confirm list: Expired eligible; post-baseline no-Active eligible; Active and pre-baseline never mass-kicked', () => {
+  const col = liveCol();
+  const rows = [
+    LIVE_HEADERS,
+    liveRow({
+      ORDER_ID: 'MM-EXP', STATUS: 'Expired', EXPIRY: '2026-09-18',
+      TELEGRAM: '@gone', NAME: 'Gone Paid', NOTES: 'PURCHASE_SENT | TG_CHAT:555'
+    }),
+    liveRow({
+      ORDER_ID: 'MM-LIVE', STATUS: 'Active', EXPIRY: '2026-10-16',
+      TELEGRAM: '@live', NAME: 'Live Paid', NOTES: 'PURCHASE_SENT | TG_CHAT:777'
+    }),
+    liveRow({
+      ORDER_ID: 'MM-PEND', STATUS: 'Pending', TELEGRAM: '@pend', NAME: 'Pending', NOTES: ''
+    })
+  ];
+  const joinLog = [
+    { userId: '101', username: 'lurker_old', name: 'Social Proof 1', joinYmd: '2026-01-15' },
+    { userId: '102', username: 'lurker_old2', name: 'Social Proof 2', joinYmd: '2026-08-31' },
+    { userId: '777', username: 'live', name: 'Live Paid', joinYmd: '2026-09-05' },
+    { userId: '888', username: 'sneak', name: 'New Unpaid', joinYmd: '2026-09-10' },
+    { userId: '999', username: 'unknown_join', name: 'No Join Date', joinYmd: '' }
+  ];
+  const list = tg.planKickConfirmList_({
+    rows: rows,
+    col: col,
+    baselineYmd: '2026-09-01',
+    joinLog: joinLog
+  });
+  assert.equal(list.requiresAdminConfirm, true);
+  assert.equal(list.executeKick, false);
+  const reasons = list.items.map((i) => i.reason).sort();
+  assert.ok(list.items.some((i) => i.reason === 'expired' && i.orderId === 'MM-EXP'));
+  assert.ok(list.items.some((i) => i.reason === 'post-baseline-no-active' && String(i.userId) === '888'));
+  assert.equal(list.items.some((i) => String(i.userId) === '101' || /lurker_old/.test(String(i.username || i.telegram || ''))), false);
+  assert.equal(list.items.some((i) => String(i.userId) === '102'), false);
+  assert.equal(list.items.some((i) => String(i.userId) === '777' || i.orderId === 'MM-LIVE'), false);
+  assert.equal(list.items.some((i) => String(i.userId) === '999'), false);
+  assert.equal(list.items.some((i) => i.orderId === 'MM-PEND'), false);
+  assert.equal(reasons.indexOf('not-active-on-sheet') === -1, true);
+  assert.equal(list.items.every((i) => i.executeKick === false), true);
+
+  const msg = tg.buildKickConfirmListMessage_(list);
+  assert.match(msg, /MM-EXP|Gone Paid|@gone|555/);
+  assert.match(msg, /888|sneak|New Unpaid/);
+  assert.match(msg, /confirm/i);
+  assert.doesNotMatch(msg, /lurker_old/);
+  const listKb = tg.buildKickConfirmListKeyboard_();
+  const listFlat = JSON.stringify(listKb);
+  assert.match(listFlat, /L:ok/);
+  assert.match(listFlat, /L:no/);
+});
+
+test('missing VIP_BASELINE_DATE refuses channel (b) proposals but still lists Expired (a)', () => {
+  const col = liveCol();
+  const rows = [
+    LIVE_HEADERS,
+    liveRow({ ORDER_ID: 'MM-EXP', STATUS: 'Expired', TELEGRAM: '@gone', NAME: 'Gone Paid', NOTES: 'PURCHASE_SENT' })
+  ];
+  const list = tg.planKickConfirmList_({
+    rows: rows,
+    col: col,
+    baselineYmd: '',
+    joinLog: [{ userId: '888', username: 'sneak', name: 'New Unpaid', joinYmd: '2026-09-10' }]
+  });
+  assert.equal(list.items.some((i) => i.reason === 'expired'), true);
+  assert.equal(list.items.some((i) => i.reason === 'post-baseline-no-active'), false);
+  assert.equal(list.channelScanRefused, true);
+  assert.match(String(list.channelScanReason || list.reason || ''), /missing-baseline/);
+});
+
+test('batch kick requires admin confirm list; never auto-bans; empty list refuses', () => {
+  const items = [
+    { reason: 'expired', orderId: 'MM-EXP', name: 'Gone Paid', telegram: '@gone', userId: '555', executeKick: false },
+    { reason: 'post-baseline-no-active', userId: '888', username: 'sneak', name: 'New Unpaid', executeKick: false }
+  ];
+  const noConfirm = tg.planKickBatchExecute_({ items: items, adminConfirmed: false });
+  assert.equal(noConfirm.ok, false);
+  assert.match(String(noConfirm.reason), /confirm/i);
+  assert.deepEqual(noConfirm.bans || [], []);
+
+  const empty = tg.planKickBatchExecute_({ items: [], adminConfirmed: true });
+  assert.equal(empty.ok, false);
+  assert.deepEqual(empty.bans || [], []);
+
+  const confirmed = tg.planKickBatchExecute_({ items: items, adminConfirmed: true });
+  assert.equal(confirmed.ok, true);
+  assert.equal(confirmed.bans.length, 2);
+  assert.equal(confirmed.bans.every((b) => b.method === 'banChatMember'), true);
+  assert.deepEqual(confirmed.bans.map((b) => String(b.userId)).sort(), ['555', '888']);
+});
+
+test('list callback L:ok / L:no parses; L:ok without a pending confirm list does not ban', () => {
+  assert.deepEqual(tg.parseCallbackData_('L:ok'), { action: 'kick-list-confirm', orderId: '' });
+  assert.deepEqual(tg.parseCallbackData_('L:no'), { action: 'kick-list-cancel', orderId: '' });
+
+  const update = {
+    update_id: 44,
+    callback_query: {
+      id: 'cb-list',
+      from: { id: Number(ADMIN) },
+      message: { chat: { id: Number(ADMIN) }, message_id: 80 },
+      data: 'L:ok'
+    }
+  };
+  const missing = tg.processTelegramUpdate_(update, { pendingKickList: null });
+  assert.equal(missing.ok, false);
+  assert.equal((missing.actions || []).some((a) => a.type === 'kick' || a.type === 'kick-batch'), false);
+
+  const withList = tg.processTelegramUpdate_(update, {
+    pendingKickList: [
+      { reason: 'expired', orderId: 'MM-EXP', userId: '555', name: 'Gone Paid', telegram: '@gone' }
+    ]
+  });
+  assert.equal(withList.ok, true);
+  const batch = (withList.actions || []).filter((a) => a.type === 'kick' || a.type === 'kick-batch');
+  assert.equal(batch.length >= 1, true);
+});
+
+test('join log records only on/after baseline joins — never a full VIP member dump', () => {
+  const after = tg.planJoinLogEntry_({
+    userId: '888',
+    username: 'sneak',
+    name: 'New Unpaid',
+    joinYmd: '2026-09-10',
+    newStatus: 'member',
+    oldStatus: 'left',
+    baselineYmd: '2026-09-01'
+  });
+  assert.equal(after.ok, true);
+  assert.equal(after.record, true);
+
+  const before = tg.planJoinLogEntry_({
+    userId: '101',
+    username: 'lurker_old',
+    joinYmd: '2026-01-15',
+    newStatus: 'member',
+    oldStatus: 'left',
+    baselineYmd: '2026-09-01'
+  });
+  assert.equal(before.record, false);
+
+  const noBaseline = tg.planJoinLogEntry_({
+    userId: '888',
+    joinYmd: '2026-09-10',
+    newStatus: 'member',
+    oldStatus: 'left',
+    baselineYmd: ''
+  });
+  assert.equal(noBaseline.record, false);
+
+  const payload = tg.buildSetWebhookPayload_('https://script.google.com/macros/s/xxx/exec', '');
+  assert.ok(payload.allowed_updates.indexOf('chat_member') !== -1);
+
+  const gs = fs.readFileSync(TG_PATH, 'utf8');
+  assert.doesNotMatch(gs, /getChatMemberCount/);
+  assert.doesNotMatch(gs, /kickAllNonActive|blindSync|syncKickEveryone|kick everyone not Active/i);
+  assert.doesNotMatch(gs, /getChatAdministrators/);
 });
 
 test('new pending order admin message has ✅ confirm button and no VIP invite link', () => {
@@ -414,4 +613,12 @@ test('GUIDE PART 13 documents setWebhook, Script Properties, VIP admin, Bangla+E
   assert.match(guide, /member_limit/);
   assert.match(guide, /বাংলা|Bangla/);
   assert.doesNotMatch(guide, /MM_RemindBot|second Remind bot/i);
+  assert.match(guide, /VIP_BASELINE_DATE/);
+  assert.match(guide, /YYYY-MM-DD/);
+  assert.match(guide, /Asia\/Dhaka/);
+  assert.match(guide, /setupVipBaselineDate_/);
+  assert.match(guide, /blind sync/i);
+  assert.match(guide, /never|FORBIDDEN|do not/i);
+  assert.match(guide, /@Method_Mafia_Vip/);
+  assert.doesNotMatch(guide, /kick everyone not Active on (the )?Sheet/i);
 });
