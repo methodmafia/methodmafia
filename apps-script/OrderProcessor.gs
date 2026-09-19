@@ -31,7 +31,7 @@
 /* ── CONFIG ───────────────────────────────────────────────── */
 const SHEET_NAME   = 'Orders';          // Tab name in Google Sheet
 const ADMIN_TOKEN  = 'CHANGE_ME_NOW';   // Replace with a long random string (e.g. from random.org)
-const DIGEST_EMAIL = 'info@themethodmafia.com';
+const DIGEST_EMAIL = 'methodmafia.hq@gmail.com';
 
 /* Column indices (0-based) — LIVE production layout (2026-09-19).
    Medium/Campaign are optional and stay -1 unless those headers exist. */

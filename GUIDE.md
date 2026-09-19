@@ -502,7 +502,7 @@ Google Sheet-এর **Source** কলামে দেখবে কোথা থ�
 ```javascript
 const SHEET_NAME   = 'Orders';          // তোমার Sheet-এর tab নাম
 const ADMIN_TOKEN  = 'CHANGE_ME_NOW';   // একটা লম্বা random পাসওয়ার্ড দাও (random.org থেকে)
-const DIGEST_EMAIL = 'info@themethodmafia.com';  // digest email ঠিকানা
+const DIGEST_EMAIL = 'methodmafia.hq@gmail.com';  // digest email ঠিকানা
 ```
 
 **ধাপ ৩: Deploy করো**
@@ -525,7 +525,7 @@ Timestamp, Order ID, Name, Email, Telegram, Plan, Amount, **Source, Status, Expi
 
 ### প্রতিদিনের কাজ — C1: Pending → Active (১-ক্লিক)
 
-সকালে Daily Digest email আসবে `info@themethodmafia.com`-এ। তাতে:
+সকালে Daily Digest email আসবে `methodmafia.hq@gmail.com`-এ। তাতে:
 - নতুন অর্ডারের তালিকা
 - Pending অর্ডারের লিস্ট
 - প্রতিটির নিচে **"Activate [Order ID]"** লিংক
