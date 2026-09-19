@@ -29,7 +29,7 @@
  *
  * CRITICAL: Column order MUST match the LIVE Google Sheet CSV header:
  *   Timestamp,Order ID,Name,Email,Telegram,Plan,Amount,Source,Status,Expiry,Days Left,Payment,Notes,FBclid,TTclid
- * Medium/Campaign omitted (optional far-right append only). Do not scramble existing cells.
+ * Medium/Campaign/Language omitted (optional far-right append only). Do not scramble existing cells.
  * SheetOrganize.gs re-reads headers at runtime.
  */
 
@@ -41,7 +41,7 @@ const ADMIN_TOKEN  = 'CHANGE_ME_NOW';
 const DIGEST_EMAIL = 'methodmafia.hq@gmail.com';
 
 /* Column indices (0-based) — LIVE production layout (2026-09-19).
-   Medium/Campaign are optional and stay -1 unless those headers exist. */
+   Medium/Campaign/Language are optional and stay -1 unless those headers exist. */
 const COL = {
   TIMESTAMP  : 0,   // A
   ORDER_ID   : 1,   // B
@@ -59,7 +59,8 @@ const COL = {
   FBCLID     : 13,  // N  ← Facebook click id (ads)
   TTCLID     : 14,  // O  ← TikTok click id (ads)
   MEDIUM     : -1,  // optional
-  CAMPAIGN   : -1   // optional
+  CAMPAIGN   : -1,  // optional
+  LANGUAGE   : -1   // optional far-right; form language=en|bn|hi, default en
 };
 
 /* ────────────────────────────────────────────────────────────

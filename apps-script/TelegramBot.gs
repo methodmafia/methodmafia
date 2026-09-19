@@ -15,6 +15,9 @@
  *      + trySendPurchaseForRow_ (Entry $30 CAPI) + one-time VIP invite
  *      (createChatInviteLink member_limit=1). NEVER post the link in VIP/public.
  *   2) Pay/renew reminders → customer Telegram (email path stays in Lifecycle.gs).
+ *      Copy is RENEW_COPY_PREMIUM_VIP.md (Premium VIP, $15). Language column
+ *      en|bn|hi, default EN. Dedupe RENEW_TG_3/_2/_1. Pending-pay is Entry-only
+ *      (no $15). Legacy ~3100 VIP members are never messaged by kick jobs.
  *   3) Kick jobs apply ONLY to members who entered via this new system
  *      (website order → pay → admin ✅ → Active + CAPI $30 + one-time VIP
  *      invite) and are now Sheet Expired. ALWAYS a confirm list, then admin ✅
@@ -60,7 +63,8 @@ var TG_HEADER_ALIASES = {
   'fbclid': 'FBCLID',
   'ttclid': 'TTCLID',
   'medium': 'MEDIUM',
-  'campaign': 'CAMPAIGN'
+  'campaign': 'CAMPAIGN',
+  'language': 'LANGUAGE'
 };
 
 /* ── Token (never hardcode) ─────────────────────────────── */
@@ -257,7 +261,7 @@ function telegramBuildColMap_(headers) {
     TIMESTAMP: -1, ORDER_ID: -1, NAME: -1, EMAIL: -1, TELEGRAM: -1,
     PLAN: -1, AMOUNT: -1, SOURCE: -1, STATUS: -1, EXPIRY: -1,
     DAYS_LEFT: -1, PAYMENT: -1, NOTES: -1, FBCLID: -1, TTCLID: -1,
-    MEDIUM: -1, CAMPAIGN: -1
+    MEDIUM: -1, CAMPAIGN: -1, LANGUAGE: -1
   };
   headers = headers || [];
   for (var i = 0; i < headers.length; i++) {
@@ -615,114 +619,141 @@ function buildAdminKickAskMessage_(item) {
 }
 
 function resolveCustomerCopyLang_(notes, locale) {
+  var loc = String(locale || '').trim().toLowerCase();
+  if (loc === 'en' || loc === 'english') return 'en';
+  if (loc === 'bn' || loc === 'bangla' || loc === 'bengali' || loc === 'bd') return 'bn';
+  if (loc === 'hi' || loc === 'hindi' || loc === 'hn') return 'hi';
   var blob = String(notes || '').toUpperCase();
-  var loc = String(locale || '').trim().toUpperCase();
-  if (blob.indexOf('LANG_EN') !== -1 || loc === 'EN' || loc === 'ENGLISH') return 'en';
-  if (blob.indexOf('LANG_HI') !== -1 || loc === 'HI' || loc === 'HINDI' || loc === 'HN') return 'hi';
-  if (blob.indexOf('LANG_BN') !== -1 || loc === 'BN' || loc === 'BANGLA' || loc === 'BD') return 'bn';
-  return 'bn';
+  if (blob.indexOf('LANG_EN') !== -1) return 'en';
+  if (blob.indexOf('LANG_HI') !== -1) return 'hi';
+  if (blob.indexOf('LANG_BN') !== -1) return 'bn';
+  return 'en';
 }
 
-function mmBnDayDigit_(n) {
-  var map = { 1: '১', 2: '২', 3: '৩' };
-  return map[Number(n)] || String(n);
+var DEFAULT_RENEW_LINK = 'Pay, then send Order ID + screenshot to @MMHQ_Support';
+
+function fillRenewPlaceholders_(text, item) {
+  item = item || {};
+  var name = String(item.name || '').trim() || 'there';
+  var link = String(item.renewLink || item.renew_link || '').trim() || DEFAULT_RENEW_LINK;
+  return String(text || '').replace(/\{name\}/g, name).replace(/\{renew_link\}/g, link);
 }
 
-function mmEnDayPhrase_(n) {
-  n = Number(n);
-  return n === 1 ? '1 day' : (n + ' days');
-}
-
-function buildToneBRenewCopy_(lang, daysLeft) {
-  var n = Number(daysLeft);
-  var dBn = mmBnDayDigit_(n);
-  var dEn = mmEnDayPhrase_(n);
-  lang = String(lang || 'bn').toLowerCase();
-  if (lang === 'en') {
-    return {
-      subject: 'Method Mafia — Premium VIP ends in ' + dEn + ' · $15',
-      body:
-        'Bhaiya/Apu 👋\n' +
-        'Your Method Mafia Premium VIP ends in just ' + dEn + ' ⏳\n\n' +
-        'The library, new method drops, and support you have this month 📚✨\n' +
-        'If you don\'t renew, those can pause.\n\n' +
-        'Keep the same access another month for just $15 💎\n' +
-        'Otherwise this month\'s new drops can slip away 😢\n\n' +
-        'To renew: pay, then send Order ID + screenshot\n' +
-        '👉 @MMHQ_Support\n\n' +
-        'We want to keep your access going 🙏'
-    };
-  }
-  if (lang === 'hi') {
-    return {
-      subject: 'Method Mafia — Premium VIP खत्म होने में ' + n + ' दिन · $15',
-      body:
-        'भैया/आपु 👋\n' +
-        'आपका Method Mafia Premium VIP खत्म होने में बस ' + n + ' दिन बचे हैं ⏳\n\n' +
-        'इस एक महीने में जो लाइब्रेरी, नए मेथड ड्रॉप और सपोर्ट मिल रहा है 📚✨\n' +
-        'रिन्यू न करने पर वो रुक सकते हैं।\n\n' +
-        'सिर्फ $15 में एक और महीना वही सुविधा चालू रखें 💎\n' +
-        'नहीं तो इस महीने के नए ड्रॉप मिस हो सकते हैं 😢\n\n' +
-        'रिन्यू करने के लिए: पेमेंट करके Order ID + स्क्रीनशॉट भेजें\n' +
-        '👉 @MMHQ_Support\n\n' +
-        'हम आपका एक्सेस लगातार रखना चाहते हैं 🙏'
-    };
-  }
+function premiumVipRenewPack_() {
   return {
-    subject: 'Method Mafia — Premium VIP শেষ হতে মাত্র ' + dBn + ' দিন · $15',
-    body:
-      'ভাইয়া/আপু 👋\n' +
-      'আপনার Method Mafia Premium VIP শেষ হতে আর মাত্র ' + dBn + ' দিন বাকি ⏳\n\n' +
-      'এই এক মাসে আপনি যে লাইব্রেরি, নতুন মেথড ড্রপ আর সাপোর্ট পাচ্ছেন 📚✨\n' +
-      'রিনিউ না করলে সেগুলো থেমে যেতে পারে।\n\n' +
-      'মাত্র $15 এ আরেক মাস একই সুবিধা চালু রাখুন 💎\n' +
-      'না করলে এ মাসের নতুন ড্রপগুলো মিস হয়ে যেতে পারে 😢\n\n' +
-      'রিনিউ করতে: পেমেন্ট করে Order ID + স্ক্রিনশট পাঠান\n' +
-      '👉 @MMHQ_Support\n\n' +
-      'আমরা আপনার এক্সেস একটানা রাখতে চাই 🙏'
+    en: {
+      3: {
+        subject: "Your Premium VIP access ends in 3 days",
+        body:
+          "Hey {name} 👋\n\nYour Premium VIP access ends in **3 days**.\n\nInside you still get the daily edge, private signals, and the circle that keeps compounding.\n\nRenew for **$15** and stay in — don’t let the streak break.\n\n→ {renew_link}\n\n— Method Mafia"
+      },
+      2: {
+        subject: "2 days left in Premium VIP",
+        body:
+          "{name}, quick reminder ⚡\n\nOnly **2 days** left on your Premium VIP.\n\nPeople who stay usually keep the gains stacking. Stepping out now means missing the next moves.\n\nLock **$15** renew today and keep your seat.\n\n→ {renew_link}"
+      },
+      1: {
+        subject: "Last day — Premium VIP closes tonight",
+        body:
+          "{name} — this is your last day 🔥\n\nPremium VIP access ends **tonight**. After that, the door closes and you’ll miss what’s coming next.\n\nOne small step: renew **$15** and stay inside.\n\n→ {renew_link}\n\nDon’t sleep on this."
+      }
+    },
+    bn: {
+      3: {
+        subject: "Premium VIP আর ৩ দিন বাকি",
+        body:
+          "হ্যালো {name} 👋\n\nতোমার Premium VIP এক্সেস আর **৩ দিন** পরে শেষ।\n\nভিতরে এখনো আছে ডেইলি এজ, প্রাইভেট সিগন্যাল, আর যে সার্কেল তোমার লাভ বাড়াচ্ছে।\n\nমাত্র **$15** রিনিউ করে ভিতরে থাকো — স্ট্রিক ভাঙতে দিও না।\n\n→ {renew_link}\n\n— Method Mafia"
+      },
+      2: {
+        subject: "Premium VIP — আর মাত্র ২ দিন",
+        body:
+          "{name}, ছোট রিমাইন্ডার ⚡\n\nPremium VIP-তে আর মাত্র **২ দিন**।\n\nযারা থাকেন, তারা সাধারণত গেইন স্ট্যাক করতে থাকেন। এখন বের হলে পরের মুভগুলো মিস।\n\nআজই **$15** রিনিউ করে সিট লক করো।\n\n→ {renew_link}"
+      },
+      1: {
+        subject: "শেষ দিন — আজ রাত Premium VIP বন্ধ",
+        body:
+          "{name} — এটা তোমার শেষ দিন 🔥\n\nPremium VIP এক্সেস **আজ রাতে** শেষ। এরপর দরজা বন্ধ — পরের সুযোগগুলো হাতছাড়া।\n\nএকটা ছোট স্টেপ: **$15** রিনিউ করে ভিতরে থাকো।\n\n→ {renew_link}\n\nএটা স্লিপ করো না।"
+      }
+    },
+    hi: {
+      3: {
+        subject: "Premium VIP में सिर्फ 3 दिन बाकी",
+        body:
+          "नमस्ते {name} 👋\n\nतुम्हारा Premium VIP एक्सेस **3 दिन** में खत्म हो रहा है।\n\nअंदर अभी भी डेली एज, प्राइवेट सिग्नल्स, और वो सर्कल है जो तुम्हारा फायदा बढ़ा रहा है।\n\nसिर्फ **$15** रिन्यू करके अंदर रहो — स्ट्रीक मत तोड़ो।\n\n→ {renew_link}\n\n— Method Mafia"
+      },
+      2: {
+        subject: "Premium VIP — सिर्फ 2 दिन बचे",
+        body:
+          "{name}, छोटा रिमाइंडर ⚡\n\nPremium VIP में सिर्फ **2 दिन** बचे हैं।\n\nजो लोग रहते हैं, वो आमतौर पर गेन स्टैक करते रहते हैं। अब बाहर निकले तो अगले मूव्स मिस।\n\nआज ही **$15** रिन्यू करके सीट लॉक करो।\n\n→ {renew_link}"
+      },
+      1: {
+        subject: "आखिरी दिन — आज रात Premium VIP बंद",
+        body:
+          "{name} — ये तुम्हारा आखिरी दिन है 🔥\n\nPremium VIP एक्सेस **आज रात** खत्म। उसके बाद दरवाज़ा बंद — आगे के मौके हाथ से निकल जाएंगे।\n\nएक छोटा स्टेप: **$15** रिन्यू करके अंदर रहो।\n\n→ {renew_link}\n\nइसको स्लीप मत करो।"
+      }
+    }
   };
 }
 
-function buildToneBPayCopy_(lang, orderId) {
-  var oid = String(orderId || '');
-  lang = String(lang || 'bn').toLowerCase();
-  if (lang === 'en') {
-    return 'Bhaiya/Apu 👋\n' +
-      'Your Method Mafia order ' + oid + ' is still waiting on payment ⏳\n\n' +
-      'Premium VIP library, new method drops, and support are ready for you 📚✨\n' +
-      'Finish payment and access can start.\n\n' +
-      'Send the screenshot\n' +
-      '👉 @MMHQ_Support\n\n' +
-      'We want to keep your access going 🙏';
+function buildPremiumVipRenewCopy_(lang, daysLeft, item) {
+  var pack = premiumVipRenewPack_();
+  var code = String(lang || 'en').toLowerCase();
+  if (code !== 'bn' && code !== 'hi') code = 'en';
+  var n = Number(daysLeft);
+  if (n !== 1 && n !== 2 && n !== 3) n = 3;
+  var entry = pack[code][n];
+  return {
+    subject: fillRenewPlaceholders_(entry.subject, item),
+    body: fillRenewPlaceholders_(entry.body, item)
+  };
+}
+
+function stripMarkdownBold_(text) {
+  return String(text || '').replace(/\*\*/g, '');
+}
+
+function fillPayPlaceholders_(text, item) {
+  item = item || {};
+  var name = String(item.name || '').trim() || 'there';
+  var oid = String(item.orderId || '').trim();
+  return String(text || '').replace(/\{name\}/g, name).replace(/\{orderId\}/g, oid);
+}
+
+function buildPremiumVipPayCopy_(lang, item) {
+  var code = String(lang || 'en').toLowerCase();
+  var body;
+  if (code === 'bn') {
+    body =
+      'হ্যালো {name} 👋\n' +
+      'তোমার Method Mafia অর্ডার {orderId} এখনও পেমেন্টের অপেক্ষায়।\n\n' +
+      'স্ক্রিনশট কনফার্ম হলে Premium VIP এক্সেস চালু হবে।\n\n' +
+      'Order ID + স্ক্রিনশট পাঠাও @MMHQ_Support';
+  } else if (code === 'hi') {
+    body =
+      'नमस्ते {name} 👋\n' +
+      'तुम्हारा Method Mafia ऑर्डर {orderId} अभी पेमेंट का इंतज़ार कर रहा है।\n\n' +
+      'स्क्रीनशॉट कन्फर्म होने के बाद Premium VIP एक्सेस चालू होगा।\n\n' +
+      'Order ID + स्क्रीनशॉट भेजो @MMHQ_Support';
+  } else {
+    body =
+      'Hey {name} 👋\n' +
+      'Your Method Mafia order {orderId} is still waiting on payment.\n\n' +
+      'Premium VIP access starts after we confirm your screenshot.\n\n' +
+      'Send Order ID + screenshot to @MMHQ_Support';
   }
-  if (lang === 'hi') {
-    return 'भैया/आपु 👋\n' +
-      'आपका Method Mafia ऑर्डर ' + oid + ' अभी पेमेंट का इंतज़ार कर रहा है ⏳\n\n' +
-      'Premium VIP लाइब्रेरी, नए मेथड ड्रॉप और सपोर्ट आपके लिए तैयार हैं 📚✨\n' +
-      'पेमेंट पूरा होते ही एक्सेस चालू हो सकता है।\n\n' +
-      'स्क्रीनशॉट भेजें\n' +
-      '👉 @MMHQ_Support\n\n' +
-      'हम आपका एक्सेस लगातार रखना चाहते हैं 🙏';
-  }
-  return 'ভাইয়া/আপু 👋\n' +
-    'আপনার Method Mafia অর্ডার ' + oid + ' এখনও পেমেন্টের অপেক্ষায় ⏳\n\n' +
-    'Premium VIP লাইব্রেরি, নতুন মেথড ড্রপ আর সাপোর্ট আপনার জন্য রেডি 📚✨\n' +
-    'পেমেন্ট শেষ করলেই এক্সেস চালু।\n\n' +
-    'স্ক্রিনশট পাঠান\n' +
-    '👉 @MMHQ_Support\n\n' +
-    'আমরা আপনার এক্সেস একটানা রাখতে চাই 🙏';
+  return fillPayPlaceholders_(body, item);
 }
 
 function buildCustomerPayTelegramMessage_(item) {
   item = item || {};
   var lang = resolveCustomerCopyLang_(item.notes, item.locale || item.lang || item.language);
-  return buildToneBPayCopy_(lang, item.orderId);
+  return buildPremiumVipPayCopy_(lang, item);
 }
 
 function buildCustomerRenewTelegramMessage_(item) {
   item = item || {};
   var lang = resolveCustomerCopyLang_(item.notes, item.locale || item.lang || item.language);
-  return buildToneBRenewCopy_(lang, item.daysLeft).body;
+  return stripMarkdownBold_(buildPremiumVipRenewCopy_(lang, item.daysLeft, item).body);
 }
 
 /* ── Lifecycle planners (email stays in Lifecycle.gs) ───── */
@@ -783,6 +814,7 @@ function planTelegramPayReminders_(rows, col, now) {
       name: String(rows[i][col.NAME] || ''),
       telegram: String(rows[i][col.TELEGRAM] || ''),
       notes: col.NOTES >= 0 ? rows[i][col.NOTES] : '',
+      language: (col.LANGUAGE >= 0) ? rows[i][col.LANGUAGE] : '',
       marker: PAY_TG_MARKER
     });
   }
@@ -805,6 +837,7 @@ function planTelegramRenewReminders_(rows, col, today) {
       notes: rows[i][col.NOTES],
       daysLeft: days,
       expiry: rows[i][col.EXPIRY],
+      language: (col.LANGUAGE >= 0) ? rows[i][col.LANGUAGE] : '',
       marker: marker
     });
   }
@@ -1605,6 +1638,7 @@ if (typeof module === 'object' && module.exports) {
     buildCustomerPayTelegramMessage_: buildCustomerPayTelegramMessage_,
     buildCustomerRenewTelegramMessage_: buildCustomerRenewTelegramMessage_,
     resolveCustomerCopyLang_: resolveCustomerCopyLang_,
+    buildPremiumVipRenewCopy_: buildPremiumVipRenewCopy_,
     planTelegramPayReminders_: planTelegramPayReminders_,
     planTelegramRenewReminders_: planTelegramRenewReminders_,
     planTelegramKickAsks_: planTelegramKickAsks_,

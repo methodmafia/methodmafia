@@ -220,71 +220,52 @@ test('Customer renew emails plan 3/2/1 day Active rows with Email, deduped by RE
   assert.equal(byId['MM-PEND'], undefined);
 });
 
-test('Customer renew mail goes to the row Email, not DIGEST_EMAIL, tone B Premium VIP', () => {
-  const msg = life.buildCustomerRenewMessage_({
-    orderId: 'MM-2026-3007',
+test('Customer renew mail uses pack copy: EN default, Language column, no cross-language leak', () => {
+  const en3 = life.buildCustomerRenewMessage_({
     name: 'Felix',
     email: 'felix@example.com',
-    daysLeft: 3,
-    expiry: '2026-09-22'
+    daysLeft: 3
   });
-  assert.equal(msg.to, 'felix@example.com');
-  assert.notEqual(msg.to, life.LIFECYCLE_ADMIN_EMAIL);
-  assert.match(msg.subject, /Premium VIP/);
-  assert.match(msg.subject, /৩|3/);
-  assert.match(msg.subject, /\$15/);
-  const body = (msg.textBody || '') + (msg.htmlBody || '');
-  assert.match(body, /ভাইয়া\/আপু/);
-  assert.match(body, /👋/);
-  assert.match(body, /Premium VIP/);
-  assert.match(body, /মাত্র ৩ দিন/);
-  assert.match(body, /\$15/);
-  assert.match(body, /@MMHQ_Support/);
-  assert.match(body, /📚|💎|😢|🙏|⏳/);
-  assert.doesNotMatch(body.replace(/Premium VIP/g, ''), /VIP/);
-  assert.doesNotMatch(body, /Your Method Mafia Premium VIP ends/);
-  assert.doesNotMatch(body, /भैया/);
-  assert.doesNotMatch(body, /kick|ban|bot/i);
-  assert.doesNotMatch(body, /\$30/);
-});
-
-test('customer renew email tone B: BN day strings ৩/২/১, EN/HI from LANG_* one language each', () => {
-  [3, 2, 1].forEach(function (n) {
-    const bnDigit = ({ 3: '৩', 2: '২', 1: '১' })[n];
-    const msg = life.buildCustomerRenewMessage_({
-      name: 'Rakib',
-      email: 'rakib@example.com',
-      daysLeft: n,
-      notes: 'LANG_BN | PURCHASE_SENT'
-    });
-    const body = msg.textBody || '';
-    assert.match(body, /Premium VIP/);
-    assert.match(body, new RegExp('মাত্র ' + bnDigit + ' দিন'));
-    assert.match(body, /\$15/);
-    assert.match(body, /@MMHQ_Support/);
-    assert.match(body, /👋/);
-    assert.doesNotMatch(body, /Just \$15|ends in just/);
-  });
-  const en = life.buildCustomerRenewMessage_({
-    email: 'a@b.c', daysLeft: 3, notes: 'LANG_EN'
-  });
-  assert.match(en.textBody, /Bhaiya\/Apu/);
-  assert.match(en.textBody, /Premium VIP/);
-  assert.match(en.textBody, /just 3 days/i);
-  assert.match(en.subject, /Premium VIP/);
-  assert.doesNotMatch(en.textBody, /[ঀ-৿]/);
-  assert.doesNotMatch(en.textBody, /[ऀ-ॿ]/);
-  const hi = life.buildCustomerRenewMessage_({
-    email: 'a@b.c', daysLeft: 2, notes: 'LANG_HI'
-  });
-  assert.match(hi.textBody, /भैया\/आपु/);
-  assert.match(hi.textBody, /Premium VIP/);
-  assert.match(hi.textBody, /2 दिन|२ दिन/);
-  assert.doesNotMatch(hi.textBody, /[ঀ-৿]/);
-  assert.doesNotMatch(hi.textBody, /ভাইয়া/);
-  assert.equal(life.resolveCustomerCopyLang_('', ''), 'bn');
-  assert.equal(life.resolveCustomerCopyLang_('LANG_EN | PURCHASE_SENT', ''), 'en');
+  assert.equal(en3.to, 'felix@example.com');
+  assert.notEqual(en3.to, life.LIFECYCLE_ADMIN_EMAIL);
+  assert.equal(en3.subject, 'Your Premium VIP access ends in 3 days');
+  assert.match(en3.textBody, /Hey Felix/);
+  assert.match(en3.textBody, /Premium VIP access ends in \*\*3 days\*\*/);
+  assert.match(en3.textBody, /\$15/);
+  assert.match(en3.textBody, /@MMHQ_Support/);
+  assert.doesNotMatch(en3.textBody, /Premium VIP আর ৩ দিন বাকি/);
+  assert.doesNotMatch(en3.textBody, /सिर्फ 3 दिन बाकी/);
+  assert.doesNotMatch(en3.textBody, /\$30/);
+  assert.doesNotMatch(en3.textBody, /kick|ban|bot/i);
+  assert.equal(life.resolveCustomerCopyLang_('', ''), 'en');
+  assert.equal(life.resolveCustomerCopyLang_('', 'bn'), 'bn');
   assert.equal(life.resolveCustomerCopyLang_('LANG_HI', ''), 'hi');
+
+  const bn3 = life.buildCustomerRenewMessage_({
+    name: 'Rakib', email: 'r@example.com', daysLeft: 3, language: 'bn'
+  });
+  assert.equal(bn3.subject, 'Premium VIP আর ৩ দিন বাকি');
+  assert.match(bn3.textBody, /হ্যালো Rakib/);
+  assert.match(bn3.textBody, /\$15/);
+  assert.doesNotMatch(bn3.textBody, /Your Premium VIP access ends in 3 days/);
+
+  const hi2 = life.buildCustomerRenewMessage_({
+    name: 'Amit', email: 'a@example.com', daysLeft: 2, language: 'HI'
+  });
+  assert.equal(hi2.subject, 'Premium VIP — सिर्फ 2 दिन बचे');
+  assert.match(hi2.textBody, /Amit/);
+  assert.match(hi2.textBody, /\$15/);
+  assert.doesNotMatch(hi2.textBody, /2 days left in Premium VIP/);
+
+  const bn1 = life.buildCustomerRenewMessage_({
+    name: 'Rakib', email: 'r@example.com', daysLeft: 1, notes: 'LANG_BN'
+  });
+  assert.equal(bn1.subject, 'শেষ দিন — আজ রাত Premium VIP বন্ধ');
+
+  const blank = life.buildCustomerRenewMessage_({
+    name: 'Felix', email: 'f@example.com', daysLeft: 3, language: ''
+  });
+  assert.equal(blank.subject, 'Your Premium VIP access ends in 3 days');
 });
 
 test('applyCustomerRenewMarkers_ writes RENEW_MAIL_3/2/1 independently', () => {
@@ -356,6 +337,6 @@ test('GUIDE documents Phase 2A triggers, renew URL, and Days Left on Expiry', ()
   assert.match(guide, /J2-TODAY\(\)|Expiry column J/i);
   assert.match(guide, /repairDaysLeftFormulas/);
   assert.match(guide, /methodmafia\.hq@gmail\.com/);
-  assert.match(guide, /\$15|Premium VIP|tone B|LANG_BN/i);
+  assert.match(guide, /\$15|Premium VIP|Language/i);
   assert.doesNotMatch(guide, /Telegram bot send|bot\.sendMessage/i);
 });
