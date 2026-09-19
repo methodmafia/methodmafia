@@ -220,7 +220,7 @@ test('Customer renew emails plan 3/2/1 day Active rows with Email, deduped by RE
   assert.equal(byId['MM-PEND'], undefined);
 });
 
-test('Customer renew mail goes to the row Email, not DIGEST_EMAIL, polite EN Method Mafia tone', () => {
+test('Customer renew mail goes to the row Email, not DIGEST_EMAIL, Bangla-first FOMO tone', () => {
   const msg = life.buildCustomerRenewMessage_({
     orderId: 'MM-2026-3007',
     name: 'Felix',
@@ -231,14 +231,41 @@ test('Customer renew mail goes to the row Email, not DIGEST_EMAIL, polite EN Met
   assert.equal(msg.to, 'felix@example.com');
   assert.notEqual(msg.to, life.LIFECYCLE_ADMIN_EMAIL);
   assert.match(msg.subject, /Method Mafia/i);
-  assert.match(msg.subject, /3/);
+  assert.match(msg.subject, /3|৩/);
   const body = (msg.textBody || '') + (msg.htmlBody || '');
   assert.match(body, /Felix/);
-  assert.match(body, /3 day/);
+  assert.match(body, /3|৩/);
   assert.match(body, /2026-09-22|22/);
   assert.match(body, /Method Mafia/);
-  assert.match(body, /30 days|another 30/i);
+  assert.match(body, /\$15/);
+  assert.match(body, /@MMHQ_Support/);
+  assert.match(body, /রিনিউ|অ্যাক্সেস|ড্রপ|মেথড/);
+  const bnIdx = body.search(/[ঀ-৿]/);
+  const enOnlyIdx = body.search(/Only |days left|Just \$15/i);
+  assert.ok(bnIdx >= 0, 'Bangla body required');
+  assert.ok(enOnlyIdx === -1 || bnIdx < enOnlyIdx, 'Bangla-first');
   assert.doesNotMatch(body, /kick|ban|bot/i);
+  assert.doesNotMatch(body, /\$30/);
+});
+
+test('customer renew email templates carry Bangla FOMO beats for 3/2/1 and $15', () => {
+  [3, 2, 1].forEach(function (n) {
+    const msg = life.buildCustomerRenewMessage_({
+      name: 'Rakib',
+      email: 'rakib@example.com',
+      daysLeft: n,
+      expiry: '2026-09-22'
+    });
+    const body = (msg.textBody || '') + (msg.htmlBody || '');
+    assert.match(body, /রিনিউ/);
+    assert.match(body, /VIP/);
+    assert.match(body, /ড্রপ|মেথড/);
+    assert.match(body, /অ্যাক্সেস|বন্ধ/);
+    assert.match(body, /\$15/);
+    assert.match(body, /@MMHQ_Support/);
+    assert.match(body, new RegExp(String(n) + '|৩|২|১'));
+    assert.match(msg.subject, /রিনিউ|VIP|দিন|day/i);
+  });
 });
 
 test('applyCustomerRenewMarkers_ writes RENEW_MAIL_3/2/1 independently', () => {
@@ -310,5 +337,6 @@ test('GUIDE documents Phase 2A triggers, renew URL, and Days Left on Expiry', ()
   assert.match(guide, /J2-TODAY\(\)|Expiry column J/i);
   assert.match(guide, /repairDaysLeftFormulas/);
   assert.match(guide, /methodmafia\.hq@gmail\.com/);
+  assert.match(guide, /\$15|FOMO|বাংলা-first|Bangla-first/i);
   assert.doesNotMatch(guide, /Telegram bot send|bot\.sendMessage/i);
 });

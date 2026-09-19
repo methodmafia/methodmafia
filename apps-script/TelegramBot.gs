@@ -614,26 +614,36 @@ function buildAdminKickAskMessage_(item) {
     'Tap ✅ to banChatMember from VIP, or Cancel. Confirm-first — bot will not kick until you tap.';
 }
 
+function tgBnDaysLeft_(n) {
+  n = Number(n);
+  var map = { 1: '১', 2: '২', 3: '৩' };
+  var bn = map[n] || String(n);
+  if (n === 1) return '১ দিন';
+  return bn + ' দিন';
+}
+
 function buildCustomerPayTelegramMessage_(item) {
   item = item || {};
   var who = String(item.name || 'there').trim() || 'there';
-  return 'Hi ' + who + ',\n\n' +
-    'Your Method Mafia order ' + (item.orderId || '') + ' is still waiting for payment.\n' +
-    'Please send the screenshot to @MMHQ_Support so we can confirm.\n\n' +
-    'আপনার অর্ডার এখনও পেমেন্টের অপেক্ষায়। স্ক্রিনশট @MMHQ_Support-এ পাঠান।\n\n' +
+  var oid = String(item.orderId || '');
+  return who + ',\n\n' +
+    'অর্ডার ' + oid + ' — পেমেন্ট এখনও হয়নি। এখনই শেষ করুন: VIP মেথড, নতুন ড্রপ আর সাপোর্ট অপেক্ষা করছে। দেরি = সুযোগ হাতছাড়া।\n' +
+    'স্ক্রিনশট @MMHQ_Support-এ পাঠান। (Entry আলাদা; এটা মাসিক রিনিউ নয়।)\n\n' +
+    'Payment still waiting on ' + oid + '. Finish now so VIP methods, new drops & support don\'t pass you by. Send SS to @MMHQ_Support.\n\n' +
     '— Method Mafia';
 }
 
 function buildCustomerRenewTelegramMessage_(item) {
   item = item || {};
   var n = Number(item.daysLeft);
-  var dayWord = n === 1 ? '1 day' : (n + ' days');
+  var bnDays = tgBnDaysLeft_(n);
+  var enDays = n === 1 ? '1 day' : (n + ' days');
   var who = String(item.name || 'there').trim() || 'there';
   var expiry = String(item.expiry || '');
-  return 'Hi ' + who + ',\n\n' +
-    'Your Method Mafia membership expires on ' + expiry + ' (' + dayWord + ' left).\n' +
-    'Reply to @MMHQ_Support if you would like another 30 days.\n\n' +
-    'আপনার মেম্বারশিপ ' + expiry + ' তারিখে শেষ (' + dayWord + ')। রিনিউ করতে @MMHQ_Support-এ মেসেজ করুন।\n\n' +
+  return who + ',\n\n' +
+    'VIP শেষ হতে আর মাত্র ' + bnDays + ' বাকি (' + expiry + ')। রিনিউ করলে VIP মেথড, আপডেট আর সাপোর্ট চালু থাকবে। না করলে নতুন মেথড ড্রপ মিস — অ্যাক্সেস বন্ধ হয়ে যাবে।\n' +
+    'মাসিক রিনিউ মাত্র $15। পেমেন্ট করে স্ক্রিনশট @MMHQ_Support-এ পাঠান।\n\n' +
+    'Only ' + enDays + ' left. Renew to keep VIP methods, updates & support. Miss new method drops if you don\'t — access stops. Just $15. Pay + send SS to @MMHQ_Support.\n\n' +
     '— Method Mafia';
 }
 

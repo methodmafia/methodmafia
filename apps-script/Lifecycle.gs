@@ -274,25 +274,40 @@ function formatExpiryLabel_(expiry) {
   return lifecycleDhakaYmd_(d);
 }
 
+function lifecycleBnDaysLeft_(n) {
+  n = Number(n);
+  var map = { 1: '১', 2: '২', 3: '৩' };
+  var bn = map[n] || String(n);
+  if (n === 1) return '১ দিন';
+  return bn + ' দিন';
+}
+
+function lifecycleEnDaysLeft_(n) {
+  n = Number(n);
+  return n === 1 ? '1 day' : (n + ' days');
+}
+
 function buildCustomerRenewMessage_(item) {
   item = item || {};
   var n = Number(item.daysLeft);
-  var dayWord = n === 1 ? '1 day' : (n + ' days');
+  var bnDays = lifecycleBnDaysLeft_(n);
+  var enDays = lifecycleEnDaysLeft_(n);
   var expiryLabel = formatExpiryLabel_(item.expiry);
   var name = String(item.name || 'there').trim() || 'there';
-  var subject = 'Method Mafia — your access expires in ' + dayWord;
+  var subject = 'Method Mafia — VIP শেষ হতে ' + bnDays + ' (renew $15)';
   var textBody =
-    'Hi ' + name + ',\n\n' +
-    'Your Method Mafia membership expires on ' + expiryLabel + ' (' + dayWord + ' left).\n\n' +
-    'If you would like to stay in, reply to this email or message support and we will add another 30 days.\n\n' +
-    'Thank you for being with Method Mafia.\n\n' +
+    name + ',\n\n' +
+    'VIP শেষ হতে আর মাত্র ' + bnDays + ' বাকি (' + expiryLabel + ')।\n' +
+    'রিনিউ করলে VIP মেথড, নতুন আপডেট আর সাপোর্ট চালু থাকবে। না করলে নতুন মেথড ড্রপ মিস — অ্যাক্সেস বন্ধ হয়ে যাবে।\n\n' +
+    'মাসিক রিনিউ মাত্র $15। পেমেন্ট করে স্ক্রিনশট @MMHQ_Support-এ পাঠান।\n\n' +
+    'Only ' + enDays + ' left. Renew to keep VIP methods, updates & support. Miss new method drops if you don\'t — access stops. Just $15. Pay + send SS to @MMHQ_Support.\n\n' +
     '— Method Mafia\n';
   var htmlBody =
-    '<p>Hi ' + lifecycleEscape_(name) + ',</p>' +
-    '<p>Your Method Mafia membership expires on <strong>' + lifecycleEscape_(expiryLabel) +
-    '</strong> (' + lifecycleEscape_(dayWord) + ' left).</p>' +
-    '<p>If you would like to stay in, reply to this email or message support and we will add another 30 days.</p>' +
-    '<p>Thank you for being with Method Mafia.</p>' +
+    '<p>' + lifecycleEscape_(name) + ',</p>' +
+    '<p>VIP শেষ হতে আর মাত্র <strong>' + lifecycleEscape_(bnDays) + '</strong> বাকি (' +
+    lifecycleEscape_(expiryLabel) + ')। রিনিউ করলে VIP মেথড, নতুন আপডেট আর সাপোর্ট চালু থাকবে। না করলে নতুন মেথড ড্রপ মিস — অ্যাক্সেস বন্ধ হয়ে যাবে।</p>' +
+    '<p>মাসিক রিনিউ মাত্র <strong>$15</strong>। পেমেন্ট করে স্ক্রিনশট @MMHQ_Support-এ পাঠান।</p>' +
+    '<p>Only ' + lifecycleEscape_(enDays) + ' left. Renew to keep VIP methods, updates &amp; support. Miss new method drops if you don\'t — access stops. Just $15. Pay + send SS to @MMHQ_Support.</p>' +
     '<p>— Method Mafia</p>';
   return {
     to: String(item.email || '').trim(),

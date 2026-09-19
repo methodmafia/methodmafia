@@ -251,15 +251,18 @@ test('pay/renew TG jobs select Pending>24h and Active 3/2/1 without double-send 
   assert.equal(renew.filter((p) => p.orderId === 'MM-R1')[0].marker, 'RENEW_TG_1');
 });
 
-test('customer pay/renew Telegram copy is private Method Mafia tone and has no public VIP link', () => {
+test('customer pay/renew Telegram copy is Bangla-first FOMO, private, no public VIP link', () => {
   const pay = tg.buildCustomerPayTelegramMessage_({
     name: 'Rakib',
     orderId: 'MM-2026-4821',
     telegram: '@rakib_h'
   });
   assert.match(pay, /Rakib|MM-2026-4821|@MMHQ_Support/i);
+  assert.match(pay, /[ঀ-৿]/);
+  assert.match(pay, /VIP|মেথড|ড্রপ|অ্যাক্সেস/);
   assert.doesNotMatch(pay, /t\.me\/\+/);
   assert.doesNotMatch(pay, /TheMethodmafia1/i);
+  assert.doesNotMatch(pay, /\$15/);
 
   const renew = tg.buildCustomerRenewTelegramMessage_({
     name: 'Felix',
@@ -267,10 +270,35 @@ test('customer pay/renew Telegram copy is private Method Mafia tone and has no p
     expiry: '2026-09-22'
   });
   assert.match(renew, /Felix/);
-  assert.match(renew, /3/);
+  assert.match(renew, /3|৩/);
   assert.match(renew, /Method Mafia/i);
+  assert.match(renew, /রিনিউ/);
+  assert.match(renew, /ড্রপ|মেথড/);
+  assert.match(renew, /অ্যাক্সেস|বন্ধ/);
+  assert.match(renew, /\$15/);
+  assert.match(renew, /@MMHQ_Support/);
+  const bnIdx = renew.search(/[ঀ-৿]/);
+  const enIdx = renew.search(/Only |days left|Just \$15/i);
+  assert.ok(bnIdx >= 0 && (enIdx === -1 || bnIdx < enIdx));
   assert.doesNotMatch(renew, /t\.me\/\+/);
   assert.doesNotMatch(renew, /kick|ban/i);
+  assert.doesNotMatch(renew, /\$30/);
+});
+
+test('Telegram renew templates snapshot Bangla FOMO keywords for 3/2/1', () => {
+  [3, 2, 1].forEach(function (n) {
+    const text = tg.buildCustomerRenewTelegramMessage_({
+      name: 'Rakib',
+      daysLeft: n,
+      expiry: '2026-09-22'
+    });
+    assert.match(text, /রিনিউ/);
+    assert.match(text, /VIP/);
+    assert.match(text, /\$15/);
+    assert.match(text, /@MMHQ_Support/);
+    assert.match(text, /ড্রপ|মেথড/);
+    assert.match(text, /অ্যাক্সেস|বন্ধ/);
+  });
 });
 
 test('kick is confirm-first: job only asks admin; ban runs only after admin k: callback', () => {
