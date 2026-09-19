@@ -78,6 +78,9 @@ en: {
   ordLblVerifying:"Verifying",
   ordLblExpired:"Expired",
   ordUnknownLbl:"Unknown",
+  ordConfirmTitle:"Next steps for your order",
+  ordConfirmBackup:"We could not load live status from the order sheet yet. If support sent you this link, check Telegram for your invite. Order ID:",
+  ordConfirmNote:"This page does not invent a status. Real Active / Rejected comes from the sheet after the public status endpoint is deployed.",
 
   /* ── ABOUT ── */
   abTitle:"About Us",
@@ -316,6 +319,9 @@ bn: {
   ordLblVerifying:"Verifying",
   ordLblExpired:"Expired",
   ordUnknownLbl:"Unknown",
+  ordConfirmTitle:"আপনার অর্ডারের পরবর্তী ধাপ",
+  ordConfirmBackup:"অর্ডার শিট থেকে লাইভ স্ট্যাটাস এখন লোড হয়নি। সাপোর্ট এই লিংক দিলে টেলিগ্রামে ইনভাইট দেখুন। অর্ডার আইডি:",
+  ordConfirmNote:"এই পেজ নিজে থেকে স্ট্যাটাস বানাবে না। আসল Active / Rejected শিট থেকে আসবে, পাবলিক status endpoint চালু হলে।",
 
   /* ── ABOUT ── */
   abTitle:"আমাদের সম্পর্কে",
@@ -554,6 +560,9 @@ hi: {
   ordLblVerifying:"Verifying",
   ordLblExpired:"Expired",
   ordUnknownLbl:"Unknown",
+  ordConfirmTitle:"आपके ऑर्डर के अगले कदम",
+  ordConfirmBackup:"ऑर्डर शीट से लाइव स्टेटस अभी लोड नहीं हुआ। सपोर्ट ने यह लिंक भेजा हो तो टेलीग्राम पर इनवाइट देखें। ऑर्डर आईडी:",
+  ordConfirmNote:"यह पेज खुद से स्टेटस नहीं बनाता। असली Active / Rejected शीट से आएगा, जब पब्लिक status एंडपॉइंट चालू होगा।",
 
   /* ── ABOUT ── */
   abTitle:"हमारे बारे में",

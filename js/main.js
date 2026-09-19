@@ -765,9 +765,19 @@ function statusMessage(status){
   return tp('ordUnknownMsg') || tp('ordFoundMsg');
 }
 
-function renderOrderStatusHtml(result, typedId){
-  const id = (result && result.orderId) || typedId || '';
+function renderOrderStatusHtml(result, typedId, opts){
+  opts = opts || {};
+  const rawId = (result && result.orderId) || typedId || '';
+  const id = (typeof MMSheet !== 'undefined' && MMSheet.escapeHtml)
+    ? MMSheet.escapeHtml(rawId)
+    : String(rawId).replace(/[<>&"'`]/g, '');
   if(!result || result.kind === 'lookup_failed'){
+    if(opts.confirmedBackup){
+      return '<div class="next-steps-box">'+
+        '<div class="next-steps-title">'+tp('ordConfirmTitle')+'</div>'+
+        '<div class="next-step">'+tp('ordConfirmBackup')+' <strong>'+id+'</strong></div>'+
+        '<div class="next-steps-note">'+tp('ordConfirmNote')+'</div></div>';
+    }
     return '<div class="info-box" style="border-left-color:var(--red)">'+
       '<p>'+tp('ordLookupFail')+'</p>'+
       '<p style="margin-top:8px">'+tp('ordLookupFail2')+'</p></div>';
@@ -778,7 +788,9 @@ function renderOrderStatusHtml(result, typedId){
       '<p style="margin-top:8px">'+tp('ordNotFound2')+'</p></div>';
   }
   const tone = statusTone(result.kind, result.status);
-  const label = statusLabel(result.status, result.statusRaw);
+  const label = (typeof MMSheet !== 'undefined' && MMSheet.escapeHtml)
+    ? MMSheet.escapeHtml(statusLabel(result.status, result.statusRaw))
+    : statusLabel(result.status, result.statusRaw);
   return '<div class="info-box" style="border-left-color:'+tone+'">'+
     '<p><strong>'+tp('ordFound')+' '+id+'</strong></p>'+
     '<p style="margin-top:8px">'+tp('ordStatus')+' <strong style="color:'+tone+'">'+label+'</strong></p>'+
@@ -807,8 +819,10 @@ function checkOrder(){
     return;
   }
   box.innerHTML = '<div class="info-box"><p>'+(tp('ordChecking') || 'Checking…')+'</p></div>';
+  let confirmedBackup = false;
+  try{ confirmedBackup = new URLSearchParams(location.search).get('confirmed') === '1'; }catch(e){}
   lookupOrderStatus(v).then(function(result){
-    box.innerHTML = renderOrderStatusHtml(result, v);
+    box.innerHTML = renderOrderStatusHtml(result, v, { confirmedBackup: confirmedBackup });
   });
 }
 

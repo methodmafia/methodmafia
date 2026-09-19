@@ -12,6 +12,12 @@
 })(typeof self !== 'undefined' ? self : this, function(){
   'use strict';
 
+  function escapeHtml(text){
+    return String(text == null ? '' : text).replace(/[&<>"']/g, function(ch){
+      return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[ch];
+    });
+  }
+
   function parseJsonSafe(text){
     if(text == null || text === '') return null;
     try{
@@ -134,6 +140,7 @@
   }
 
   return {
+    escapeHtml: escapeHtml,
     parseJsonSafe: parseJsonSafe,
     isWriteSuccess: isWriteSuccess,
     interpretWriteResult: interpretWriteResult,

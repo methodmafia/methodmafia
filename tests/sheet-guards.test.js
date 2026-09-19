@@ -56,6 +56,12 @@ test('index and order-status load sheet-client before main', () => {
   });
 });
 
+test('GUIDE no longer promises a fake Payment Confirmed banner', () => {
+  const guide = read('GUIDE.md');
+  assert.equal(guide.includes('"Payment Confirmed" banner দেখাবে'), false);
+  assert.match(guide, /action=status|Sheet থেকে/);
+});
+
 test('i18n includes sheet-fail and real status copy in EN/BN/HI', () => {
   const tr = read('js/translations.js');
   const pages = read('js/pages.js');
@@ -63,7 +69,7 @@ test('i18n includes sheet-fail and real status copy in EN/BN/HI', () => {
     const hits = tr.split(key + ':').length - 1;
     assert.ok(hits >= 3, key + ' must exist in en/bn/hi, found ' + hits);
   });
-  ['ordLookupFail', 'ordNotFound', 'ordActiveMsg', 'ordRejectMsg', 'ordLblReject'].forEach(function(key) {
+  ['ordLookupFail', 'ordNotFound', 'ordActiveMsg', 'ordRejectMsg', 'ordLblReject', 'ordConfirmBackup'].forEach(function(key) {
     const hits = pages.split(key + ':').length - 1;
     assert.ok(hits >= 3, key + ' must exist in en/bn/hi, found ' + hits);
   });

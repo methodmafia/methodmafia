@@ -642,7 +642,7 @@ https://themethodmafia.com/order-status.html?orderId=MM-XXXX&confirmed=1&plan=En
 এই URL খুললে (optional backup, Entry only):
 - GA-তে `purchase` event fire হবে
 - FB Pixel-এ `Purchase` / TikTok-এ `CompletePayment` fire হবে (value $30, event_id = Order ID)
-- "Payment Confirmed" banner দেখাবে কাস্টমারকে
+- পেজ **Sheet থেকে** status দেখাবে (`action=status`). Endpoint না থাকলে মিথ্যা "Payment Confirmed"/"Submitted" দেখাবে না — next-steps + Telegram টেক্সট দেখাবে
 
 **মূল Purchase এখন Google Sheet Status → Active থেকে যায়।** কাস্টমার এই লিংক না খুললেও ads conversion count হবে (PART 9 সেটআপ করলে)। Monthly-এ Purchase যাবে না।
 

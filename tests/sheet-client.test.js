@@ -72,6 +72,12 @@ test('HTTP error or missing {ok:true} is never a write success', () => {
   assert.equal(sheet.isWriteSuccess(null), false);
 });
 
+test('escapeHtml encodes markup so order IDs cannot inject HTML', () => {
+  assert.equal(sheet.escapeHtml('MM-2026-3007'), 'MM-2026-3007');
+  assert.equal(sheet.escapeHtml('<img src=x onerror=alert(1)>'), '&lt;img src=x onerror=alert(1)&gt;');
+  assert.equal(sheet.escapeHtml('a&b'), 'a&amp;b');
+});
+
 test('parseJsonSafe only returns objects parsed from JSON', () => {
   assert.deepEqual(sheet.parseJsonSafe('{"ok":true}'), { ok: true });
   assert.equal(sheet.parseJsonSafe(''), null);
