@@ -99,14 +99,15 @@ test('Apps Script CAPI uses Script Properties and documented endpoints', () => {
   assert.ok(!/META_ACCESS_TOKEN\s*[:=]\s*['"][^'"]+['"]/.test(gs));
 });
 
-test('OrderProcessor writes fbclid/ttclid at the end of the row', () => {
+test('OrderProcessor writes fbclid/ttclid using live header order', () => {
   const fs = require('fs');
   const gs = fs.readFileSync(path.join(__dirname, '..', 'apps-script', 'OrderProcessor.gs'), 'utf8');
-  assert.ok(gs.indexOf('FBCLID') !== -1);
-  assert.ok(gs.indexOf('data.fbclid') !== -1);
-  assert.ok(gs.indexOf('data.ttclid') !== -1);
-  assert.ok(gs.indexOf("'FBclid','TTclid'") !== -1 || gs.indexOf("'FBclid', 'TTclid'") !== -1);
+  const org = fs.readFileSync(path.join(__dirname, '..', 'apps-script', 'SheetOrganize.gs'), 'utf8');
+  assert.ok(org.indexOf('data.fbclid') !== -1);
+  assert.ok(org.indexOf('data.ttclid') !== -1);
+  assert.ok(org.indexOf('FBclid,TTclid') !== -1);
   assert.ok(gs.indexOf('trySendPurchaseForRow_') !== -1);
+  assert.ok(gs.indexOf('upsertNewOrderToOrganizeTabs_') !== -1);
 });
 
 test('Meta and TikTok endpoints match the documented APIs', () => {

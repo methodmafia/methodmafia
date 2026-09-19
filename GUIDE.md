@@ -31,7 +31,8 @@ methodmafia/
 │
 ├── apps-script/
 │   ├── OrderProcessor.gs  ← Sheet orders + FBclid/TTclid
-│   └── CapiPurchase.gs    ← Status→Active Purchase (CAPI)
+│   ├── CapiPurchase.gs    ← Status→Active Purchase (CAPI)
+│   └── SheetOrganize.gs   ← Master / Archive_Rejected / YYYY-MM
 │
 └── images/
     ├── logo.jpg
@@ -399,7 +400,7 @@ https://themethodmafia.com/?utm_source=tiktok
 https://themethodmafia.com/?utm_source=telegram
 ```
 
-Google Sheet-এর **Source** কলামে দেখবে কোথা থেকে এসেছে।
+Google Sheet-এর **Source** কলামে দেখবে কোথা থেকে এসেছে। (লাইভ sheet-এ Medium/Campaign কলাম নেই — চাইলে PART 10-এর `appendOptionalUtmHeaders` শেষে যোগ করে।)
 
 **যেটা বেশি বিক্রি দিচ্ছে, সেখানে বেশি টাকা দাও।**
 
@@ -501,7 +502,7 @@ Google Sheet-এর **Source** কলামে দেখবে কোথা থ�
 ```javascript
 const SHEET_NAME   = 'Orders';          // তোমার Sheet-এর tab নাম
 const ADMIN_TOKEN  = 'CHANGE_ME_NOW';   // একটা লম্বা random পাসওয়ার্ড দাও (random.org থেকে)
-const DIGEST_EMAIL = 'info@themethodmafia.com';  // digest email ঠিকানা
+const DIGEST_EMAIL = 'methodmafia.hq@gmail.com';  // digest email ঠিকানা
 ```
 
 **ধাপ ৩: Deploy করো**
@@ -513,16 +514,18 @@ const DIGEST_EMAIL = 'info@themethodmafia.com';  // digest email ঠিকান
 6. সেই URL → `config.js`-এ `SHEET_URL:` লাইনে বসাও
 
 **ধাপ ৪: Sheet headers সেটআপ**
-Apps Script editor-এ `setupSheetHeaders` ফাংশন সিলেক্ট করে ▶ Run চাপো।
-Sheet-এ কলাম তৈরি হবে: Timestamp, Order ID, Name, Email, Telegram, Plan, Amount, Payment, **Source, Medium, Campaign**, Status, Expiry, Days Left, Notes, **FBclid, TTclid**
+Apps Script editor-এ `setupSheetHeaders` ফাংশন সিলেক্ট করে ▶ Run চাপো — **শুধু খালি sheet-এ**। লাইভ Orders-এ আগে থেকে সারি থাকলে হেডার বদলাবে না (স্ক্র্যাম্বল রোধ)।
 
-আগে থেকে Sheet চালু থাকলে শেষে দুটো কলাম যোগ করো: `FBclid` আর `TTclid` (Notes-এর পরে)। অথবা `setupSheetHeaders` আবার Run করো — শুধু হেডার রো আপডেট হবে।
+লাইভ কলাম অর্ডার:
+Timestamp, Order ID, Name, Email, Telegram, Plan, Amount, **Source, Status, Expiry, Days Left, Payment**, Notes, **FBclid, TTclid**
+
+নতুন ট্যাব (`Master`, `Archive_Rejected`, `YYYY-MM`) আর midnight reject-archive: **PART 10**।
 
 ---
 
 ### প্রতিদিনের কাজ — C1: Pending → Active (১-ক্লিক)
 
-সকালে Daily Digest email আসবে `info@themethodmafia.com`-এ। তাতে:
+সকালে Daily Digest email আসবে `methodmafia.hq@gmail.com`-এ। তাতে:
 - নতুন অর্ডারের তালিকা
 - Pending অর্ডারের লিস্ট
 - প্রতিটির নিচে **"Activate [Order ID]"** লিংক
@@ -614,7 +617,7 @@ https://themethodmafia.com/order-status.html?orderId=MM-XXXX&confirmed=1&plan=En
 
 ## 🔗 UTM Tracking
 
-এখন ad লিংকে UTM যোগ করলে Sheet-এ **Source, Medium, Campaign** কলামে যাবে:
+এখন ad লিংকে UTM যোগ করলে Sheet-এ **Source** কলামে যাবে (লাইভ layout)। Medium/Campaign কলাম নেই — চাইলে PART 10 `appendOptionalUtmHeaders` শেষে যোগ করে:
 ```
 https://themethodmafia.com/?utm_source=facebook&utm_medium=paid&utm_campaign=entry_sep26
 https://themethodmafia.com/?utm_source=tiktok&utm_medium=paid&utm_campaign=promo_oct
@@ -651,10 +654,11 @@ Ads শুধু **Entry** টার্গেট করে। Purchase value **�
 
 Google Sheet → **Extensions** → **Apps Script**
 
-- Keep `OrderProcessor.gs` (replace with the repo file — it now has FBclid / TTclid columns)
+- Keep `OrderProcessor.gs` (replace with the repo file — live header order + FBclid / TTclid)
 - **+** → Script → name it `CapiPurchase` → paste `apps-script/CapiPurchase.gs`
+- **+** → Script → name it `SheetOrganize` → paste `apps-script/SheetOrganize.gs` (required with the new OrderProcessor)
 
-Save (Ctrl+S).
+Save (Ctrl+S). If you already have a Web App URL, also **Deploy → Manage deployments → Edit → New version** so `doPost` picks up the column fix.
 
 ### 2) Script Properties (tokens — never put tokens in the code)
 
@@ -726,5 +730,101 @@ If Notes never gets `PURCHASE_SENT`: tokens missing, trigger not installed, or P
 - `event_id` = Order ID — browser backup আর CAPI একই conversion হিসেবে গণনা হবে
 - FBclid / TTclid কলাম Swa ignore করতে পারো — ads matching-এর জন্য
 - Pixel ID বদলাতে `config.js` → `META_PIXEL` / `TIKTOK_PIXEL` (সাইট) **এবং** Script Properties (CAPI) দুটো জায়গায়
+
+---
+
+# 📂 PART 10 — Sheet organize (Orders / Master / Archive / monthly)
+
+Keep the live sheet clean for AI/Drive totals. **Never hard-delete orders.** Rejects stay on `Orders` the same calendar day (Swa may flip back to Active), then move to `Archive_Rejected` after Dhaka midnight.
+
+Live header order (CSV confirmed 2026-09-19, Orders tab only — do not rearrange):
+`Timestamp,Order ID,Name,Email,Telegram,Plan,Amount,Source,Status,Expiry,Days Left,Payment,Notes,FBclid,TTclid`
+
+Medium/Campaign are **not** on the live sheet. Do not insert them in the middle. Optional: `appendOptionalUtmHeaders` adds them at the far right only.
+
+Backup already taken (2026-09-19):
+- Live: https://docs.google.com/spreadsheets/d/1b-XGKfxIOnTJ5AVJr2beAyg4j14i6YzbgAI2VfVwXnM
+- Copy: https://docs.google.com/spreadsheets/d/1ffSBXNNTSDrFWAHOY0yq9qCSfwgx-D12UBU2ohm-mMk
+
+---
+
+## English — install (Developer + Swa)
+
+### 1) Paste all three Apps Script files, then ship a **new Web App version**
+
+Google Sheet → **Extensions** → **Apps Script**
+
+- Replace `OrderProcessor.gs` with repo `apps-script/OrderProcessor.gs` (keep your real `ADMIN_TOKEN`)
+- Replace `CapiPurchase.gs` with repo `apps-script/CapiPurchase.gs` (CAPI unchanged: Entry + Active → Purchase $30, `PURCHASE_SENT` dedupe)
+- **+** → Script → name it `SheetOrganize` → paste `apps-script/SheetOrganize.gs` **before** using the new OrderProcessor
+
+Save (Ctrl+S). **Do not change column order on the live sheet.**
+
+**Deploy → Manage deployments → pencil (Edit) → Version: New version → Deploy.**  
+Keep the same Web App URL (`config.js` → `SHEET_URL`). Triggers use Head automatically; **website `doPost` does not** until you make a new version.
+
+If an experimental `Master` / `Archive_Rejected` tab already exists with different headers, rename or delete it first. Setup will refuse to copy into a mismatched tab (no scramble).
+
+### 2) Project timezone = Asia/Dhaka
+
+Apps Script → ⚙️ **Project Settings** → **Time zone** → `(GMT+06:00) Dhaka`
+
+### 3) One-time migrator (safe copy, does not delete Orders)
+
+Function dropdown → `setupOrganizeSheets` → ▶ **Run** → Authorize.
+
+Creates missing tabs and copies existing `Orders` rows into `Master` + current `YYYY-MM`. Rejects stay on `Orders` until midnight.
+
+### 4) Midnight reject-cleanup trigger
+
+Apps Script → ⏰ **Triggers** → **Add Trigger**:
+
+```
+Function:       midnightOrganizeTrigger
+Event source:   Time-driven
+Type:           Day timer
+Time of day:    Midnight to 1am
+```
+
+Or run `installMidnightOrganizeTrigger` once from the editor (same job, timezone Asia/Dhaka).
+
+**Do not ▶ Run `midnightOrganizeTrigger` on the live `Orders` tab in daytime.** The function refuses unless the Asia/Dhaka hour is 00:00 (test tabs `TEST_*` are exempt). A reject typed at 00:30 may still be archived in the same 00:00–01:00 window — flip back to Active before the job runs, or restore from `Archive_Rejected`.
+
+After 00:00 Asia/Dhaka: the job first copies current `Orders` into `Master`, then any row still `reject` / `Reject` / `rejected` is **moved** (not destroyed) to `Archive_Rejected`. Status is re-read immediately before delete so a same-minute flip to Active is kept.
+
+### 5) Safe tests (TEST_ tabs only — will not delete real orders)
+
+Run in this order, then `cleanupOrganizeTests_`:
+
+```
+testOrganizePendingMaster_   → TEST- row on TEST_Orders AND TEST_Master
+testRejectStaysSameDay_      → reject stays on TEST_Orders (no archive)
+testMidnightRejectMove_      → reject moves to TEST_Archive_Rejected; Master keeps the row
+cleanupOrganizeTests_        → deletes TEST_* tabs
+```
+
+---
+
+## বাংলা — Swa একবারের সেটআপ
+
+**ধাপ ১:** Sheet → Extensions → Apps Script। তিনটা ফাইল পেস্ট করো: `OrderProcessor.gs`, `CapiPurchase.gs`, নতুন `SheetOrganize.gs`। `ADMIN_TOKEN` আগেরটাই রাখো। কলাম এদিক-ওদিক কোরো না। তারপর **Deploy → Manage deployments → New version** (আগের Web App URL রাখো) — নাহলে ওয়েবসাইটের নতুন অর্ডার পুরনো `doPost` চালাবে।
+
+**ধাপ ২:** ⚙️ Project Settings → Time zone: **Dhaka**।
+
+**ধাপ ৩:** Function `setupOrganizeSheets` ▶ Run। `Master`, `Archive_Rejected`, আর এই মাসের `YYYY-MM` ট্যাব তৈরি হবে। `Orders`-এর সারি মুছবে না। আগে থেকে ভুল-হেডার `Master` থাকলে আগে rename/delete করো।
+
+**ধাপ ৪:** ⏰ Triggers → `midnightOrganizeTrigger` → Time-driven → Day timer → **Midnight to 1am**। Authorize দাও। দিনের বেলা live `Orders`-এ এই ফাংশন Run কোরো না।
+
+**ধাপ ৫ (Developer):** `testOrganizePendingMaster_`, `testRejectStaysSameDay_`, `testMidnightRejectMove_` Run করো। শেষে `cleanupOrganizeTests_`।
+
+### প্রতিদিনের নিয়ম
+
+- নতুন ওয়েবসাইট অর্ডার → `Orders` + `Master` (+ এই মাসের ট্যাব)
+- Status `reject` লিখলে **আজকে** `Orders`-এই থাকবে (ভুলে Active করে দিতে পারবে)
+- রাত ১২টার পরও reject থাকলে → `Archive_Rejected` (ইতিহাস মুছে যায় না)
+- `PURCHASE_SENT` Notes মুছবে না — CAPI আগের মতো Entry Active-এ একবারই যাবে
+
+`setupSheetHeaders` এখন লাইভ হেডার স্ক্র্যাম্বল করবে না। Medium/Campaign লাগলে শুধু `appendOptionalUtmHeaders` Run করো — কলাম **শেষে** যোগ হয়, মাঝখানে নয়।
+
 
 
