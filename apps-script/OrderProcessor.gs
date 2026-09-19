@@ -4,18 +4,20 @@
  * Drop this entire file into a new Apps Script project bound to
  * the same Google Sheet that receives orders from the website.
  *
- * SETUP (see GUIDE.md → Apps Script):
+ * SETUP (see GUIDE.md → PART 8 + PART 11):
  *  1. Extensions → Apps Script → paste this code
- *  2. Set SHEET_NAME, ADMIN_TOKEN, DIGEST_EMAIL constants below
+ *  2. Project Settings → Script properties → ADMIN_TOKEN (long random secret)
+ *     or run setupAdminToken_("your-long-random-secret")
  *  3. Deploy → New deployment → Web App → Execute as: Me, Access: Anyone
  *  4. Copy the Web App URL into config.js → SHEET_URL
- *  5. For digest/expiry triggers: Triggers → Add → Time-driven
+ *  5. Optional: run installDailyDigestTrigger (9am Asia/Dhaka)
  *
  * ── FEATURES ──────────────────────────────────────────────────
  *  • Accepts POST from website → writes new order row          (existing)
  *  • C2: Duplicate detection (same Telegram or Email)
- *  • C1: GET ?action=activate&orderId=MM-XXXX&token=ADMIN_TOKEN
+ *  • C1: GET ?action=activate&orderId=MM-XXXX&token=<Script Properties>
  *        marks order Active + logs timestamp
+ *  • Public GET ?action=status&orderId=MM-XXXX (no token, no PII)
  *  • C3: Daily digest email to DIGEST_EMAIL
  *  • C4: Expiry reminder email (members expiring in ≤3 days)
  *  • CAPI: Status → Active (Entry) sends Purchase via CapiPurchase.gs
@@ -30,7 +32,9 @@
 
 /* ── CONFIG ───────────────────────────────────────────────── */
 const SHEET_NAME   = 'Orders';          // Tab name in Google Sheet
-const ADMIN_TOKEN  = 'CHANGE_ME_NOW';   // Replace with a long random string (e.g. from random.org)
+/* PLACEHOLDER ONLY — not a live secret. getAdminToken_() ignores this value.
+   Set Project Settings → Script properties → ADMIN_TOKEN, or run setupAdminToken_(). */
+const ADMIN_TOKEN  = 'CHANGE_ME_NOW';
 const DIGEST_EMAIL = 'methodmafia.hq@gmail.com';
 
 /* Column indices (0-based) — LIVE production layout (2026-09-19).
@@ -54,6 +58,124 @@ const COL = {
   MEDIUM     : -1,  // optional
   CAMPAIGN   : -1   // optional
 };
+
+/* ────────────────────────────────────────────────────────────
+   ADMIN_TOKEN — Script Properties only (fail closed)
+   ──────────────────────────────────────────────────────────── */
+function isUsableAdminToken_(token) {
+  var t = String(token == null ? '' : token).trim();
+  if (!t) return false;
+  if (t.toUpperCase() === 'CHANGE_ME_NOW') return false;
+  return true;
+}
+
+function resolveAdminToken_(scriptPropValue) {
+  var stored = String(scriptPropValue == null ? '' : scriptPropValue).trim();
+  if (!isUsableAdminToken_(stored)) return '';
+  return stored;
+}
+
+function getAdminToken_() {
+  var stored = '';
+  try {
+    stored = PropertiesService.getScriptProperties().getProperty('ADMIN_TOKEN');
+  } catch (err) {
+    stored = '';
+  }
+  return resolveAdminToken_(stored);
+}
+
+function adminTokenMatches_(provided, stored) {
+  if (!isUsableAdminToken_(stored)) return false;
+  return String(provided || '') === stored;
+}
+
+function setupAdminToken_(token) {
+  var value = String(arguments.length ? token : '').trim();
+  if (!isUsableAdminToken_(value)) {
+    throw new Error(
+      'ADMIN_TOKEN missing or placeholder. Set Project Settings → Script properties → ADMIN_TOKEN ' +
+      'to a long random string, or run setupAdminToken_("your-long-random-secret").'
+    );
+  }
+  PropertiesService.getScriptProperties().setProperty('ADMIN_TOKEN', value);
+  Logger.log('ADMIN_TOKEN stored in Script Properties. Do not paste it into GitHub or frontend JS.');
+}
+
+function classifyDoGetRequest_(params, storedToken) {
+  params = params || {};
+  var action = String(params.action || '').trim().toLowerCase();
+  var orderId = String(params.orderId || '').trim().toUpperCase();
+  if (action === 'status') {
+    return { kind: 'status', orderId: orderId };
+  }
+  if (!adminTokenMatches_(params.token, storedToken)) {
+    return { kind: 'unauthorized' };
+  }
+  if (action === 'activate' && orderId) return { kind: 'activate', orderId: orderId };
+  if (action === 'digest') return { kind: 'digest' };
+  if (action === 'expiry') return { kind: 'expiry' };
+  return { kind: 'help' };
+}
+
+function publicStatusSheetNames_() {
+  var orders = (typeof SHEET_NAME !== 'undefined') ? SHEET_NAME : 'Orders';
+  var master = (typeof TAB_MASTER !== 'undefined') ? TAB_MASTER : 'Master';
+  var archive = (typeof TAB_ARCHIVE_REJECTED !== 'undefined') ? TAB_ARCHIVE_REJECTED : 'Archive_Rejected';
+  return [orders, master, archive];
+}
+
+function buildPublicStatusPayload_(orderId, found, status, plan) {
+  return {
+    ok: true,
+    found: !!found,
+    orderId: String(orderId || '').toUpperCase(),
+    status: found ? String(status == null ? '' : status) : '',
+    plan: found ? String(plan == null ? '' : plan) : ''
+  };
+}
+
+function publicStatusHasOnlySafeKeys_(payload) {
+  var allowed = { ok: 1, found: 1, orderId: 1, status: 1, plan: 1 };
+  var keys = Object.keys(payload || {});
+  for (var i = 0; i < keys.length; i++) {
+    if (!allowed[keys[i]]) return false;
+  }
+  return true;
+}
+
+function handlePublicStatus_(orderId) {
+  var oid = String(orderId || '').toUpperCase();
+  if (!oid) return buildPublicStatusPayload_('', false, '', '');
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var names = publicStatusSheetNames_();
+  for (var i = 0; i < names.length; i++) {
+    var sheet = ss.getSheetByName(names[i]);
+    if (!sheet) continue;
+    if (typeof applyColMapFromSheet_ === 'function') {
+      try { applyColMapFromSheet_(sheet); } catch (mapErr) {
+        Logger.log('public status colmap ' + names[i] + ': ' + mapErr.message);
+      }
+    }
+    var row = findOrderRow(sheet, oid);
+    if (!row) continue;
+    var status = sheet.getRange(row, COL.STATUS + 1).getValue();
+    var plan = sheet.getRange(row, COL.PLAN + 1).getValue();
+    return buildPublicStatusPayload_(oid, true, status, plan);
+  }
+  return buildPublicStatusPayload_(oid, false, '', '');
+}
+
+function jsonResponse_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function buildActivateLink_(baseUrl, orderId, token) {
+  if (!baseUrl || !orderId || !isUsableAdminToken_(token)) return '';
+  return String(baseUrl) + '?action=activate&orderId=' +
+    encodeURIComponent(orderId) + '&token=' + encodeURIComponent(token);
+}
 
 /* ────────────────────────────────────────────────────────────
    doPost — receives order form submission from website
@@ -153,27 +275,43 @@ function fallbackLiveOrderRow_(data, now, isDupe) {
 }
 
 /* ────────────────────────────────────────────────────────────
-   doGet — admin actions via URL
-   Usage: GET ?action=activate&orderId=MM-2026-1234&token=ADMIN_TOKEN
-          GET ?action=confirm&orderId=MM-2026-1234&plan=Entry&token=ADMIN_TOKEN
+   doGet — public status (no token) + admin actions (Script Properties token)
+   Usage: GET ?action=status&orderId=MM-2026-1234
+          GET ?action=activate&orderId=MM-2026-1234&token=<Script Properties ADMIN_TOKEN>
    ──────────────────────────────────────────────────────────── */
 function doGet(e) {
-  const params  = e.parameter;
-  const token   = params.token || '';
-  const action  = params.action || '';
-  const orderId = (params.orderId || '').toUpperCase();
+  const params = (e && e.parameter) || {};
+  const stored = getAdminToken_();
+  const route  = classifyDoGetRequest_(params, stored);
 
-  /* Security: reject wrong token */
-  if (token !== ADMIN_TOKEN) {
+  /* Public order status for the website — BEFORE any admin token check.
+     JSON only: {ok, found, orderId, status, plan}. No email/Telegram/PII. */
+  if (route.kind === 'status') {
+    try {
+      return jsonResponse_(handlePublicStatus_(route.orderId));
+    } catch (err) {
+      Logger.log('public status: ' + err.message);
+      return jsonResponse_({
+        ok: false,
+        found: false,
+        orderId: String(route.orderId || '').toUpperCase(),
+        status: '',
+        plan: ''
+      });
+    }
+  }
+
+  if (route.kind === 'unauthorized') {
     return htmlResponse('<h2>❌ Unauthorized</h2><p>Wrong token.</p>');
   }
 
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME)
                 || SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
   applyColMapFromSheet_(sheet);
+  const orderId = route.orderId || '';
 
   /* ── C1: Mark order Active ── */
-  if (action === 'activate' && orderId) {
+  if (route.kind === 'activate' && orderId) {
     const row = findOrderRow(sheet, orderId);
     if (!row) {
       return htmlResponse('<h2>❌ Not Found</h2><p>Order ID <strong>' + orderId + '</strong> not found.</p>');
@@ -213,13 +351,13 @@ function doGet(e) {
   }
 
   /* ── Digest on demand ── */
-  if (action === 'digest') {
+  if (route.kind === 'digest') {
     sendDailyDigest();
     return htmlResponse('<h2>✅ Digest sent to ' + DIGEST_EMAIL + '</h2>');
   }
 
   /* ── Expiry check on demand ── */
-  if (action === 'expiry') {
+  if (route.kind === 'expiry') {
     sendExpiryReminders();
     return htmlResponse('<h2>✅ Expiry reminders sent</h2>');
   }
@@ -263,6 +401,25 @@ function checkDuplicate(sheet, telegram, email) {
    ──────────────────────────────────────────────────────────── */
 function dailyDigestTrigger() {
   sendDailyDigest();
+}
+
+/** Optional installer: 9:00 Asia/Dhaka daily. Safe to run more than once. */
+function installDailyDigestTrigger() {
+  var tz = (typeof ORGANIZE_TZ !== 'undefined') ? ORGANIZE_TZ : 'Asia/Dhaka';
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'dailyDigestTrigger') {
+      Logger.log('dailyDigestTrigger already installed');
+      return;
+    }
+  }
+  ScriptApp.newTrigger('dailyDigestTrigger')
+    .timeBased()
+    .everyDays(1)
+    .atHour(9)
+    .inTimezone(tz)
+    .create();
+  Logger.log('Installed dailyDigestTrigger at 09:00 ' + tz);
 }
 
 function sendDailyDigest() {
@@ -318,15 +475,22 @@ function sendDailyDigest() {
     });
     body += '</ul>';
 
-    /* C1: Include 1-click activation links */
-    const baseUrl = ScriptApp.getService().getUrl();
-    body += '<h3>1-Click Activate</h3>';
-    body += '<p>Click to mark an order Active and get the customer confirmation URL:</p><ul>';
-    pendingOrders.slice(0, 10).forEach(r => {
-      const url = baseUrl + '?action=activate&orderId=' + encodeURIComponent(r[COL.ORDER_ID]) + '&token=' + ADMIN_TOKEN;
-      body += '<li><a href="' + url + '">Activate ' + r[COL.ORDER_ID] + ' — ' + r[COL.NAME] + '</a></li>';
-    });
-    body += '</ul>';
+    /* C1: Include 1-click activation links (Script Properties token) */
+    const adminToken = getAdminToken_();
+    if (isUsableAdminToken_(adminToken)) {
+      const baseUrl = ScriptApp.getService().getUrl();
+      body += '<h3>1-Click Activate</h3>';
+      body += '<p>Click to mark an order Active and get the customer confirmation URL:</p><ul>';
+      pendingOrders.slice(0, 10).forEach(r => {
+        const url = buildActivateLink_(baseUrl, r[COL.ORDER_ID], adminToken);
+        if (url) {
+          body += '<li><a href="' + url + '">Activate ' + r[COL.ORDER_ID] + ' — ' + r[COL.NAME] + '</a></li>';
+        }
+      });
+      body += '</ul>';
+    } else {
+      body += '<p><em>Activate links omitted — set Script properties ADMIN_TOKEN (or run setupAdminToken_).</em></p>';
+    }
   }
 
   try {
@@ -452,4 +616,21 @@ function setupSheetHeaders() {
        .setFontWeight('bold');
 
   Logger.log('Headers set up on sheet: ' + SHEET_NAME);
+}
+
+if (typeof module === 'object' && module.exports) {
+  module.exports = {
+    SHEET_NAME: SHEET_NAME,
+    ADMIN_TOKEN: ADMIN_TOKEN,
+    DIGEST_EMAIL: DIGEST_EMAIL,
+    COL: COL,
+    isUsableAdminToken_: isUsableAdminToken_,
+    resolveAdminToken_: resolveAdminToken_,
+    adminTokenMatches_: adminTokenMatches_,
+    classifyDoGetRequest_: classifyDoGetRequest_,
+    publicStatusSheetNames_: publicStatusSheetNames_,
+    buildPublicStatusPayload_: buildPublicStatusPayload_,
+    publicStatusHasOnlySafeKeys_: publicStatusHasOnlySafeKeys_,
+    buildActivateLink_: buildActivateLink_
+  };
 }
