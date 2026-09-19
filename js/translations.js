@@ -189,6 +189,7 @@ en: {
 
   /* Toast */
   toastOk: "Order received! Redirecting to Telegram...",
+  toastSheetFail: "Could not save your order. Please try again or message @MMHQ_Support.",
   errFill: "Please fill in all fields.",
   errName: "Please enter a valid name (letters only).",
   errEmail: "Please enter a valid email address.",
@@ -396,6 +397,7 @@ bn: {
   ftRights: "সর্বস্বত্ব সংরক্ষিত।",
 
   toastOk: "অর্ডার পেয়েছি! টেলিগ্রামে নিয়ে যাচ্ছি...",
+  toastSheetFail: "অর্ডার সেভ করা যায়নি। আবার চেষ্টা করুন অথবা @MMHQ_Support-এ মেসেজ করুন।",
   errFill: "অনুগ্রহ করে সব ঘর পূরণ করুন।",
   errName: "সঠিক নাম লিখুন (শুধু অক্ষর)।",
   errEmail: "সঠিক ইমেইল ঠিকানা লিখুন।",
@@ -602,6 +604,7 @@ hi: {
   ftRights: "सर्वाधिकार सुरक्षित।",
 
   toastOk: "ऑर्डर मिल गया! टेलीग्राम पर ले जा रहे हैं...",
+  toastSheetFail: "ऑर्डर सेव नहीं हो सका। फिर कोशिश करें या @MMHQ_Support पर मैसेज करें।",
   errFill: "कृपया सभी फील्ड भरें।",
   errName: "कृपया सही नाम लिखें (केवल अक्षर)।",
   errEmail: "कृपया सही ईमेल पता लिखें।",

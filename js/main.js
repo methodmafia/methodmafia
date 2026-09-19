@@ -560,40 +560,65 @@ function submitOrder(){
     });
   }
 
-  fetch(CONFIG.SHEET_URL, {
-    method:'POST',
-    mode:'no-cors',
-    headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body: JSON.stringify(payload)
-  }).catch(()=>{});
+  /* Sheet write: CORS + readable JSON only. Opaque no-cors used to
+     look like success even when Apps Script / Sheet write failed. */
+  const sheetOpts = (typeof MMSheet !== 'undefined')
+    ? MMSheet.writeFetchOptions(payload)
+    : {
+        method:'POST',
+        mode:'cors',
+        redirect:'follow',
+        credentials:'omit',
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify(payload)
+      };
 
-  try{ localStorage.setItem('mm_last_order', orderId); }catch(e){}
+  fetch(CONFIG.SHEET_URL, sheetOpts)
+    .then(function(res){
+      return (typeof MMSheet !== 'undefined')
+        ? MMSheet.readResponse(res)
+        : res.text().then(function(text){
+            var json = null;
+            try{ json = JSON.parse(text); }catch(e){}
+            return { type: res.type, ok: !!res.ok, status: res.status, json: json, text: text };
+          });
+    })
+    .then(function(parsed){
+      const ok = (typeof MMSheet !== 'undefined')
+        ? MMSheet.isWriteSuccess(parsed)
+        : !!(parsed && parsed.ok && parsed.json && parsed.json.ok === true);
+      if(!ok) throw new Error('sheet_write_failed');
 
-  toast(t('toastOk'));
+      try{ localStorage.setItem('mm_last_order', orderId); }catch(e){}
+      toast(t('toastOk'));
 
-  const localLine = (LANG === 'bn')
-    ? '\nAmount (BDT): ' + (SELECTED_PLAN === 'entry' ? CONFIG.ENTRY_BDT : CONFIG.MONTHLY_BDT)
-    : '';
+      const localLine = (LANG === 'bn')
+        ? '\nAmount (BDT): ' + (SELECTED_PLAN === 'entry' ? CONFIG.ENTRY_BDT : CONFIG.MONTHLY_BDT)
+        : '';
 
-  const supportHandle = CONFIG.SUPPORT_HANDLE || '@MMHQ_Support';
-  const msg = encodeURIComponent(
-    '🧾 NEW ORDER\n' +
-    '━━━━━━━━━━━━━━\n' +
-    'Order ID : ' + orderId + '\n' +
-    'Name     : ' + payload.name + '\n' +
-    'Email    : ' + payload.email + '\n' +
-    'Telegram : ' + handle + '\n' +
-    '━━━━━━━━━━━━━━\n' +
-    'Plan     : ' + payload.plan + '\n' +
-    'Amount   : ' + payload.amount + localLine + '\n' +
-    'Payment  : ' + SELECTED_PAY + '\n' +
-    '━━━━━━━━━━━━━━\n\n' +
-    'I have placed my order. Please send me the payment details.'
-  );
-  setTimeout(()=>{
-    window.open(CONFIG.SUPPORT + '?text=' + msg, '_blank');
-    btn.disabled = false;
-  }, 900);
+      const msg = encodeURIComponent(
+        '🧾 NEW ORDER\n' +
+        '━━━━━━━━━━━━━━\n' +
+        'Order ID : ' + orderId + '\n' +
+        'Name     : ' + payload.name + '\n' +
+        'Email    : ' + payload.email + '\n' +
+        'Telegram : ' + handle + '\n' +
+        '━━━━━━━━━━━━━━\n' +
+        'Plan     : ' + payload.plan + '\n' +
+        'Amount   : ' + payload.amount + localLine + '\n' +
+        'Payment  : ' + SELECTED_PAY + '\n' +
+        '━━━━━━━━━━━━━━\n\n' +
+        'I have placed my order. Please send me the payment details.'
+      );
+      setTimeout(()=>{
+        window.open(CONFIG.SUPPORT + '?text=' + msg, '_blank');
+        btn.disabled = false;
+      }, 900);
+    })
+    .catch(function(){
+      toast(t('toastSheetFail'), true);
+      btn.disabled = false;
+    });
 }
 
 /* ─── স্ক্রল রিভিল + প্রোগ্রেস ─── */
@@ -714,6 +739,105 @@ function initExitPopup(){
   ov.addEventListener('click', e=>{ if(e.target === ov) closeExit(); });
 }
 
+/* ─── Order status — public Sheet lookup (no admin token) ─── */
+function statusTone(kind, status){
+  if(kind === 'found' && status === 'active') return 'var(--green)';
+  if(kind === 'found' && (status === 'reject' || status === 'expired')) return 'var(--red)';
+  if(kind === 'lookup_failed' || kind === 'not_found') return 'var(--red)';
+  return 'var(--gold)';
+}
+
+function statusLabel(status, raw){
+  if(status === 'active') return tp('ordLblActive') || 'Active';
+  if(status === 'pending') return tp('ordLblPending') || 'Pending';
+  if(status === 'verifying') return tp('ordLblVerifying') || 'Verifying';
+  if(status === 'expired') return tp('ordLblExpired') || 'Expired';
+  if(status === 'reject') return tp('ordLblReject') || 'Rejected';
+  return raw || tp('ordUnknownLbl') || 'Unknown';
+}
+
+function statusMessage(status){
+  if(status === 'active') return tp('ordActiveMsg');
+  if(status === 'pending') return tp('ordPendingMsg') || tp('ordFoundMsg');
+  if(status === 'verifying') return tp('ordVerifyingMsg');
+  if(status === 'expired') return tp('ordExpiredMsg');
+  if(status === 'reject') return tp('ordRejectMsg');
+  return tp('ordUnknownMsg') || tp('ordFoundMsg');
+}
+
+function renderOrderStatusHtml(result, typedId, opts){
+  opts = opts || {};
+  const rawId = (result && result.orderId) || typedId || '';
+  const id = (typeof MMSheet !== 'undefined' && MMSheet.escapeHtml)
+    ? MMSheet.escapeHtml(rawId)
+    : String(rawId).replace(/[<>&"'`]/g, '');
+  if(!result || result.kind === 'lookup_failed'){
+    if(opts.confirmedBackup){
+      return '<div class="next-steps-box">'+
+        '<div class="next-steps-title">'+tp('ordConfirmTitle')+'</div>'+
+        '<div class="next-step">'+tp('ordConfirmBackup')+' <strong>'+id+'</strong></div>'+
+        '<div class="next-steps-note">'+tp('ordConfirmNote')+'</div></div>';
+    }
+    return '<div class="info-box" style="border-left-color:var(--red)">'+
+      '<p>'+tp('ordLookupFail')+'</p>'+
+      '<p style="margin-top:8px">'+tp('ordLookupFail2')+'</p></div>';
+  }
+  if(result.kind === 'not_found'){
+    return '<div class="info-box" style="border-left-color:var(--red)">'+
+      '<p>'+tp('ordNotFound')+'</p>'+
+      '<p style="margin-top:8px">'+tp('ordNotFound2')+'</p></div>';
+  }
+  const tone = statusTone(result.kind, result.status);
+  const label = (typeof MMSheet !== 'undefined' && MMSheet.escapeHtml)
+    ? MMSheet.escapeHtml(statusLabel(result.status, result.statusRaw))
+    : statusLabel(result.status, result.statusRaw);
+  return '<div class="info-box" style="border-left-color:'+tone+'">'+
+    '<p><strong>'+tp('ordFound')+' '+id+'</strong></p>'+
+    '<p style="margin-top:8px">'+tp('ordStatus')+' <strong style="color:'+tone+'">'+label+'</strong></p>'+
+    '<p style="margin-top:8px">'+statusMessage(result.status)+'</p></div>';
+}
+
+function lookupOrderStatus(orderId){
+  if(typeof MMSheet === 'undefined' || !CONFIG.SHEET_URL){
+    return Promise.resolve({ kind: 'lookup_failed' });
+  }
+  const url = MMSheet.buildStatusLookupUrl(CONFIG.SHEET_URL, orderId);
+  if(!url) return Promise.resolve({ kind: 'lookup_failed' });
+  return fetch(url, MMSheet.statusFetchOptions())
+    .then(function(res){ return MMSheet.readResponse(res); })
+    .then(function(parsed){ return MMSheet.interpretStatusResult(parsed); })
+    .catch(function(){ return { kind: 'lookup_failed' }; });
+}
+
+function checkOrder(){
+  const inp = document.getElementById('iOrderId');
+  const box = document.getElementById('statusResult');
+  if(!inp || !box) return;
+  const v = inp.value.trim().toUpperCase();
+  if(!v){
+    box.innerHTML = '<div class="info-box" style="border-left-color:var(--red)"><p>'+tp('ordErr')+'</p></div>';
+    return;
+  }
+  box.innerHTML = '<div class="info-box"><p>'+(tp('ordChecking') || 'Checking…')+'</p></div>';
+  let confirmedBackup = false;
+  try{ confirmedBackup = new URLSearchParams(location.search).get('confirmed') === '1'; }catch(e){}
+  lookupOrderStatus(v).then(function(result){
+    box.innerHTML = renderOrderStatusHtml(result, v, { confirmedBackup: confirmedBackup });
+  });
+}
+
+function initOrderStatusPage(){
+  if(!document.getElementById('statusResult')) return;
+  try{
+    const p = new URLSearchParams(location.search);
+    const oid = p.get('orderId');
+    if(!oid) return;
+    const inp = document.getElementById('iOrderId');
+    if(inp) inp.value = oid;
+    checkOrder();
+  }catch(e){}
+}
+
 /* ─── Purchase backup on confirmed=1 — Entry only, value $30.
    Primary Purchase is Apps Script CAPI when Status → Active. ─── */
 function initPurchaseConfirm(){
@@ -761,5 +885,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
   initLiveActivity();
   initExitPopup();
   initPurchaseConfirm();
+  initOrderStatusPage();
   getUtmData();
 });

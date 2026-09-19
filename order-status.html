@@ -82,6 +82,7 @@
 <ul>
   <li data-p="ordSt1"></li><li data-p="ordSt2"></li>
   <li data-p="ordSt3"></li><li data-p="ordSt4"></li>
+  <li data-p="ordSt5"></li>
 </ul>
 
 <h3 data-p="ordH2">Lost Your Order ID?</h3>
@@ -94,53 +95,6 @@
 </p></div>
 </div>
 
-<script>
-function checkOrder(){
-  var v=document.getElementById('iOrderId').value.trim().toUpperCase();
-  var box=document.getElementById('statusResult');
-  if(!v){ box.innerHTML='<div class="info-box" style="border-left-color:var(--red)"><p>'+tp('ordErr')+'</p></div>'; return; }
-  var saved=''; try{ saved=(localStorage.getItem('mm_last_order')||'').toUpperCase(); }catch(e){}
-  if(v===saved){
-    box.innerHTML='<div class="info-box" style="border-left-color:var(--green)">'+
-      '<p><strong>'+tp('ordFound')+' '+v+'</strong></p>'+
-      '<p style="margin-top:8px">'+tp('ordStatus')+' <strong style="color:var(--green)">'+tp('ordSubmitted')+'</strong></p>'+
-      '<p style="margin-top:8px">'+tp('ordFoundMsg')+'</p></div>';
-  } else {
-    box.innerHTML='<div class="info-box"><p>'+tp('ordNF')+'</p>'+
-      '<p style="margin-top:8px">'+tp('ordNF2')+'</p></div>';
-  }
-}
-
-/* B2/B3: Auto-check URL params on load.
-   Swa sends the customer:
-   /order-status.html?orderId=MM-XXXX&confirmed=1&plan=Entry
-   When customer visits with confirmed=1, Purchase fires via initPurchaseConfirm() in main.js.
-   Also auto-populate the order ID field. */
-(function(){
-  try{
-    var p=new URLSearchParams(location.search);
-    var oid=p.get('orderId');
-    if(oid){
-      var inp=document.getElementById('iOrderId');
-      if(inp) inp.value=oid;
-      if(p.get('confirmed')==='1'){
-        /* show confirmed banner */
-        var res=document.getElementById('statusResult');
-        if(res){
-          setTimeout(function(){
-            res.innerHTML='<div class="next-steps-box">'+
-              '<div class="next-steps-title">🎉 Payment Confirmed!</div>'+
-              '<div class="next-step">Your payment for order <strong>'+oid+'</strong> has been verified.</div>'+
-              '<div class="next-step">Check Telegram — your <strong>private VIP invite link</strong> has been sent.</div>'+
-              '<div class="next-steps-note">Welcome to The Method Mafia. 1000+ methods are now unlocked.</div>'+
-              '</div>';
-          },300);
-        }
-      }
-    }
-  }catch(e){}
-})();
-</script>
 </div>
 
 <footer>
@@ -168,6 +122,7 @@ function checkOrder(){
 
 <script src="js/translations.js"></script>
 <script src="js/pages.js"></script>
+<script src="js/sheet-client.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

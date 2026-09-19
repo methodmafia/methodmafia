@@ -26,6 +26,7 @@ methodmafia/
 │   ├── translations.js ← মূল পেজের লেখা (৩ ভাষা)
 │   ├── pages.js        ← বাকি পেজের লেখা (৩ ভাষা)
 │   ├── main.js         ← সব কাজ করার কোড
+│   ├── sheet-client.js ← Sheet write/status JSON (CORS, no token)
 │   ├── tracking-lib.js ← click ID / UTM / event rules
 │   └── pixels.js       ← Meta + TikTok pixel (সব পেজে)
 │
@@ -512,6 +513,41 @@ const DIGEST_EMAIL = 'info@themethodmafia.com';  // digest email ঠিকান
 5. **Deploy** চাপো → URL কপি করো
 6. সেই URL → `config.js`-এ `SHEET_URL:` লাইনে বসাও
 
+### Web App / CORS (form + order-status)
+
+সাইট **কখনো** `mode: 'no-cors'` ব্যবহার করে না। ফর্ম শুধু তখনই success দেখায় যখন Web App readable JSON `{ok:true}` ফেরত দেয়। Opaque/HTML/CORS error = error UI।
+
+**Write (doPost):** `Content-Type: text/plain` (simple POST, preflight নেই)। `doPost` ইতিমধ্যে `{ok:true}` JSON দেয় — নতুন deployment-এ **Anyone** access লাগে।
+
+**Status (doGet, public, no token):** `order-status.html` কল করে:
+`SHEET_URL?action=status&orderId=MM-2026-XXXX`
+Frontend-এ `ADMIN_TOKEN` যাবে না। শুধু `{ok, found, orderId, status, plan}` — নাম/ইমেইল/টেলিগ্রাম/click ID নয়।
+
+`doGet`-এর **token check-এর আগে** এই ব্লক বসাও (অন্য Apps Script PR-এও কপি করা যাবে):
+
+```javascript
+  if (action === 'status' && orderId) {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME)
+                  || SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
+    const row = findOrderRow(sheet, orderId);
+    if (!row) {
+      return ContentService.createTextOutput(JSON.stringify({
+        ok: true, found: false, orderId: orderId
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    const status = sheet.getRange(row, COL.STATUS + 1).getValue();
+    const plan   = sheet.getRange(row, COL.PLAN + 1).getValue();
+    return ContentService.createTextOutput(JSON.stringify({
+      ok: true, found: true, orderId: orderId,
+      status: String(status || ''), plan: String(plan || '')
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+```
+
+`ContentService` JSON-এ Google সাধারণত `Access-Control-Allow-Origin` দেয়। `HtmlService` দিলে CORS ভাঙে — status-এ HTML ফেরত দিও না। বসানোর পর **Deploy → New deployment** (বা Manage → New version)।
+
+টেস্ট: `MM-2026-3007` = Active, `MM-2026-5114` = reject। Endpoint না থাকলে পেজ error দেখাবে (আগের মতো মিথ্যা Submitted নয়)।
+
 **ধাপ ৪: Sheet headers সেটআপ**
 Apps Script editor-এ `setupSheetHeaders` ফাংশন সিলেক্ট করে ▶ Run চাপো।
 Sheet-এ কলাম তৈরি হবে: Timestamp, Order ID, Name, Email, Telegram, Plan, Amount, Payment, **Source, Medium, Campaign**, Status, Expiry, Days Left, Notes, **FBclid, TTclid**
@@ -606,7 +642,7 @@ https://themethodmafia.com/order-status.html?orderId=MM-XXXX&confirmed=1&plan=En
 এই URL খুললে (optional backup, Entry only):
 - GA-তে `purchase` event fire হবে
 - FB Pixel-এ `Purchase` / TikTok-এ `CompletePayment` fire হবে (value $30, event_id = Order ID)
-- "Payment Confirmed" banner দেখাবে কাস্টমারকে
+- পেজ **Sheet থেকে** status দেখাবে (`action=status`). Endpoint না থাকলে মিথ্যা "Payment Confirmed"/"Submitted" দেখাবে না — next-steps + Telegram টেক্সট দেখাবে
 
 **মূল Purchase এখন Google Sheet Status → Active থেকে যায়।** কাস্টমার এই লিংক না খুললেও ads conversion count হবে (PART 9 সেটআপ করলে)। Monthly-এ Purchase যাবে না।
 
