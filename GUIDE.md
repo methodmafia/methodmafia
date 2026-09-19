@@ -32,7 +32,8 @@ methodmafia/
 ├── apps-script/
 │   ├── OrderProcessor.gs  ← Sheet orders + FBclid/TTclid
 │   ├── CapiPurchase.gs    ← Status→Active Purchase (CAPI)
-│   └── SheetOrganize.gs   ← Master / Archive_Rejected / YYYY-MM
+│   ├── SheetOrganize.gs   ← Master / Archive_Rejected / YYYY-MM
+│   └── Lifecycle.gs       ← Pending 24h nudge, Auto Expired, Renew +30
 │
 └── images/
     ├── logo.jpg
@@ -587,14 +588,14 @@ Digest `methodmafia.hq@gmail.com`-এ যাবে। Activate লিংক Scri
 
 ### C4: Expiry Reminder Setup
 
-আরেকটা Trigger:
+Paste `Lifecycle.gs` (PART 12) then use `installExpiryLifecycleTrigger` (10:00 Asia/Dhaka) **or** keep this trigger — after paste, `expiryReminderTrigger` runs the full Phase 2A job (customer 3/2/1 mail + Auto Expired + admin digest):
 ```
 Function:     expiryReminderTrigger
 Event source: Time-driven
 Type:         Day timer
 Time:         10am to 11am
 ```
-৩ দিন বা কম বাকি থাকলে প্রতিদিন reminder email আসবে।
+৩ দিন বা কম বাকি থাকলে প্রতিদিন reminder email আসবে (`methodmafia.hq@gmail.com`)। কাস্টমার ইমেইল PART 12।
 
 **ম্যানুয়ালি চালাতে:**
 ```
@@ -870,5 +871,79 @@ Short setup after PART 10. Master / Archive / midnight **বদলায় ন�
 3. **Digest** — `installDailyDigestTrigger` (সকাল ৯টা ঢাকা)। Activate লিংক Script Properties টোকেন দিয়েই কাজ করে। ইমেইল: `methodmafia.hq@gmail.com`।
 4. **Purchase** — `onOrderStatusEdit` trigger লাগবে (বা `installOnOrderStatusEditTrigger`)। Status কলাম I। শুধু Entry $30, `PURCHASE_SENT` একবার।
 
+---
 
+# ⏳ PART 12 — Pending nudge, Auto Expired, Renew +30 (Phase 2A)
+
+Short install after PART 11. Master / Archive / midnight **বদলায় না**। CAPI Entry **$30** / `PURCHASE_SENT` **বদলায় না**। No Telegram bot in this step.
+
+Paste a fourth Apps Script file: **+** → Script → name it `Lifecycle` → paste `apps-script/Lifecycle.gs`. Also replace `OrderProcessor.gs` + `SheetOrganize.gs` from this repo (Days Left formula uses live Expiry column **J**: `=IF(J2="","",J2-TODAY())`). Run `repairDaysLeftFormulas` once so existing K cells use J. Confirm ⚙️ Project Settings → Time zone is **Asia/Dhaka** (3/2/1 mail, Auto Expired, and +30 use the same Dhaka calendar as Master/month tabs). **Deploy → Manage deployments → New version** (same Web App URL).
+
+## English
+
+### 1) Pending 24h nudge (admin only)
+
+Editor: `installPendingNudgeTrigger` ▶ Run (11:00 Asia/Dhaka). Or ⏰ Triggers:
+
+```
+Function:     pendingNudgeTrigger
+Event source: Time-driven
+Type:         Day timer
+Time of day:  11am to 12pm
+```
+
+Pending rows older than 24 hours → one email to `methodmafia.hq@gmail.com` with the list + Activate links. Notes flag `PENDING_NUDGED` so it does not spam every day. On demand: `?action=pendingNudge&token=…`
+
+### 2) Auto Expired + customer 3/2/1 mail + admin digest
+
+If you already have `expiryReminderTrigger` at 10am, **paste is enough** — that function now runs the full job. Otherwise run `installExpiryLifecycleTrigger` (10:00 Asia/Dhaka) or add:
+
+```
+Function:     expiryLifecycleTrigger
+Event source: Time-driven
+Type:         Day timer
+Time of day:  10am to 11am
+```
+
+Each run:
+
+1. Emails the **customer Email** (not only the admin digest) 3 / 2 / 1 days before Expiry. Polite English. Notes markers `RENEW_MAIL_3`, `RENEW_MAIL_2`, `RENEW_MAIL_1` (one each).
+2. Active rows **past** Expiry → Status `Expired` (row stays; never deleted). Syncs Master / month tab. Re-applies Days Left on column **J**.
+3. Admin expiry digest still goes to `methodmafia.hq@gmail.com`.
+
+On demand: `?action=expiry&token=…` or `?action=autoExpire&token=…`
+
+### 3) Renew +30
+
+Active or Expired only. New Expiry = **max(today, current Expiry) + 30 days**. Status → `Active`. Syncs Master / `YYYY-MM`. Does **not** send ads Purchase.
+
+Editor: `renewOrder("MM-2026-3007")` ▶ Run.
+
+Admin URL (Script Properties `ADMIN_TOKEN`):
+
+```
+https://script.google.com/macros/.../exec?action=renew&orderId=MM-2026-XXXX&token=YOUR_TOKEN
+```
+
+### 4) Safe tests (TEST_ tabs only)
+
+```
+testPendingNudge_        → plans a 30h-old Pending TEST- row
+testAutoExpire_          → Active past Expiry → Expired on TEST_Orders + TEST_Master (row kept)
+testRenewPlus30_         → Expired TEST- row → Active, expiry today+30, no CAPI
+testCustomerRenewMail_   → Active +3 days plans RENEW_MAIL_3 (dry-run, no MailApp)
+cleanupLifecycleTests_   → deletes TEST_* tabs
+```
+
+## বাংলা
+
+**ধাপ ১:** Apps Script-এ নতুন ফাইল `Lifecycle` — `apps-script/Lifecycle.gs` পেস্ট। `OrderProcessor` + `SheetOrganize` আপডেট। `repairDaysLeftFormulas` একবার Run করো। **Deploy → New version**।
+
+**ধাপ ২:** `installPendingNudgeTrigger` Run (সকাল ১১টা ঢাকা)। ২৪ ঘণ্টার বেশি Pending → শুধু `methodmafia.hq@gmail.com`-এ লিস্ট + Activate লিংক। Notes: `PENDING_NUDGED`।
+
+**ধাপ ৩:** আগে `expiryReminderTrigger` থাকলে নতুন trigger লাগবে না। না থাকলে `installExpiryLifecycleTrigger` (সকাল ১০টা)। কাস্টমার ইমেইলে ৩/২/১ দিন আগে রিমাইন্ডার (`RENEW_MAIL_3` ইত্যাদি)। মেয়াদ পার হলে Status `Expired` (সারি মুছবে না, Master সিঙ্ক)।
+
+**ধাপ ৪:** Renew — `?action=renew&orderId=…&token=…` অথবা editor-এ `renewOrder("MM-…")`। আজ বা বর্তমান Expiry যেটা পরে, সেখান থেকে +৩০ দিন। Purchase যাবে না।
+
+Days Left: কলাম **K** সূত্র কলাম **J** (Expiry) দেখে — `=IF(J2="","",J2-TODAY())`।
 

@@ -219,7 +219,7 @@ test('sync month rows from Master for a given YYYY-MM (Dhaka)', () => {
 test('Days Left formula points at Expiry column J (live), not M', () => {
   const col = organize.buildColMapFromHeaders_(LIVE_HEADER_SNIPPET);
   const formula = organize.daysLeftFormula_(2, col);
-  assert.equal(formula, '=IF(J2="","",DATEDIF(TODAY(),J2,"D"))');
+  assert.equal(formula, '=IF(J2="","",J2-TODAY())');
 });
 
 test('setup refuses to overwrite existing live headers (no scramble)', () => {
@@ -284,6 +284,7 @@ test('Apps Script test function names exist for Swa/Developer', () => {
   assert.match(gs, /function testOrganizePendingMaster_\s*\(/);
   assert.match(gs, /function testRejectStaysSameDay_\s*\(/);
   assert.match(gs, /function testMidnightRejectMove_\s*\(/);
+  assert.match(gs, /function repairDaysLeftFormulas\s*\(/);
   assert.match(gs, /TEST_/);
   assert.match(gs, /Asia\/Dhaka/);
 });

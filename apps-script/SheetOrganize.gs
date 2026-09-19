@@ -138,7 +138,8 @@ function colLetter_(index0) {
 
 function daysLeftFormula_(row1, col) {
   var letter = colLetter_(col.EXPIRY);
-  return '=IF(' + letter + row1 + '="","",DATEDIF(TODAY(),' + letter + row1 + ',"D"))';
+  /* Live Expiry column (J on production). J-TODAY() works for past dates; DATEDIF does not. */
+  return '=IF(' + letter + row1 + '="","",' + letter + row1 + '-TODAY())';
 }
 
 function buildOrderRowValues_(headers, col, data, now, isDupe) {
@@ -370,6 +371,31 @@ function getOrCreateSheetWithHeaders_(ss, name, headers) {
 function applyDaysLeftFormulaOnSheet_(sheet, row1, col) {
   if (!col || col.DAYS_LEFT < 0 || col.EXPIRY < 0) return;
   sheet.getRange(row1, col.DAYS_LEFT + 1).setFormula(daysLeftFormula_(row1, col));
+}
+
+/** One-time: rewrite Days Left on Orders / Master / Archive / current month to live Expiry (J). */
+function repairDaysLeftFormulas() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var names = [
+    (typeof SHEET_NAME !== 'undefined') ? SHEET_NAME : 'Orders',
+    TAB_MASTER,
+    TAB_ARCHIVE_REJECTED,
+    dhakaMonthTab_(new Date())
+  ];
+  var repaired = [];
+  for (var i = 0; i < names.length; i++) {
+    var sh = ss.getSheetByName(names[i]);
+    if (!sh) continue;
+    var col = applyColMapFromSheet_(sh);
+    if (col.DAYS_LEFT < 0 || col.EXPIRY < 0) continue;
+    var last = sh.getLastRow();
+    for (var r = 2; r <= last; r++) {
+      applyDaysLeftFormulaOnSheet_(sh, r, col);
+    }
+    repaired.push(names[i] + ':' + Math.max(0, last - 1));
+  }
+  Logger.log('repairDaysLeftFormulas ' + repaired.join(', '));
+  return repaired;
 }
 
 function upsertRowByOrderIdOnSheet_(sheet, rowValues, col) {

@@ -68,6 +68,8 @@ test('classifyDoGetRequest_ rejects admin actions without a usable Script Proper
   assert.equal(op.classifyDoGetRequest_({ action: 'activate', orderId: 'MM-1', token: 'live-script-property-token' }, 'live-script-property-token').kind, 'activate');
   assert.equal(op.classifyDoGetRequest_({ action: 'digest', token: 'live-script-property-token' }, 'live-script-property-token').kind, 'digest');
   assert.equal(op.classifyDoGetRequest_({ action: 'expiry', token: 'live-script-property-token' }, 'live-script-property-token').kind, 'expiry');
+  assert.equal(op.classifyDoGetRequest_({ action: 'renew', orderId: 'MM-1', token: 'live-script-property-token' }, 'live-script-property-token').kind, 'renew');
+  assert.equal(op.classifyDoGetRequest_({ action: 'pendingNudge', token: 'x' }, '').kind, 'unauthorized');
 });
 
 test('public status payload is {ok, found, orderId, status, plan} with no PII keys', () => {

@@ -4,7 +4,7 @@
  * Drop this entire file into a new Apps Script project bound to
  * the same Google Sheet that receives orders from the website.
  *
- * SETUP (see GUIDE.md → PART 8 + PART 11):
+ * SETUP (see GUIDE.md → PART 8 + PART 11 + PART 12):
  *  1. Extensions → Apps Script → paste this code
  *  2. Project Settings → Script properties → ADMIN_TOKEN (long random secret)
  *     or run setupAdminToken_("your-long-random-secret")
@@ -20,6 +20,8 @@
  *  • Public GET ?action=status&orderId=MM-XXXX (no token, no PII)
  *  • C3: Daily digest email to DIGEST_EMAIL
  *  • C4: Expiry reminder email (members expiring in ≤3 days)
+ *  • Phase 2A: Pending 24h nudge, Auto Expired, renew +30, customer 3/2/1 mail
+ *    (Lifecycle.gs — pendingNudgeTrigger / expiryLifecycleTrigger / renewOrder)
  *  • CAPI: Status → Active (Entry) sends Purchase via CapiPurchase.gs
  *  • Organize: doPost also upserts Master + current YYYY-MM (SheetOrganize.gs)
  * ──────────────────────────────────────────────────────────────
@@ -115,6 +117,9 @@ function classifyDoGetRequest_(params, storedToken) {
   if (action === 'activate' && orderId) return { kind: 'activate', orderId: orderId };
   if (action === 'digest') return { kind: 'digest' };
   if (action === 'expiry') return { kind: 'expiry' };
+  if (action === 'renew' && orderId) return { kind: 'renew', orderId: orderId };
+  if (action === 'pendingnudge' || action === 'pending_nudge') return { kind: 'pendingNudge' };
+  if (action === 'autoexpire' || action === 'auto_expire') return { kind: 'autoExpire' };
   return { kind: 'help' };
 }
 
@@ -221,7 +226,7 @@ function doPost(e) {
     } else if (col.DAYS_LEFT >= 0 && col.EXPIRY >= 0) {
       var expLetter = String.fromCharCode(65 + col.EXPIRY);
       sheet.getRange(newRowNum, col.DAYS_LEFT + 1)
-           .setFormula('=IF(' + expLetter + newRowNum + '="","",DATEDIF(TODAY(),' + expLetter + newRowNum + ',"D"))');
+           .setFormula('=IF(' + expLetter + newRowNum + '="","",' + expLetter + newRowNum + '-TODAY())');
     }
 
     var organizeOk = true;
@@ -356,13 +361,67 @@ function doGet(e) {
     return htmlResponse('<h2>✅ Digest sent to ' + DIGEST_EMAIL + '</h2>');
   }
 
-  /* ── Expiry check on demand ── */
+  /* ── Expiry check on demand (customer 3/2/1 + auto-expire + admin digest) ── */
   if (route.kind === 'expiry') {
-    sendExpiryReminders();
-    return htmlResponse('<h2>✅ Expiry reminders sent</h2>');
+    if (typeof expiryLifecycleTrigger === 'function') {
+      expiryLifecycleTrigger();
+    } else {
+      sendExpiryReminders();
+    }
+    return htmlResponse('<h2>✅ Expiry lifecycle ran (customer mail + auto-expire + admin digest)</h2>');
   }
 
-  return htmlResponse('<h2>Method Mafia Admin</h2><p>Available actions: activate, digest, expiry</p>');
+  /* ── Renew +30 (Active/Expired only). Does NOT send CAPI Purchase. ── */
+  if (route.kind === 'renew' && orderId) {
+    if (typeof renewOrder !== 'function') {
+      return htmlResponse('<h2>❌ Lifecycle.gs missing</h2><p>Paste <code>apps-script/Lifecycle.gs</code> then Deploy → New version.</p>');
+    }
+    var renewed = renewOrder(orderId);
+    if (!renewed.ok) {
+      if (renewed.reason === 'not-found') {
+        return htmlResponse('<h2>❌ Not Found</h2><p>Order ID <strong>' + orderId + '</strong> not found.</p>');
+      }
+      return htmlResponse(
+        '<h2>❌ Cannot renew</h2><p>Order <strong>' + orderId +
+        '</strong> must be Active or Expired (reason: ' + (renewed.reason || 'not-renewable') + ').</p>'
+      );
+    }
+    return htmlResponse(
+      '<h2>✅ Renewed +30</h2>' +
+      '<p>Order <strong>' + orderId + '</strong> is <strong>Active</strong> until <strong>' +
+      renewed.newExpiry + '</strong>.</p>' +
+      '<p style="color:#555;font-size:13px">No ads Purchase was sent (renew is not a new Entry $30).</p>'
+    );
+  }
+
+  if (route.kind === 'pendingNudge') {
+    if (typeof runPendingNudgeJob_ !== 'function') {
+      return htmlResponse('<h2>❌ Lifecycle.gs missing</h2>');
+    }
+    var nudge = runPendingNudgeJob_({});
+    var ids = (nudge.nudged || []).join(', ');
+    if (!nudge.nudged || !nudge.nudged.length) {
+      return htmlResponse('<h2>Pending 24h nudge</h2><p>No Pending rows older than 24 hours.</p>');
+    }
+    if (!nudge.emailed) {
+      return htmlResponse(
+        '<h2>⚠️ Pending nudge email failed</h2>' +
+        '<p>Would have nudged: <strong>' + ids + '</strong>.</p>' +
+        '<p>Notes were <em>not</em> stamped with PENDING_NUDGED. Check MailApp quota / authorization.</p>'
+      );
+    }
+    return htmlResponse('<h2>✅ Pending 24h nudge</h2><p>Emailed ' + DIGEST_EMAIL + '. Nudged: ' + ids + '</p>');
+  }
+
+  if (route.kind === 'autoExpire') {
+    if (typeof autoExpireActiveOrders !== 'function') {
+      return htmlResponse('<h2>❌ Lifecycle.gs missing</h2>');
+    }
+    var expired = autoExpireActiveOrders();
+    return htmlResponse('<h2>✅ Auto Expired</h2><p>Expired: ' + (expired.expired || []).join(', ') + '</p>');
+  }
+
+  return htmlResponse('<h2>Method Mafia Admin</h2><p>Available actions: activate, digest, expiry, renew, pendingNudge, autoExpire</p>');
 }
 
 /* ────────────────────────────────────────────────────────────
@@ -505,6 +564,10 @@ function sendDailyDigest() {
    Set up a time-driven trigger: Triggers → expiryReminderTrigger → Time-driven → Day timer → 10am
    ──────────────────────────────────────────────────────────── */
 function expiryReminderTrigger() {
+  if (typeof expiryLifecycleTrigger === 'function') {
+    expiryLifecycleTrigger();
+    return;
+  }
   sendExpiryReminders();
 }
 
