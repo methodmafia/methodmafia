@@ -654,10 +654,11 @@ Ads শুধু **Entry** টার্গেট করে। Purchase value **�
 
 Google Sheet → **Extensions** → **Apps Script**
 
-- Keep `OrderProcessor.gs` (replace with the repo file — it now has FBclid / TTclid columns)
+- Keep `OrderProcessor.gs` (replace with the repo file — live header order + FBclid / TTclid)
 - **+** → Script → name it `CapiPurchase` → paste `apps-script/CapiPurchase.gs`
+- **+** → Script → name it `SheetOrganize` → paste `apps-script/SheetOrganize.gs` (required with the new OrderProcessor)
 
-Save (Ctrl+S).
+Save (Ctrl+S). If you already have a Web App URL, also **Deploy → Manage deployments → Edit → New version** so `doPost` picks up the column fix.
 
 ### 2) Script Properties (tokens — never put tokens in the code)
 
@@ -747,15 +748,20 @@ Backup already taken (2026-09-19):
 
 ## English — install (Developer + Swa)
 
-### 1) Paste the new Apps Script files
+### 1) Paste all three Apps Script files, then ship a **new Web App version**
 
 Google Sheet → **Extensions** → **Apps Script**
 
 - Replace `OrderProcessor.gs` with repo `apps-script/OrderProcessor.gs` (keep your real `ADMIN_TOKEN`)
-- Keep `CapiPurchase.gs` — replace with repo file (CAPI unchanged: Entry + Active → Purchase $30, `PURCHASE_SENT` dedupe)
-- **+** → Script → name it `SheetOrganize` → paste `apps-script/SheetOrganize.gs`
+- Replace `CapiPurchase.gs` with repo `apps-script/CapiPurchase.gs` (CAPI unchanged: Entry + Active → Purchase $30, `PURCHASE_SENT` dedupe)
+- **+** → Script → name it `SheetOrganize` → paste `apps-script/SheetOrganize.gs` **before** using the new OrderProcessor
 
 Save (Ctrl+S). **Do not change column order on the live sheet.**
+
+**Deploy → Manage deployments → pencil (Edit) → Version: New version → Deploy.**  
+Keep the same Web App URL (`config.js` → `SHEET_URL`). Triggers use Head automatically; **website `doPost` does not** until you make a new version.
+
+If an experimental `Master` / `Archive_Rejected` tab already exists with different headers, rename or delete it first. Setup will refuse to copy into a mismatched tab (no scramble).
 
 ### 2) Project timezone = Asia/Dhaka
 
@@ -780,7 +786,9 @@ Time of day:    Midnight to 1am
 
 Or run `installMidnightOrganizeTrigger` once from the editor (same job, timezone Asia/Dhaka).
 
-After 00:00 Asia/Dhaka: any row still `reject` / `Reject` / `rejected` on `Orders` is **moved** (not destroyed) to `Archive_Rejected`, and `Master` status is updated.
+**Do not ▶ Run `midnightOrganizeTrigger` on the live `Orders` tab in daytime.** The function refuses unless the Asia/Dhaka hour is 00:00 (test tabs `TEST_*` are exempt). A reject typed at 00:30 may still be archived in the same 00:00–01:00 window — flip back to Active before the job runs, or restore from `Archive_Rejected`.
+
+After 00:00 Asia/Dhaka: the job first copies current `Orders` into `Master`, then any row still `reject` / `Reject` / `rejected` is **moved** (not destroyed) to `Archive_Rejected`. Status is re-read immediately before delete so a same-minute flip to Active is kept.
 
 ### 5) Safe tests (TEST_ tabs only — will not delete real orders)
 
@@ -797,13 +805,13 @@ cleanupOrganizeTests_        → deletes TEST_* tabs
 
 ## বাংলা — Swa একবারের সেটআপ
 
-**ধাপ ১:** Sheet → Extensions → Apps Script। তিনটা ফাইল পেস্ট করো: `OrderProcessor.gs`, `CapiPurchase.gs`, নতুন `SheetOrganize.gs`। `ADMIN_TOKEN` আগেরটাই রাখো। কলাম এদিক-ওদিক কোরো না।
+**ধাপ ১:** Sheet → Extensions → Apps Script। তিনটা ফাইল পেস্ট করো: `OrderProcessor.gs`, `CapiPurchase.gs`, নতুন `SheetOrganize.gs`। `ADMIN_TOKEN` আগেরটাই রাখো। কলাম এদিক-ওদিক কোরো না। তারপর **Deploy → Manage deployments → New version** (আগের Web App URL রাখো) — নাহলে ওয়েবসাইটের নতুন অর্ডার পুরনো `doPost` চালাবে।
 
 **ধাপ ২:** ⚙️ Project Settings → Time zone: **Dhaka**।
 
-**ধাপ ৩:** Function `setupOrganizeSheets` ▶ Run। `Master`, `Archive_Rejected`, আর এই মাসের `YYYY-MM` ট্যাব তৈরি হবে। `Orders`-এর সারি মুছবে না।
+**ধাপ ৩:** Function `setupOrganizeSheets` ▶ Run। `Master`, `Archive_Rejected`, আর এই মাসের `YYYY-MM` ট্যাব তৈরি হবে। `Orders`-এর সারি মুছবে না। আগে থেকে ভুল-হেডার `Master` থাকলে আগে rename/delete করো।
 
-**ধাপ ৪:** ⏰ Triggers → `midnightOrganizeTrigger` → Time-driven → Day timer → **Midnight to 1am**। Authorize দাও।
+**ধাপ ৪:** ⏰ Triggers → `midnightOrganizeTrigger` → Time-driven → Day timer → **Midnight to 1am**। Authorize দাও। দিনের বেলা live `Orders`-এ এই ফাংশন Run কোরো না।
 
 **ধাপ ৫ (Developer):** `testOrganizePendingMaster_`, `testRejectStaysSameDay_`, `testMidnightRejectMove_` Run করো। শেষে `cleanupOrganizeTests_`।
 

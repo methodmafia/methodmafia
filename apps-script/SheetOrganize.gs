@@ -112,7 +112,8 @@ function dhakaParts_(date) {
   return {
     y: shifted.getUTCFullYear(),
     m: shifted.getUTCMonth() + 1,
-    d: shifted.getUTCDate()
+    d: shifted.getUTCDate(),
+    h: shifted.getUTCHours()
   };
 }
 
@@ -213,6 +214,24 @@ function upsertRowsByOrderId_(rows, incomingRow, col) {
   }
   copy.push(incomingRow.slice());
   return { rows: copy, action: 'append', index: copy.length - 1 };
+}
+
+function dhakaHour_(date) {
+  return dhakaParts_(date).h;
+}
+
+function isOrganizeTestSheetName_(name) {
+  return String(name || '').indexOf(ORGANIZE_TEST_PREFIX) === 0;
+}
+
+function reconcileOrdersIntoMaster_(orders, master, col) {
+  var next = [];
+  var i;
+  for (i = 0; i < master.length; i++) next.push(master[i].slice());
+  for (i = 1; i < orders.length; i++) {
+    next = upsertRowsByOrderId_(next, orders[i], col).rows;
+  }
+  return next;
 }
 
 function planMidnightRejectMoves_(orders, col) {
@@ -325,7 +344,7 @@ function sheetValues_(sheet) {
 function getOrCreateSheetWithHeaders_(ss, name, headers) {
   var sh = ss.getSheetByName(name);
   if (!sh) {
-    sh = ss.insertSheet(name);
+    sh = ss.insertSheet(name, ss.getNumSheets());
     sh.getRange(1, 1, 1, headers.length).setValues([headers]);
     sh.setFrozenRows(1);
     sh.getRange(1, 1, 1, headers.length)
@@ -337,6 +356,15 @@ function getOrCreateSheetWithHeaders_(ss, name, headers) {
   if (sh.getLastRow() === 0) {
     sh.getRange(1, 1, 1, headers.length).setValues([headers]);
     sh.setFrozenRows(1);
+    return sh;
+  }
+  var existing = readHeaders_(sh);
+  var decision = planHeaderWrite_(existing, headers, sh.getLastRow() > 1);
+  if (decision.reason === 'refuse-scramble') {
+    throw new Error(
+      'Tab "' + name + '" headers do not match Orders. Rename or delete that tab, then re-run. Found: ' +
+      existing.join(',')
+    );
   }
   return sh;
 }
@@ -352,7 +380,7 @@ function upsertRowByOrderIdOnSheet_(sheet, rowValues, col) {
   var padded = [];
   for (var i = 0; i < width; i++) padded.push(i < rowValues.length ? rowValues[i] : '');
   var orderId = String(rowValues[col.ORDER_ID] || '').toUpperCase();
-  var existing = orderId && typeof findOrderRow === 'function' ? findOrderRow(sheet, orderId) : null;
+  var existing = orderId && typeof findOrderRow === 'function' ? findOrderRow(sheet, orderId, col) : null;
   if (existing) {
     var oldNotes = (col.NOTES >= 0) ? sheet.getRange(existing, col.NOTES + 1).getValue() : '';
     if (col.NOTES >= 0) {
@@ -425,7 +453,7 @@ function setupOrganizeSheets() {
 }
 
 function midnightOrganizeTrigger() {
-  runMidnightOrganize_({ dryRun: false });
+  runMidnightOrganize_({ dryRun: false, requireDhakaMidnightWindow: true });
 }
 
 function runMidnightOrganize_(opts) {
@@ -438,8 +466,12 @@ function runMidnightOrganize_(opts) {
   if (!orders) throw new Error('Missing sheet ' + ordersName);
   var headers = readHeaders_(orders);
   var col = applyColMapFromSheet_(orders);
-  var master = getOrCreateSheetWithHeaders_(ss, masterName, headers);
-  var archive = getOrCreateSheetWithHeaders_(ss, archiveName, headers);
+  var testMode = isOrganizeTestSheetName_(ordersName);
+  var now = new Date();
+  if (opts.requireDhakaMidnightWindow && !testMode && !opts.force && dhakaHour_(now) !== 0) {
+    Logger.log('midnightOrganize skipped: not Asia/Dhaka 00:00 hour. Do not Run this on live Orders in daytime.');
+    return { moved: [], skipped: 'not-midnight-window' };
+  }
 
   if (opts.dryRun) {
     var planned = planMidnightRejectMoves_(sheetValues_(orders), col);
@@ -447,14 +479,25 @@ function runMidnightOrganize_(opts) {
     return { moved: planned.map(function(p) { return p.orderId; }), dryRun: true };
   }
 
+  var master = getOrCreateSheetWithHeaders_(ss, masterName, headers);
+  var archive = getOrCreateSheetWithHeaders_(ss, archiveName, headers);
+
+  var orderRows = sheetValues_(orders);
+  for (var h = 1; h < orderRows.length; h++) {
+    upsertRowByOrderIdOnSheet_(master, orderRows[h], col);
+  }
+
   var snapshot = sheetValues_(orders);
   var moves = planMidnightRejectMoves_(snapshot, col);
   moves.sort(function(a, b) { return b.rowIndex0 - a.rowIndex0; });
+  var moved = [];
   for (var i = 0; i < moves.length; i++) {
     var rowValues = orders.getRange(moves[i].rowIndex0 + 1, 1, 1, headers.length).getValues()[0];
+    if (!isRejectStatus_(rowValues[col.STATUS])) continue;
     upsertRowByOrderIdOnSheet_(archive, rowValues, col);
     upsertRowByOrderIdOnSheet_(master, rowValues, col);
     orders.deleteRow(moves[i].rowIndex0 + 1);
+    moved.push(String(rowValues[col.ORDER_ID] || moves[i].orderId));
   }
 
   var monthName = opts.monthName || dhakaMonthTab_(new Date());
@@ -465,8 +508,8 @@ function runMidnightOrganize_(opts) {
   for (var j = 0; j < monthRows.length; j++) {
     upsertRowByOrderIdOnSheet_(monthSheet, monthRows[j], col);
   }
-  Logger.log('midnightOrganize moved ' + moves.length + ' reject(s); synced ' + monthTabName);
-  return { moved: moves.map(function(m) { return m.orderId; }) };
+  Logger.log('midnightOrganize moved ' + moved.length + ' reject(s); synced ' + monthTabName);
+  return { moved: moved };
 }
 
 /**
@@ -483,8 +526,20 @@ function appendOptionalUtmHeaders() {
     Logger.log('Medium/Campaign already present');
     return;
   }
-  orders.getRange(1, 1, 1, next.length).setValues([next]);
-  Logger.log('Appended optional headers at far right: ' + next.slice(headers.length).join(','));
+  var added = next.slice(headers.length).join(',');
+  var names = [orders.getName(), TAB_MASTER, TAB_ARCHIVE_REJECTED, dhakaMonthTab_(new Date())];
+  for (var i = 0; i < names.length; i++) {
+    var sh = ss.getSheetByName(names[i]);
+    if (!sh) continue;
+    var cur = readHeaders_(sh);
+    if (headersEqual_(cur, next)) continue;
+    if (!headersEqual_(cur, headers)) {
+      Logger.log('skip ' + names[i] + ' (headers differ from Orders)');
+      continue;
+    }
+    sh.getRange(1, 1, 1, next.length).setValues([next]);
+  }
+  Logger.log('Appended optional headers at far right: ' + added);
 }
 
 function installMidnightOrganizeTrigger() {
@@ -680,6 +735,8 @@ if (typeof module === 'object' && module.exports) {
     upsertRowsByOrderId_: upsertRowsByOrderId_,
     planMidnightRejectMoves_: planMidnightRejectMoves_,
     applyMidnightRejectMoves_: applyMidnightRejectMoves_,
+    reconcileOrdersIntoMaster_: reconcileOrdersIntoMaster_,
+    dhakaHour_: dhakaHour_,
     collectMonthRows_: collectMonthRows_,
     planHeaderWrite_: planHeaderWrite_,
     planAppendOptionalHeaders_: planAppendOptionalHeaders_,

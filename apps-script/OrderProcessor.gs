@@ -64,36 +64,92 @@ function doPost(e) {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME)
                   || SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
 
-    var headers = readHeaders_(sheet);
-    var headerDecision = planHeaderWrite_(headers, LIVE_HEADERS, sheet.getLastRow() > 1);
-    if (headerDecision.write) {
-      sheet.getRange(1, 1, 1, LIVE_HEADERS.length).setValues([LIVE_HEADERS]);
-      sheet.setFrozenRows(1);
-      headers = LIVE_HEADERS.slice();
+    var headers;
+    var col;
+    if (typeof readHeaders_ === 'function' && typeof LIVE_HEADERS !== 'undefined') {
+      headers = readHeaders_(sheet);
+      var headerDecision = planHeaderWrite_(headers, LIVE_HEADERS, sheet.getLastRow() > 1);
+      if (headerDecision.write) {
+        sheet.getRange(1, 1, 1, LIVE_HEADERS.length).setValues([LIVE_HEADERS]);
+        sheet.setFrozenRows(1);
+        headers = LIVE_HEADERS.slice();
+      }
+      col = applyColMapFromSheet_(sheet);
+    } else {
+      headers = [
+        'Timestamp','Order ID','Name','Email','Telegram',
+        'Plan','Amount','Source','Status','Expiry','Days Left',
+        'Payment','Notes','FBclid','TTclid'
+      ];
+      col = COL;
     }
-    const col = applyColMapFromSheet_(sheet);
 
     /* C2: Duplicate detection (Orders + Master so archived rejects still flag) */
     const isDupe = checkDuplicate(sheet, data.telegram, data.email);
 
     const now = new Date();
-    const row = buildOrderRowValues_(headers, col, data, now, isDupe);
+    const row = (typeof buildOrderRowValues_ === 'function')
+      ? buildOrderRowValues_(headers, col, data, now, isDupe)
+      : fallbackLiveOrderRow_(data, now, isDupe);
 
     sheet.appendRow(row);
     const newRowNum = sheet.getLastRow();
-    applyDaysLeftFormulaOnSheet_(sheet, newRowNum, col);
+    if (typeof applyDaysLeftFormulaOnSheet_ === 'function') {
+      applyDaysLeftFormulaOnSheet_(sheet, newRowNum, col);
+    } else if (col.DAYS_LEFT >= 0 && col.EXPIRY >= 0) {
+      var expLetter = String.fromCharCode(65 + col.EXPIRY);
+      sheet.getRange(newRowNum, col.DAYS_LEFT + 1)
+           .setFormula('=IF(' + expLetter + newRowNum + '="","",DATEDIF(TODAY(),' + expLetter + newRowNum + ',"D"))');
+    }
 
-    /* Master + current YYYY-MM. CAPI still only fires on Active/Entry. */
-    try { upsertNewOrderToOrganizeTabs_(sheet, newRowNum); } catch (orgErr) {
+    var organizeOk = true;
+    var organizeError = '';
+    try {
+      if (typeof upsertNewOrderToOrganizeTabs_ === 'function') {
+        upsertNewOrderToOrganizeTabs_(sheet, newRowNum);
+      } else {
+        organizeOk = false;
+        organizeError = 'SheetOrganize.gs missing';
+      }
+    } catch (orgErr) {
+      organizeOk = false;
+      organizeError = orgErr.message;
       Logger.log('doPost organize: ' + orgErr.message);
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ok: true, dupe: isDupe}))
-                         .setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({
+      ok: true,
+      dupe: isDupe,
+      organize: organizeOk,
+      organizeError: organizeError || undefined
+    })).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ok: false, error: err.message}))
                          .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+function fallbackLiveOrderRow_(data, now, isDupe) {
+  data = data || {};
+  now = now || new Date();
+  var expiry = new Date(now.getTime() + 30 * 24 * 3600 * 1000);
+  return [
+    now.toISOString(),
+    data.orderId || '',
+    data.name || '',
+    data.email || '',
+    data.telegram || '',
+    data.plan || '',
+    data.amount || '',
+    data.source || 'direct',
+    'Pending',
+    expiry.toISOString().split('T')[0],
+    '',
+    data.payment || '',
+    isDupe ? '⚠️ DUPLICATE' : '',
+    data.fbclid || '',
+    data.ttclid || ''
+  ];
 }
 
 /* ────────────────────────────────────────────────────────────
@@ -185,7 +241,20 @@ function checkDuplicate(sheet, telegram, email) {
     Logger.log('checkDuplicate Master: ' + err.message);
   }
   const col = (typeof applyColMapFromSheet_ === 'function') ? applyColMapFromSheet_(sheet) : COL;
-  return checkDuplicateInTables_(tables, col, telegram, email);
+  if (typeof checkDuplicateInTables_ === 'function') {
+    return checkDuplicateInTables_(tables, col, telegram, email);
+  }
+  const tgLower = String(telegram || '').toLowerCase().replace(/^@/, '');
+  const emlLower = String(email || '').toLowerCase();
+  for (let t = 0; t < tables.length; t++) {
+    const data = tables[t] || [];
+    for (let i = 1; i < data.length; i++) {
+      const rowTg = String(data[i][col.TELEGRAM] || '').toLowerCase().replace(/^@/, '');
+      const rowEml = String(data[i][col.EMAIL] || '').toLowerCase();
+      if ((tgLower && rowTg === tgLower) || (emlLower && rowEml === emlLower)) return true;
+    }
+  }
+  return false;
 }
 
 /* ────────────────────────────────────────────────────────────
@@ -333,11 +402,12 @@ function sendExpiryReminders() {
 /* ────────────────────────────────────────────────────────────
    Helpers
    ──────────────────────────────────────────────────────────── */
-function findOrderRow(sheet, orderId) {
+function findOrderRow(sheet, orderId, col) {
+  col = col || COL;
   const want = String(orderId || '').toUpperCase();
   const data = sheet.getDataRange().getValues();
   for (let i = 1; i < data.length; i++) {
-    if ((data[i][COL.ORDER_ID] || '').toString().toUpperCase() === want) return i + 1;
+    if ((data[i][col.ORDER_ID] || '').toString().toUpperCase() === want) return i + 1;
   }
   return null;
 }

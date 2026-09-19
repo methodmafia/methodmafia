@@ -251,6 +251,29 @@ test('setup copies Orders into Master without deleting Orders rows', () => {
   assert.equal(out.master[2][col.ORDER_ID], 'MM-2026-5114');
 });
 
+test('midnight heal copies Orders into Master before archiving rejects', () => {
+  const col = organize.buildColMapFromHeaders_(LIVE_HEADER_SNIPPET);
+  const pending = [
+    '2026-09-19T08:00:00.000Z', 'MM-2026-9999', 'New', 'new@example.com',
+    '@new_user', 'Entry', '$30', 'direct', 'Pending', '2026-10-19', '', 'Other',
+    '', '', ''
+  ];
+  const orders = [LIVE_HEADER_SNIPPET, FELIX_ROW.slice(), pending];
+  const master = [LIVE_HEADER_SNIPPET];
+  const healed = organize.reconcileOrdersIntoMaster_(orders, master, col);
+  assert.equal(healed.length, 3);
+  assert.equal(healed[1][col.ORDER_ID], 'MM-2026-3007');
+  assert.equal(healed[2][col.STATUS], 'Pending');
+});
+
+test('fallback live row (no SheetOrganize) still uses Source then Status then Payment', () => {
+  const fs = require('fs');
+  const gs = fs.readFileSync(path.join(__dirname, '..', 'apps-script', 'OrderProcessor.gs'), 'utf8');
+  assert.match(gs, /function fallbackLiveOrderRow_/);
+  assert.match(gs, /data\.source \|\| 'direct'/);
+  assert.match(gs, /organize: organizeOk/);
+});
+
 test('Apps Script test function names exist for Swa/Developer', () => {
   const gs = fs.readFileSync(path.join(__dirname, '..', 'apps-script', 'SheetOrganize.gs'), 'utf8');
   assert.match(gs, /function setupOrganizeSheets\s*\(/);

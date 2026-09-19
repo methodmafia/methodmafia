@@ -226,7 +226,13 @@ function onOrderStatusEdit(e) {
     } catch (err) {
       Logger.log('onOrderStatusEdit row ' + r + ': ' + err.message);
     }
-    /* Reject stays on Orders the same calendar day — midnight job archives. */
+    /* Reject stays on Orders until the Dhaka midnight job — never move here. */
+    if (typeof planImmediateStatusChange_ === 'function') {
+      var stay = planImmediateStatusChange_(sheet.getRange(r, COL.STATUS + 1).getValue());
+      if (stay.removeFromOrders) {
+        Logger.log('onOrderStatusEdit unexpected remove plan for row ' + r);
+      }
+    }
     try {
       if (typeof syncOrderRowToOrganizeTabs_ === 'function') {
         syncOrderRowToOrganizeTabs_(sheet, r);
