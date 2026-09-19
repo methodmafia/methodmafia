@@ -877,7 +877,7 @@ Short setup after PART 10. Master / Archive / midnight **বদলায় ন�
 
 Short install after PART 11. Master / Archive / midnight **বদলায় না**। CAPI Entry **$30** / `PURCHASE_SENT` **বদলায় না**। No Telegram bot in this step.
 
-Paste a fourth Apps Script file: **+** → Script → name it `Lifecycle` → paste `apps-script/Lifecycle.gs`. Also replace `OrderProcessor.gs` + `SheetOrganize.gs` from this repo (Days Left formula uses live Expiry column **J**: `=IF(J2="","",J2-TODAY())`). Run `repairDaysLeftFormulas` once so existing K cells use J. **Deploy → Manage deployments → New version** (same Web App URL).
+Paste a fourth Apps Script file: **+** → Script → name it `Lifecycle` → paste `apps-script/Lifecycle.gs`. Also replace `OrderProcessor.gs` + `SheetOrganize.gs` from this repo (Days Left formula uses live Expiry column **J**: `=IF(J2="","",J2-TODAY())`). Run `repairDaysLeftFormulas` once so existing K cells use J. Confirm ⚙️ Project Settings → Time zone is **Asia/Dhaka** (3/2/1 mail, Auto Expired, and +30 use the same Dhaka calendar as Master/month tabs). **Deploy → Manage deployments → New version** (same Web App URL).
 
 ## English
 

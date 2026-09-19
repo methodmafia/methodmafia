@@ -399,7 +399,18 @@ function doGet(e) {
       return htmlResponse('<h2>❌ Lifecycle.gs missing</h2>');
     }
     var nudge = runPendingNudgeJob_({});
-    return htmlResponse('<h2>✅ Pending 24h nudge</h2><p>Nudged: ' + (nudge.nudged || []).join(', ') + '</p>');
+    var ids = (nudge.nudged || []).join(', ');
+    if (!nudge.nudged || !nudge.nudged.length) {
+      return htmlResponse('<h2>Pending 24h nudge</h2><p>No Pending rows older than 24 hours.</p>');
+    }
+    if (!nudge.emailed) {
+      return htmlResponse(
+        '<h2>⚠️ Pending nudge email failed</h2>' +
+        '<p>Would have nudged: <strong>' + ids + '</strong>.</p>' +
+        '<p>Notes were <em>not</em> stamped with PENDING_NUDGED. Check MailApp quota / authorization.</p>'
+      );
+    }
+    return htmlResponse('<h2>✅ Pending 24h nudge</h2><p>Emailed ' + DIGEST_EMAIL + '. Nudged: ' + ids + '</p>');
   }
 
   if (route.kind === 'autoExpire') {

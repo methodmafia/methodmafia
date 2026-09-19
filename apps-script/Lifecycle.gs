@@ -22,6 +22,9 @@ var PENDING_NUDGE_MS = 24 * 60 * 60 * 1000;
 var PENDING_NUDGED_MARKER = 'PENDING_NUDGED';
 var RENEW_MARKERS = { 3: 'RENEW_MAIL_3', 2: 'RENEW_MAIL_2', 1: 'RENEW_MAIL_1' };
 var LIFECYCLE_TZ = (typeof ORGANIZE_TZ !== 'undefined') ? ORGANIZE_TZ : 'Asia/Dhaka';
+var LIFECYCLE_TZ_OFFSET_MS = (typeof ORGANIZE_TZ_OFFSET_MS !== 'undefined')
+  ? ORGANIZE_TZ_OFFSET_MS
+  : (6 * 60 * 60 * 1000); // Asia/Dhaka, no DST — same as SheetOrganize
 
 function lifecycleStatus_(status) {
   return String(status || '').trim().toLowerCase();
@@ -51,34 +54,39 @@ function lifecycleParseDate_(value) {
   return isNaN(d.getTime()) ? null : d;
 }
 
-function lifecycleStartOfDay_(date) {
-  var d = new Date(date.getTime());
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
 function lifecyclePad2_(n) {
   n = String(n);
   return n.length < 2 ? '0' + n : n;
 }
 
-function lifecycleYmd_(date) {
-  return date.getFullYear() + '-' + lifecyclePad2_(date.getMonth() + 1) + '-' + lifecyclePad2_(date.getDate());
+function lifecycleDhakaYmd_(date) {
+  if (typeof dhakaYmd_ === 'function') return dhakaYmd_(date);
+  var shifted = new Date(date.getTime() + LIFECYCLE_TZ_OFFSET_MS);
+  return shifted.getUTCFullYear() + '-' + lifecyclePad2_(shifted.getUTCMonth() + 1) + '-' + lifecyclePad2_(shifted.getUTCDate());
 }
 
-function lifecycleAddDays_(date, days) {
-  var d = new Date(date.getTime());
-  d.setDate(d.getDate() + days);
-  return d;
+function lifecycleYmdAddDays_(ymd, days) {
+  var p = String(ymd || '').split('-');
+  if (p.length < 3) return '';
+  var d = new Date(Date.UTC(Number(p[0]), Number(p[1]) - 1, Number(p[2])));
+  if (isNaN(d.getTime())) return '';
+  d.setUTCDate(d.getUTCDate() + Number(days));
+  return d.getUTCFullYear() + '-' + lifecyclePad2_(d.getUTCMonth() + 1) + '-' + lifecyclePad2_(d.getUTCDate());
+}
+
+function lifecycleYmdToUtcMs_(ymd) {
+  var p = String(ymd || '').split('-');
+  if (p.length < 3) return NaN;
+  return Date.UTC(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
 }
 
 function calendarDaysUntil_(expiry, today) {
   var e = lifecycleParseDate_(expiry);
   var t = lifecycleParseDate_(today);
   if (!e || !t) return null;
-  e = lifecycleStartOfDay_(e);
-  t = lifecycleStartOfDay_(t);
-  return Math.round((e.getTime() - t.getTime()) / 86400000);
+  var eYmd = lifecycleDhakaYmd_(e);
+  var tYmd = lifecycleDhakaYmd_(t);
+  return Math.round((lifecycleYmdToUtcMs_(eYmd) - lifecycleYmdToUtcMs_(tYmd)) / 86400000);
 }
 
 function daysLeftFormulaUsesExpiryColumn_(formula, col) {
@@ -199,11 +207,11 @@ function applyAutoExpiresToRows_(rows, col, today) {
 
 function computeRenewedExpiry_(currentExpiry, today) {
   var t = lifecycleParseDate_(today) || new Date();
-  t = lifecycleStartOfDay_(t);
+  var tYmd = lifecycleDhakaYmd_(t);
   var e = lifecycleParseDate_(currentExpiry);
-  if (e) e = lifecycleStartOfDay_(e);
-  var base = (!e || e.getTime() < t.getTime()) ? t : e;
-  return lifecycleYmd_(lifecycleAddDays_(base, 30));
+  var eYmd = e ? lifecycleDhakaYmd_(e) : '';
+  var base = (!eYmd || eYmd < tYmd) ? tYmd : eYmd;
+  return lifecycleYmdAddDays_(base, 30);
 }
 
 function planRenewOrder_(status, expiry, today) {
@@ -261,7 +269,7 @@ function planCustomerRenewMails_(rows, col, today) {
 function formatExpiryLabel_(expiry) {
   var d = lifecycleParseDate_(expiry);
   if (!d) return String(expiry || '');
-  return lifecycleYmd_(lifecycleStartOfDay_(d));
+  return lifecycleDhakaYmd_(d);
 }
 
 function buildCustomerRenewMessage_(item) {
@@ -670,8 +678,7 @@ function testCustomerRenewMail_() {
   var orders = lifecycleResetTestSheet_(ss, 'TEST_Orders', headers);
   var col = buildColMapFromHeaders_(headers);
   var today = new Date();
-  today.setHours(0, 0, 0, 0);
-  var in3 = lifecycleAddDays_(today, 3);
+  var in3 = lifecycleYmdAddDays_(lifecycleDhakaYmd_(today), 3);
   var r = buildOrderRowValues_(headers, col, {
     orderId: 'TEST-MM-MAIL-1',
     name: 'Mail Me',
@@ -683,7 +690,7 @@ function testCustomerRenewMail_() {
     source: 'direct'
   }, new Date(), false);
   r[col.STATUS] = 'Active';
-  r[col.EXPIRY] = lifecycleYmd_(in3);
+  r[col.EXPIRY] = in3;
   r[col.NOTES] = 'PURCHASE_SENT';
   orders.appendRow(r);
   var planned = planCustomerRenewMails_(orders.getDataRange().getValues(), col, today);

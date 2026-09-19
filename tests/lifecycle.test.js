@@ -131,6 +131,10 @@ test('Auto Expired flips Active rows past Expiry and never deletes', () => {
   assert.equal(life.calendarDaysUntil_('2026-09-18', TODAY), -1);
   assert.equal(life.calendarDaysUntil_('2026-09-19', TODAY), 0);
   assert.equal(life.calendarDaysUntil_('2026-09-22', TODAY), 3);
+  /* Sheets date-only at Dhaka midnight is 18:00Z the previous UTC day. */
+  assert.equal(life.calendarDaysUntil_(new Date('2026-09-18T18:00:00.000Z'), TODAY), 0);
+  assert.equal(life.calendarDaysUntil_(new Date('2026-09-17T18:00:00.000Z'), TODAY), -1);
+  assert.equal(life.computeRenewedExpiry_(new Date('2026-10-16T00:00:00+06:00'), TODAY), '2026-11-15');
 
   const out = life.applyAutoExpiresToRows_(rows, col, TODAY);
   assert.deepEqual(out.expired, ['MM-PAST']);
@@ -289,6 +293,8 @@ test('renewOrder path must not fire CAPI; Entry $30 Purchase path stays intact',
     ? opSrc.slice(opSrc.indexOf("route.kind === 'renew'"), opSrc.indexOf("route.kind === 'renew'") + 800)
     : '';
   assert.doesNotMatch(renewBlock, /trySendPurchaseForRow_/);
+  assert.match(opSrc, /nudge\.emailed/);
+  assert.match(opSrc, /Pending nudge email failed/);
 });
 
 test('GUIDE documents Phase 2A triggers, renew URL, and Days Left on Expiry', () => {
