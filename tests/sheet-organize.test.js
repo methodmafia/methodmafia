@@ -34,6 +34,9 @@ const GARRY_REJECT_ROW = [
 ];
 
 test('LIVE_HEADERS match the production sheet (Source before Status, Payment after Days Left)', () => {
+  const csv = 'Timestamp,Order ID,Name,Email,Telegram,Plan,Amount,Source,Status,Expiry,Days Left,Payment,Notes,FBclid,TTclid';
+  assert.equal(organize.LIVE_HEADER_CSV, csv);
+  assert.deepEqual(organize.LIVE_HEADERS, csv.split(','));
   assert.deepEqual(organize.LIVE_HEADERS, LIVE_HEADER_SNIPPET);
   const col = organize.buildColMapFromHeaders_(LIVE_HEADER_SNIPPET);
   assert.equal(col.TIMESTAMP, 0);

@@ -105,7 +105,7 @@ test('OrderProcessor writes fbclid/ttclid using live header order', () => {
   const org = fs.readFileSync(path.join(__dirname, '..', 'apps-script', 'SheetOrganize.gs'), 'utf8');
   assert.ok(org.indexOf('data.fbclid') !== -1);
   assert.ok(org.indexOf('data.ttclid') !== -1);
-  assert.ok(org.indexOf("'FBclid'") !== -1 && org.indexOf("'TTclid'") !== -1);
+  assert.ok(org.indexOf('FBclid,TTclid') !== -1);
   assert.ok(gs.indexOf('trySendPurchaseForRow_') !== -1);
   assert.ok(gs.indexOf('upsertNewOrderToOrganizeTabs_') !== -1);
 });

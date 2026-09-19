@@ -25,11 +25,9 @@ var TAB_MASTER = 'Master';
 var TAB_ARCHIVE_REJECTED = 'Archive_Rejected';
 var ORGANIZE_TEST_PREFIX = 'TEST_';
 
-var LIVE_HEADERS = [
-  'Timestamp', 'Order ID', 'Name', 'Email', 'Telegram',
-  'Plan', 'Amount', 'Source', 'Status', 'Expiry', 'Days Left',
-  'Payment', 'Notes', 'FBclid', 'TTclid'
-];
+/* Confirmed live CSV export (Orders only, 2026-09-19). Do not invent columns. */
+var LIVE_HEADER_CSV = 'Timestamp,Order ID,Name,Email,Telegram,Plan,Amount,Source,Status,Expiry,Days Left,Payment,Notes,FBclid,TTclid';
+var LIVE_HEADERS = LIVE_HEADER_CSV.split(',');
 
 var HEADER_KEY_ALIASES = {
   'timestamp': 'TIMESTAMP',
@@ -717,6 +715,7 @@ function cleanupOrganizeTests_() {
 
 if (typeof module === 'object' && module.exports) {
   module.exports = {
+    LIVE_HEADER_CSV: LIVE_HEADER_CSV,
     LIVE_HEADERS: LIVE_HEADERS,
     ORGANIZE_TZ: ORGANIZE_TZ,
     TAB_MASTER: TAB_MASTER,

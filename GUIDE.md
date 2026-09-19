@@ -737,8 +737,10 @@ If Notes never gets `PURCHASE_SENT`: tokens missing, trigger not installed, or P
 
 Keep the live sheet clean for AI/Drive totals. **Never hard-delete orders.** Rejects stay on `Orders` the same calendar day (Swa may flip back to Active), then move to `Archive_Rejected` after Dhaka midnight.
 
-Live header order (do not rearrange):
-`Timestamp, Order ID, Name, Email, Telegram, Plan, Amount, Source, Status, Expiry, Days Left, Payment, Notes, FBclid, TTclid`
+Live header order (CSV confirmed 2026-09-19, Orders tab only — do not rearrange):
+`Timestamp,Order ID,Name,Email,Telegram,Plan,Amount,Source,Status,Expiry,Days Left,Payment,Notes,FBclid,TTclid`
+
+Medium/Campaign are **not** on the live sheet. Do not insert them in the middle. Optional: `appendOptionalUtmHeaders` adds them at the far right only.
 
 Backup already taken (2026-09-19):
 - Live: https://docs.google.com/spreadsheets/d/1b-XGKfxIOnTJ5AVJr2beAyg4j14i6YzbgAI2VfVwXnM

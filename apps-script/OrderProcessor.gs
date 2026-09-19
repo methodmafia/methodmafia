@@ -22,10 +22,10 @@
  *  • Organize: doPost also upserts Master + current YYYY-MM (SheetOrganize.gs)
  * ──────────────────────────────────────────────────────────────
  *
- * CRITICAL: Column order MUST match the LIVE Google Sheet header:
- *   Timestamp, Order ID, Name, Email, Telegram, Plan, Amount,
- *   Source, Status, Expiry, Days Left, Payment, Notes, FBclid, TTclid
- * Wrong indices scramble rows. SheetOrganize.gs re-reads headers at runtime.
+ * CRITICAL: Column order MUST match the LIVE Google Sheet CSV header:
+ *   Timestamp,Order ID,Name,Email,Telegram,Plan,Amount,Source,Status,Expiry,Days Left,Payment,Notes,FBclid,TTclid
+ * Medium/Campaign omitted (optional far-right append only). Do not scramble existing cells.
+ * SheetOrganize.gs re-reads headers at runtime.
  */
 
 /* ── CONFIG ───────────────────────────────────────────────── */
