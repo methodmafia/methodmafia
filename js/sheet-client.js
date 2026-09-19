@@ -1,0 +1,147 @@
+/* ═══════════════════════════════════════════════════════════
+   THE METHOD MAFIA — Sheet web-app client (browser + Node)
+   Write success is only JSON {ok:true}. Status lookup is
+   public (action=status) and never sends an admin token.
+   ═══════════════════════════════════════════════════════════ */
+(function(root, factory){
+  if(typeof module === 'object' && module.exports){
+    module.exports = factory();
+  } else {
+    root.MMSheet = factory();
+  }
+})(typeof self !== 'undefined' ? self : this, function(){
+  'use strict';
+
+  function parseJsonSafe(text){
+    if(text == null || text === '') return null;
+    try{
+      var v = JSON.parse(text);
+      return (v && typeof v === 'object') ? v : null;
+    }catch(e){ return null; }
+  }
+
+  function isWriteSuccess(parsed){
+    if(!parsed) return false;
+    if(parsed.type === 'opaque') return false;
+    if(parsed.ok !== true) return false;
+    return !!(parsed.json && parsed.json.ok === true);
+  }
+
+  function interpretWriteResult(parsed){
+    if(isWriteSuccess(parsed)) return { ok: true };
+    var reason = 'invalid';
+    if(!parsed || parsed.networkError) reason = 'network';
+    else if(parsed.type === 'opaque') reason = 'opaque';
+    else if(parsed.json && parsed.json.ok === false) reason = 'sheet';
+    else if(parsed.ok === false) reason = 'http';
+    return { ok: false, reason: reason };
+  }
+
+  function stripTokenFromSearch(searchParams){
+    if(!searchParams) return;
+    if(typeof searchParams.delete === 'function'){
+      searchParams.delete('token');
+    }
+  }
+
+  function buildStatusLookupUrl(sheetUrl, orderId){
+    var base = String(sheetUrl || '').trim();
+    var id = String(orderId || '').trim().toUpperCase();
+    if(!base || !id) return '';
+    try{
+      var u = new URL(base);
+      stripTokenFromSearch(u.searchParams);
+      u.searchParams.set('action', 'status');
+      u.searchParams.set('orderId', id);
+      return u.toString();
+    }catch(e){
+      var cleaned = base
+        .replace(/([?&])token=[^&]*/gi, '$1')
+        .replace(/[?&]+$/, '')
+        .replace(/\?&/, '?');
+      var sep = cleaned.indexOf('?') === -1 ? '?' : '&';
+      return cleaned + sep + 'action=status&orderId=' + encodeURIComponent(id);
+    }
+  }
+
+  function normalizeStatus(raw){
+    var s = String(raw || '').trim().toLowerCase();
+    if(s === 'active') return 'active';
+    if(s === 'pending' || s === 'submitted') return 'pending';
+    if(s === 'verifying') return 'verifying';
+    if(s === 'expired') return 'expired';
+    if(s === 'reject' || s === 'rejected' || s === 'declined') return 'reject';
+    if(!s) return 'unknown';
+    return 'other';
+  }
+
+  function interpretStatusResult(parsed){
+    if(!parsed || parsed.networkError || parsed.type === 'opaque'){
+      return { kind: 'lookup_failed' };
+    }
+    var json = parsed.json;
+    if(!json || json.ok !== true){
+      return { kind: 'lookup_failed' };
+    }
+    if(json.found !== true){
+      return { kind: 'not_found', orderId: String(json.orderId || '').toUpperCase() };
+    }
+    return {
+      kind: 'found',
+      orderId: String(json.orderId || '').toUpperCase(),
+      status: normalizeStatus(json.status),
+      statusRaw: String(json.status || ''),
+      plan: json.plan ? String(json.plan) : ''
+    };
+  }
+
+  function readResponse(res){
+    if(!res){
+      return Promise.resolve({ type: 'error', ok: false, status: 0, json: null, text: '' });
+    }
+    if(res.type === 'opaque'){
+      return Promise.resolve({ type: 'opaque', ok: false, status: 0, json: null, text: '' });
+    }
+    return Promise.resolve(res.text()).then(function(text){
+      return {
+        type: res.type || 'basic',
+        ok: !!res.ok,
+        status: res.status || 0,
+        json: parseJsonSafe(text),
+        text: text || ''
+      };
+    });
+  }
+
+  function writeFetchOptions(payload){
+    return {
+      method: 'POST',
+      mode: 'cors',
+      redirect: 'follow',
+      credentials: 'omit',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload || {})
+    };
+  }
+
+  function statusFetchOptions(){
+    return {
+      method: 'GET',
+      mode: 'cors',
+      redirect: 'follow',
+      credentials: 'omit'
+    };
+  }
+
+  return {
+    parseJsonSafe: parseJsonSafe,
+    isWriteSuccess: isWriteSuccess,
+    interpretWriteResult: interpretWriteResult,
+    buildStatusLookupUrl: buildStatusLookupUrl,
+    normalizeStatus: normalizeStatus,
+    interpretStatusResult: interpretStatusResult,
+    readResponse: readResponse,
+    writeFetchOptions: writeFetchOptions,
+    statusFetchOptions: statusFetchOptions
+  };
+});
