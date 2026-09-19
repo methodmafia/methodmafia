@@ -130,6 +130,17 @@
     };
   }
 
+  function normalizeOrderLanguage(code){
+    var s = String(code == null ? '' : code).trim().toLowerCase();
+    if(s === 'bn' || s === 'hi' || s === 'en') return s;
+    return 'en';
+  }
+
+  /* Sheet column stores EN/BN/HI. Keep in sync with OrderProcessor.gs → sheetLanguageLabel_ */
+  function sheetLanguageLabel(code){
+    return normalizeOrderLanguage(code).toUpperCase();
+  }
+
   function statusFetchOptions(){
     return {
       method: 'GET',
@@ -149,6 +160,8 @@
     interpretStatusResult: interpretStatusResult,
     readResponse: readResponse,
     writeFetchOptions: writeFetchOptions,
-    statusFetchOptions: statusFetchOptions
+    statusFetchOptions: statusFetchOptions,
+    normalizeOrderLanguage: normalizeOrderLanguage,
+    sheetLanguageLabel: sheetLanguageLabel
   };
 });

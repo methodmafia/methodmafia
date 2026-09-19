@@ -345,6 +345,18 @@
       <input type="text" class="inp" id="iTelegram" data-tp="phTelegram" placeholder="@yourusername">
     </div>
     <div class="fg">
+      <div class="lang-pref">
+        <label class="lbl" data-t="lblLanguage">Preferred Language</label>
+        <input type="hidden" id="iLanguage" name="language" value="en">
+        <div class="lang-pref-row" id="langPrefRow" role="radiogroup" aria-label="Preferred language">
+          <button type="button" class="lang-pref-opt" data-lang="bn" aria-pressed="false" onclick="selectPrefLang(this,'bn')">বাংলা</button>
+          <button type="button" class="lang-pref-opt sel" data-lang="en" aria-pressed="true" onclick="selectPrefLang(this,'en')">English</button>
+          <button type="button" class="lang-pref-opt" data-lang="hi" aria-pressed="false" onclick="selectPrefLang(this,'hi')">हिन्दी</button>
+        </div>
+        <p class="lang-pref-hint" data-t="langHint">Renew messages will use this language</p>
+      </div>
+    </div>
+    <div class="fg">
       <label class="lbl" data-t="lblPlan">Select Plan</label>
       <div class="plan-row">
         <button class="plan-opt sel" onclick="selectPlan(this,'entry')">

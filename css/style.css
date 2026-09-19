@@ -480,6 +480,40 @@ html[lang="bn"] h2.sec-title,html[lang="hi"] h2.sec-title{letter-spacing:.8px}
 .inp::placeholder{color:rgba(128,104,32,.4)}
 .inp.error{border-color:var(--red)}
 
+.lang-pref{
+  background:rgba(255,215,0,.03);
+  border:1px solid var(--line-2);
+  border-radius:14px;
+  padding:14px 12px 12px;
+}
+.lang-pref-row{display:flex;gap:8px}
+.lang-pref-opt{
+  flex:1;min-width:0;
+  background:rgba(255,215,0,.04);
+  border:2px solid var(--line-2);
+  border-radius:999px;
+  padding:10px 8px;
+  text-align:center;
+  font-size:13px;font-weight:700;
+  color:var(--gold-dim);
+  transition:.2s;
+  line-height:1.2;
+}
+.lang-pref-opt:hover{border-color:var(--gold);color:var(--gold)}
+.lang-pref-opt.sel:hover{color:#0a0a0a}
+.lang-pref-opt.sel{
+  border-color:var(--gold);
+  color:#0a0a0a;
+  background:linear-gradient(135deg,#FFD700,#FFA500 55%,#FF7A00);
+  font-weight:800;
+}
+.lang-pref-hint{
+  margin:9px 2px 0;
+  font-size:10.5px;
+  color:var(--gold-dim);
+  line-height:1.45;
+}
+
 .plan-row{display:flex;gap:8px}
 .plan-opt{
   flex:1;background:rgba(255,215,0,.04);border:2px solid transparent;
@@ -681,6 +715,8 @@ footer{
   section{padding:40px 16px}
   .price-grid{grid-template-columns:1fr}
   .form-wrap{padding:24px 17px}
+  .lang-pref{padding:13px 10px 11px;border-radius:12px}
+  .lang-pref-opt{min-height:44px;padding:8px 6px;font-size:12.5px}
   .cd-box{min-width:52px;padding:8px 11px}
   .cd-n{font-size:24px}
   .float-tg{width:46px;height:46px;font-size:21px;bottom:18px;right:18px}
