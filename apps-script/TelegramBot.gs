@@ -15,16 +15,17 @@
  *      + trySendPurchaseForRow_ (Entry $30 CAPI) + one-time VIP invite
  *      (createChatInviteLink member_limit=1). NEVER post the link in VIP/public.
  *   2) Pay/renew reminders → customer Telegram (email path stays in Lifecycle.gs).
- *   3) Kick → ALWAYS a confirm list (names/ids/reasons) then admin ✅
- *      before any banChatMember. Never auto-kick. Blind sync is FORBIDDEN.
- *      ~3000 social-proof members must stay. Eligible proposals only:
- *        (a) Sheet Status Expired (was paid, expired), or
- *        (b) joined on/after VIP_BASELINE_DATE (YYYY-MM-DD, Asia/Dhaka)
- *            AND Sheet has no Active row for that Telegram identity.
- *      Pre-baseline joins are never mass-kicked by sync jobs. Path (b)
- *      uses the post-baseline join log (chat_member), never a full VIP dump.
+ *   3) Kick jobs apply ONLY to members who entered via this new system
+ *      (website order → pay → admin ✅ → Active + CAPI $30 + one-time VIP
+ *      invite) and are now Sheet Expired. ALWAYS a confirm list, then admin ✅
+ *      before any banChatMember. Never auto-kick.
+ *      ALL existing VIP members (~3000 social-proof) stay untouched forever.
+ *      Blind sync is FORBIDDEN forever. Never mass-sync / never kick legacy.
+ *      Optional gated path: post-VIP_BASELINE_DATE unpaid joiners — default OFF
+ *      (VIP_KICK_UNPAID_JOINERS). Never touch pre-baseline members.
+ *      Default VIP_BASELINE_DATE = 2026-09-19 (Asia/Dhaka go-live); Swa can change.
  *
- * See GUIDE.md → PART 13. Run setupVipBaselineDate_("YYYY-MM-DD").
+ * See GUIDE.md → PART 13. Run setupVipBaselineDate_("2026-09-19").
  */
 
 var TELEGRAM_ADMIN_CHAT_ID = '7581392046';
@@ -39,6 +40,7 @@ var BOT_CONFIRMED_MARKER = 'BOT_CONFIRMED';
 var PAY_TG_MS = 24 * 60 * 60 * 1000;
 var TG_JOIN_LOG_PROP = 'TG_VIP_JOIN_LOG';
 var TG_PENDING_KICK_PROP = 'TG_PENDING_KICK_LIST';
+var DEFAULT_VIP_BASELINE_DATE = '2026-09-19';
 
 var TG_HEADER_ALIASES = {
   'timestamp': 'TIMESTAMP',
@@ -141,24 +143,39 @@ function parseVipBaselineDate_(value) {
   return { ok: true, ymd: s };
 }
 
+function resolveVipBaselineYmd_(value) {
+  var parsed = parseVipBaselineDate_(value);
+  if (parsed.ok) return parsed.ymd;
+  return DEFAULT_VIP_BASELINE_DATE;
+}
+
+function parseKickUnpaidJoinersFlag_(value) {
+  var s = String(value == null ? '' : value).trim().toLowerCase();
+  return s === '1' || s === 'true' || s === 'yes' || s === 'on';
+}
+
 function setupVipBaselineDate_(ymd) {
   var parsed = parseVipBaselineDate_(ymd);
   if (!parsed.ok) {
     throw new Error(
       'VIP_BASELINE_DATE must be ISO YYYY-MM-DD on the Asia/Dhaka calendar, e.g. 2026-09-19. ' +
-      'Members who joined before this date are never mass-kicked. Reason: ' + parsed.reason
+      'Default go-live is 2026-09-19. Legacy VIP members are never mass-kicked. Reason: ' + parsed.reason
     );
   }
   PropertiesService.getScriptProperties().setProperty('VIP_BASELINE_DATE', parsed.ymd);
   Logger.log(
     'VIP_BASELINE_DATE=' + parsed.ymd +
-    ' (Asia/Dhaka). Blind sync is forbidden — do not kick social-proof members.'
+    ' (Asia/Dhaka). Blind sync is forbidden forever — existing VIP members stay untouched.'
   );
   return parsed.ymd;
 }
 
 function getVipBaselineDate_() {
-  return String(getTelegramProp_('VIP_BASELINE_DATE') || '').trim();
+  return resolveVipBaselineYmd_(getTelegramProp_('VIP_BASELINE_DATE'));
+}
+
+function getVipKickUnpaidJoiners_() {
+  return parseKickUnpaidJoinersFlag_(getTelegramProp_('VIP_KICK_UNPAID_JOINERS'));
 }
 
 function telegramWebhookAuthorized_(providedSecret, storedSecret) {
@@ -298,6 +315,17 @@ function isGrandfatheredByBaseline_(joinYmd, baselineYmd) {
   return join.ymd < base.ymd;
 }
 
+function isNewSystemMember_(opts) {
+  opts = opts || {};
+  if (tgNotesHasMarker_(opts.notes, BOT_CONFIRMED_MARKER)) return true;
+  if (tgNotesHasMarker_(opts.notes, VIP_SENT_MARKER)) return true;
+  if (tgNotesHasMarker_(opts.notes, 'VIP_INVITE_ADMIN')) return true;
+  var baseline = resolveVipBaselineYmd_(opts.baselineYmd);
+  var ts = tgParseDate_(opts.timestamp);
+  if (!ts) return false;
+  return tgDhakaYmd_(ts) >= baseline;
+}
+
 /* ── Confirm / VIP / kick plans ─────────────────────────── */
 
 function planActivateFromBotConfirm_(row) {
@@ -392,6 +420,8 @@ function planKickConfirmList_(opts) {
   var items = [];
   var seen = {};
   var i;
+  var baselineYmd = resolveVipBaselineYmd_(opts.baselineYmd);
+  var unpaidOn = opts.kickUnpaidJoiners === true;
 
   for (i = 1; i < rows.length; i++) {
     var st = String(rows[i][col.STATUS] || '').trim().toLowerCase();
@@ -402,6 +432,8 @@ function planKickConfirmList_(opts) {
     var uid = resolveCustomerChatId_(telegram, notes, null);
     var ident = telegramIdentityKey_(uid || telegram);
     if (ident) seen[ident] = true;
+    var ts = col.TIMESTAMP >= 0 ? rows[i][col.TIMESTAMP] : '';
+    if (!isNewSystemMember_({ notes: notes, timestamp: ts, baselineYmd: baselineYmd })) continue;
     items.push({
       reason: 'expired',
       orderId: col.ORDER_ID >= 0 ? String(rows[i][col.ORDER_ID] || '') : '',
@@ -414,13 +446,11 @@ function planKickConfirmList_(opts) {
     });
   }
 
-  var baseline = parseVipBaselineDate_(opts.baselineYmd);
-  var channelScanRefused = !baseline.ok;
   var joinLog = opts.joinLog || [];
-  if (baseline.ok) {
+  if (unpaidOn) {
     for (i = 0; i < joinLog.length; i++) {
       var j = joinLog[i] || {};
-      if (isGrandfatheredByBaseline_(j.joinYmd, baseline.ymd)) continue;
+      if (isGrandfatheredByBaseline_(j.joinYmd, baselineYmd)) continue;
       var uname = String(j.username || '').replace(/^@/, '');
       if (sheetHasActiveRowForIdentity_(rows, col, j.userId)) continue;
       if (uname && sheetHasActiveRowForIdentity_(rows, col, '@' + uname)) continue;
@@ -444,10 +474,11 @@ function planKickConfirmList_(opts) {
     items: items,
     requiresAdminConfirm: true,
     executeKick: false,
-    channelScanRefused: channelScanRefused,
-    channelScanReason: channelScanRefused ? (baseline.reason || 'missing-baseline') : '',
-    reason: channelScanRefused ? (baseline.reason || 'missing-baseline') : '',
-    baselineYmd: baseline.ok ? baseline.ymd : ''
+    kickUnpaidJoiners: unpaidOn,
+    channelScanRefused: !unpaidOn,
+    channelScanReason: unpaidOn ? '' : 'unpaid-joiners-off',
+    reason: unpaidOn ? '' : 'unpaid-joiners-off',
+    baselineYmd: baselineYmd
   };
 }
 
@@ -488,7 +519,7 @@ function planJoinLogEntry_(opts) {
     oldSt !== 'member' && oldSt !== 'restricted' &&
     oldSt !== 'administrator' && oldSt !== 'creator';
   if (!joined) return { ok: true, record: false, reason: 'not-a-join' };
-  var baseline = parseVipBaselineDate_(opts.baselineYmd);
+  var baseline = parseVipBaselineDate_(resolveVipBaselineYmd_(opts.baselineYmd));
   if (!baseline.ok) return { ok: false, record: false, reason: baseline.reason || 'missing-baseline' };
   if (isGrandfatheredByBaseline_(opts.joinYmd, baseline.ymd)) {
     return { ok: true, record: false, reason: 'pre-baseline' };
@@ -520,8 +551,8 @@ function buildKickConfirmListMessage_(list) {
   var items = list.items || [];
   var lines = [
     '⚠️ Kick confirm list — @' + TELEGRAM_BOT_USERNAME,
-    'VIP social-proof members stay. Blind sync is FORBIDDEN.',
-    'Tap ✅ to banChatMember the people below, or Cancel. Confirm-first — bot will not kick until you tap.',
+    'Legacy VIP members stay untouched. Blind sync is FORBIDDEN forever.',
+    'Only new-system Expired (website order → bot ✅ → one-time invite). Tap ✅ to banChatMember the people below, or Cancel. Confirm-first — bot will not kick until you tap.',
     '━━━━━━━━━━━━━━'
   ];
   for (var i = 0; i < items.length; i++) {
@@ -698,10 +729,16 @@ function shouldAskKick_(status, expiry, notes, today) {
   return st === 'expired';
 }
 
-function planTelegramKickAsks_(rows, col, today) {
+function planTelegramKickAsks_(rows, col, today, baselineYmd) {
   var out = [];
+  var baseline = resolveVipBaselineYmd_(baselineYmd);
   for (var i = 1; i < rows.length; i++) {
     if (!shouldAskKick_(rows[i][col.STATUS], rows[i][col.EXPIRY], rows[i][col.NOTES], today)) continue;
+    if (!isNewSystemMember_({
+      notes: col.NOTES >= 0 ? rows[i][col.NOTES] : '',
+      timestamp: col.TIMESTAMP >= 0 ? rows[i][col.TIMESTAMP] : '',
+      baselineYmd: baseline
+    })) continue;
     out.push({
       rowIndex0: i,
       orderId: String(rows[i][col.ORDER_ID] || ''),
@@ -1350,7 +1387,8 @@ function runTelegramLifecycleHook_(opts) {
     rows: data,
     col: col,
     baselineYmd: getVipBaselineDate_(),
-    joinLog: loadJoinLog_()
+    joinLog: loadJoinLog_(),
+    kickUnpaidJoiners: getVipKickUnpaidJoiners_()
   });
   var kicks = kickList.items || [];
   var i;
@@ -1442,6 +1480,7 @@ if (typeof module === 'object' && module.exports) {
   module.exports = {
     TELEGRAM_ADMIN_CHAT_ID: TELEGRAM_ADMIN_CHAT_ID,
     TELEGRAM_BOT_USERNAME: TELEGRAM_BOT_USERNAME,
+    DEFAULT_VIP_BASELINE_DATE: DEFAULT_VIP_BASELINE_DATE,
     isUsableTelegramToken_: isUsableTelegramToken_,
     resolveTelegramBotToken_: resolveTelegramBotToken_,
     getTelegramBotTokenFromSources_: getTelegramBotTokenFromSources_,
@@ -1460,9 +1499,12 @@ if (typeof module === 'object' && module.exports) {
     formatVipInviteFailure_: formatVipInviteFailure_,
     planKickExecute_: planKickExecute_,
     parseVipBaselineDate_: parseVipBaselineDate_,
+    resolveVipBaselineYmd_: resolveVipBaselineYmd_,
+    parseKickUnpaidJoinersFlag_: parseKickUnpaidJoinersFlag_,
     telegramIdentityKey_: telegramIdentityKey_,
     sheetHasActiveRowForIdentity_: sheetHasActiveRowForIdentity_,
     isGrandfatheredByBaseline_: isGrandfatheredByBaseline_,
+    isNewSystemMember_: isNewSystemMember_,
     planKickConfirmList_: planKickConfirmList_,
     planKickBatchExecute_: planKickBatchExecute_,
     planJoinLogEntry_: planJoinLogEntry_,

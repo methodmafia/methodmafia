@@ -956,9 +956,15 @@ Option A (Swa). **Only @MM_OrdersBot** — do not add another bot for reminders.
 
 Bot ✅ after you verify the payment screenshot (SS) → Sheet **Status Active** → existing CAPI Entry **$30** (`trySendPurchaseForRow_`) → **one-time** VIP invite (`createChatInviteLink` `member_limit=1`). The invite is DMed to the customer (or to 7581392046 to forward privately). **Never post a public VIP link.**
 
-Pay/renew TG runs after the existing 10am lifecycle job (`expiryLifecycleTrigger` → `runTelegramLifecycleHook_`). **Email path stays in Lifecycle.gs.** Kick always builds a **confirm list** (names / ids / reasons) and waits for admin ✅ — `banChatMember` never runs without that tap.
+Pay/renew TG runs after the existing 10am lifecycle job (`expiryLifecycleTrigger` → `runTelegramLifecycleHook_`). **Email path stays in Lifecycle.gs.** Kick jobs always build a **confirm list** (names / ids / reasons) and wait for admin ✅ — `banChatMember` never runs without that tap.
 
-**Kick policy (Swa):** VIP has ~3000 social-proof members who **must stay**. Only ~10–15 are real paid Active. **Blind sync is FORBIDDEN.** Never propose a mass kick of people just because they are not Status Active. Set `VIP_BASELINE_DATE` (ISO `YYYY-MM-DD`, Asia/Dhaka). Members who joined **before** that date are never mass-kicked by sync jobs. Eligible for a kick *proposal* only if (a) Sheet Status is **Expired** (was paid, expired), or (b) they joined **on/after** `VIP_BASELINE_DATE` **and** the Sheet has no Active row for that Telegram identity. Path (b) uses the bot’s post-baseline join log (`chat_member`) — it does not dump the whole VIP channel. Single-user kick (one Expired order) stays confirm-first and still shows who.
+**Kick policy (Swa, final):** ALL existing VIP channel members (~3000 social-proof) stay **untouched forever**. Never mass-sync. Never kick them. **Blind sync is FORBIDDEN forever.**
+
+The new bot applies **only** to **new website-order members**: pay → admin ✅ → Sheet **Active** + CAPI Entry **$30** + bot DMs a **one-time** VIP invite. Kick jobs run **only** for those new-system members whose Sheet Status is **Expired** (paid, then expired), always with a confirm list.
+
+Optional, **default OFF:** post-`VIP_BASELINE_DATE` unpaid joiners (`VIP_KICK_UNPAID_JOINERS=1`). Leave this unset. Never touch pre-baseline / legacy members.
+
+Default `VIP_BASELINE_DATE` = **2026-09-19** (Asia/Dhaka go-live). Swa can change it. Single-user kick stays confirm-first and still shows who.
 
 Public username **@Method_Mafia_Vip** is optional context; the bot uses numeric `TELEGRAM_VIP_CHAT_ID`.
 
@@ -979,11 +985,12 @@ Sheet → Extensions → Apps Script
 | `TELEGRAM_BOT_TOKEN` | BotFather token for **@MM_OrdersBot** (or run `setupAdminBotToken_("…")`) |
 | `TELEGRAM_VIP_CHAT_ID` | VIP channel numeric id (starts with `-100…`) |
 | `TELEGRAM_WEBHOOK_SECRET` | optional long random string |
-| `VIP_BASELINE_DATE` | ISO `YYYY-MM-DD` on the **Asia/Dhaka** calendar (or run `setupVipBaselineDate_("2026-09-19")`). Pick the day you start using this bot for VIP joins. Everyone already in VIP before that date is grandfathered. |
+| `VIP_BASELINE_DATE` | Default **`2026-09-19`** (Asia/Dhaka go-live). ISO `YYYY-MM-DD`. Optional override: `setupVipBaselineDate_("YYYY-MM-DD")`. Everyone already in VIP before this date stays forever. |
+| `VIP_KICK_UNPAID_JOINERS` | **Leave unset / `0`.** Default OFF. Set `1` only if you explicitly want post-baseline unpaid joiners on the confirm list. Never touch legacy members. |
 
 Never paste the token into this GUIDE, GitHub, or `config.js`. `DIGEST_EMAIL` stays `methodmafia.hq@gmail.com`.
 
-**Never run blind sync.** Do not invent a job that bans every VIP member who is not Active. The ~3000 social-proof members stay. The bot only *proposes* Expired paid rows and post-baseline joins with no Active row, then waits for your ✅ on the confirm list.
+**Never run blind sync.** The ~3000 existing VIP members stay untouched forever. Kick jobs only propose **new-system Expired** rows (bot ✅ / one-time invite / order on or after 2026-09-19), then wait for your ✅ on the confirm list.
 
 ### 2) VIP channel — admin the bot
 
@@ -1013,11 +1020,11 @@ Use the real token only in BotFather / the address bar — not in the repo. If y
 1. Submit a test order → row on **Orders + Master**; admin 7581392046 gets NEW ORDER + ✅
 2. Verify SS with @MMHQ_Support → tap **✅ Confirm (SS verified)**
 3. Sheet Status `Active`; Entry Notes `PURCHASE_SENT`; customer (or admin) gets a **one-time** `t.me/+` link — not in the VIP channel
-4. Expired row (after auto-expire) → bot sends a **confirm list** (who + why) → only after ✅ is anyone banned. Pre-baseline VIP members are not on that list.
+4. New-system Expired row (after auto-expire) → bot sends a **confirm list** (who + why) → only after ✅ is anyone banned. Legacy / pre-baseline VIP members are never on that list.
 
 ## বাংলা — Swa যা ক্লিক করবে
 
-**ধাপ ১:** `OrderProcessor.gs` পেস্ট করো — এটা **organize + lifecycle + webhook**। পুরোনো pre-organize ফাইল পেস্ট করবে না (Master/Archive মুছবে)। `TelegramBot.gs` নতুন ফাইল। `SheetOrganize` + `Lifecycle` + `CapiPurchase` রাখো। Script properties: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_VIP_CHAT_ID`, `VIP_BASELINE_DATE` (`YYYY-MM-DD`, Asia/Dhaka)। চাইলে `setupAdminBotToken_("…")` আর `setupVipBaselineDate_("2026-09-19")` Run করো। **Blind sync চালাবে না** — ~৩০০০ সোশ্যাল-প্রুফ মেম্বার থাকবে।
+**ধাপ ১:** `OrderProcessor.gs` পেস্ট করো — এটা **organize + lifecycle + webhook**। পুরোনো pre-organize ফাইল পেস্ট করবে না (Master/Archive মুছবে)। `TelegramBot.gs` নতুন ফাইল। `SheetOrganize` + `Lifecycle` + `CapiPurchase` রাখো। Script properties: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_VIP_CHAT_ID`, `VIP_BASELINE_DATE` ডিফল্ট **`2026-09-19`** (Asia/Dhaka, Swa বদলাতে পারে)। `VIP_KICK_UNPAID_JOINERS` খালি রাখো (ডিফল্ট অফ)। চাইলে `setupAdminBotToken_("…")` আর `setupVipBaselineDate_("2026-09-19")` Run করো। **Blind sync চালাবে না — চিরকাল নিষেধ।** আগের ~৩০০০ VIP মেম্বার থাকবে, কিক হবে না। Kick শুধু নতুন সিস্টেমের Expired (পেইড তারপর মেয়াদ শেষ) — কনফার্ম লিস্ট সহ।
 
 **ধাপ ২:** VIP চ্যানেলে **@MM_OrdersBot** অ্যাডমিন করো — *Invite users via link* + *Ban users*। পাবলিক ইউজারনেম `@Method_Mafia_Vip` চাইলে নোট রাখো; বট ব্যবহার করে `TELEGRAM_VIP_CHAT_ID`।
 
