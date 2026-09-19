@@ -908,7 +908,7 @@ Time of day:  10am to 11am
 
 Each run:
 
-1. Emails the **customer Email** (not only the admin digest) 3 / 2 / 1 days before Expiry. Copy is locked to **RENEW_COPY_PREMIUM_VIP.md** (tone B: Premium VIP, Day3 soft → Day2 mid → Day1 max FOMO, monthly renew **$15**, SS to `@MMHQ_Support`). Language from Sheet column **Language** (`en`|`bn`|`hi`, case-insensitive). **Default EN if blank/missing — never BN default.** Same pack goes out on Telegram the same day. Notes markers `RENEW_MAIL_3`, `RENEW_MAIL_2`, `RENEW_MAIL_1` (one each; Telegram uses `RENEW_TG_3/_2/_1`).
+1. Emails the **customer Email** (not only the admin digest) 3 / 2 / 1 days before Expiry. **From `info@themethodmafia.com`** (name Method Mafia; must be a Gmail “Send mail as” alias on the Apps Script owner — never HQ Gmail From). Copy is locked to **RENEW_COPY_PREMIUM_VIP.md** (tone B: Premium VIP, Day3 soft → Day2 mid → Day1 max FOMO, monthly renew **$15**, SS to `@MMHQ_Support`). Language from Sheet column **Language** (`en`|`bn`|`hi`, case-insensitive). **Default EN if blank/missing — never BN default.** Same pack goes out on Telegram the same day. Notes markers `RENEW_MAIL_3`, `RENEW_MAIL_2`, `RENEW_MAIL_1` (one each; Telegram uses `RENEW_TG_3/_2/_1`).
 2. Active rows **past** Expiry → Status `Expired` (row stays; never deleted). Syncs Master / month tab. Re-applies Days Left on column **J**.
 3. Admin expiry digest still goes to `methodmafia.hq@gmail.com`.
 

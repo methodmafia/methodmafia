@@ -268,6 +268,115 @@ test('Customer renew mail uses pack copy: EN default, Language column, no cross-
   assert.equal(blank.subject, 'Your Premium VIP access ends in 3 days');
 });
 
+test('customer renew send options From info@themethodmafia.com, never HQ Gmail', () => {
+  assert.equal(life.CUSTOMER_MAIL_FROM, 'info@themethodmafia.com');
+  assert.equal(life.CUSTOMER_MAIL_FROM_NAME, 'Method Mafia');
+  assert.notEqual(life.CUSTOMER_MAIL_FROM, life.LIFECYCLE_ADMIN_EMAIL);
+  assert.notEqual(life.CUSTOMER_MAIL_FROM, op.DIGEST_EMAIL);
+
+  const msg = life.buildCustomerRenewMessage_({
+    name: 'Felix',
+    email: 'felix@example.com',
+    daysLeft: 3
+  });
+  const opts = life.buildCustomerRenewMailOptions_(msg);
+  assert.equal(opts.to, 'felix@example.com');
+  assert.equal(opts.from, 'info@themethodmafia.com');
+  assert.equal(opts.name, 'Method Mafia');
+  assert.equal(opts.subject, msg.subject);
+  assert.equal(opts.htmlBody, msg.htmlBody);
+  assert.equal(opts.body, msg.textBody);
+  assert.notEqual(opts.from, 'methodmafia.hq@gmail.com');
+});
+
+test('sendCustomerRenewEmail_ prefers GmailApp with from/name; MailApp fallback keeps from; never HQ retry', () => {
+  const msg = life.buildCustomerRenewMessage_({
+    name: 'Felix',
+    email: 'felix@example.com',
+    daysLeft: 3
+  });
+
+  const gmailCalls = [];
+  const gmail = {
+    sendEmail: function (to, subject, body, options) {
+      gmailCalls.push({ to: to, subject: subject, body: body, options: options });
+    }
+  };
+  const gmailResult = life.sendCustomerRenewEmail_(msg, {
+    GmailApp: gmail,
+    MailApp: { sendEmail: function () { throw new Error('MailApp must not run when GmailApp exists'); } }
+  });
+  assert.equal(gmailResult.ok, true);
+  assert.equal(gmailResult.via, 'GmailApp');
+  assert.equal(gmailCalls.length, 1);
+  assert.equal(gmailCalls[0].to, 'felix@example.com');
+  assert.equal(gmailCalls[0].options.from, 'info@themethodmafia.com');
+  assert.equal(gmailCalls[0].options.name, 'Method Mafia');
+  assert.equal(gmailCalls[0].options.htmlBody, msg.htmlBody);
+
+  const mailCalls = [];
+  const mailResult = life.sendCustomerRenewEmail_(msg, {
+    GmailApp: null,
+    MailApp: {
+      sendEmail: function (payload) {
+        mailCalls.push(payload);
+      }
+    }
+  });
+  assert.equal(mailResult.ok, true);
+  assert.equal(mailResult.via, 'MailApp');
+  assert.equal(mailCalls.length, 1);
+  assert.equal(mailCalls[0].from, 'info@themethodmafia.com');
+  assert.equal(mailCalls[0].name, 'Method Mafia');
+  assert.equal(mailCalls[0].to, 'felix@example.com');
+
+  const logs = [];
+  const failResult = life.sendCustomerRenewEmail_(msg, {
+    GmailApp: {
+      sendEmail: function () { throw new Error('Invalid From address'); }
+    },
+    MailApp: {
+      sendEmail: function () { throw new Error('MailApp must not be a HQ fallback'); }
+    },
+    log: function (line) { logs.push(String(line)); }
+  });
+  assert.equal(failResult.ok, false);
+  assert.equal(failResult.retryWithoutFrom, false);
+  assert.match(String(failResult.reason || logs.join('\n')), /info@themethodmafia\.com|alias|Invalid From/i);
+  assert.equal(logs.some(function (line) {
+    return /info@themethodmafia\.com/.test(line) && /alias|FROM|from/i.test(line);
+  }), true);
+});
+
+test('pending nudge and admin digest stay HQ To; customer From is not used there', () => {
+  const items = [{
+    orderId: 'MM-2026-1111',
+    name: 'Amina',
+    telegram: '@amina',
+    email: 'amina@example.com',
+    hoursOld: 30
+  }];
+  const nudge = life.buildPendingNudgeMessage_(items, {});
+  assert.equal(nudge.to, 'methodmafia.hq@gmail.com');
+  assert.equal(nudge.from, undefined);
+
+  const lifeSrc = fs.readFileSync(LIFE_PATH, 'utf8');
+  const nudgeBlock = lifeSrc.slice(
+    lifeSrc.indexOf('function runPendingNudgeJob_'),
+    lifeSrc.indexOf('function installPendingNudgeTrigger')
+  );
+  assert.doesNotMatch(nudgeBlock, /CUSTOMER_MAIL_FROM/);
+  assert.doesNotMatch(nudgeBlock, /info@themethodmafia\.com/);
+
+  const opSrc = fs.readFileSync(OP_PATH, 'utf8');
+  assert.match(opSrc, /DIGEST_EMAIL\s*=\s*'methodmafia\.hq@gmail\.com'/);
+  assert.doesNotMatch(opSrc, /DIGEST_EMAIL\s*=\s*'info@themethodmafia\.com'/);
+  const digestSends = opSrc.match(/MailApp\.sendEmail\(\{[^}]+\}/g) || [];
+  digestSends.forEach(function (call) {
+    assert.doesNotMatch(call, /from:\s*CUSTOMER_MAIL_FROM|from:\s*'info@themethodmafia\.com'/);
+  });
+});
+
 test('applyCustomerRenewMarkers_ writes RENEW_MAIL_3/2/1 independently', () => {
   const rows = [
     LIVE_HEADERS,

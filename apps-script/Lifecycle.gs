@@ -17,6 +17,8 @@
  *
  * Email path only in this file. After customer mail + Auto Expired, OrderProcessor
  * expiryReminderTrigger calls runTelegramLifecycleHook_ if present (pay/renew/kick).
+ * Customer renew From is info@themethodmafia.com (never HQ Gmail). Digest / pending
+ * nudge / admin expiry stay TO methodmafia.hq@gmail.com with default From.
  * CAPI Purchase is NOT sent on renew (Entry $30 stays first Active only).
  * See GUIDE.md → PART 12 + PART 13.
  */
@@ -24,6 +26,8 @@
 var LIFECYCLE_ADMIN_EMAIL = (typeof DIGEST_EMAIL !== 'undefined')
   ? DIGEST_EMAIL
   : 'methodmafia.hq@gmail.com';
+var CUSTOMER_MAIL_FROM = 'info@themethodmafia.com';
+var CUSTOMER_MAIL_FROM_NAME = 'Method Mafia';
 var PENDING_NUDGE_MS = 24 * 60 * 60 * 1000;
 var PENDING_NUDGED_MARKER = 'PENDING_NUDGED';
 var RENEW_MARKERS = { 3: 'RENEW_MAIL_3', 2: 'RENEW_MAIL_2', 1: 'RENEW_MAIL_1' };
@@ -398,6 +402,78 @@ function buildCustomerRenewMessage_(item) {
   };
 }
 
+function buildCustomerRenewMailOptions_(msg) {
+  msg = msg || {};
+  return {
+    to: String(msg.to || '').trim(),
+    subject: String(msg.subject || ''),
+    htmlBody: msg.htmlBody || '',
+    body: msg.textBody || msg.body || '',
+    from: CUSTOMER_MAIL_FROM,
+    name: CUSTOMER_MAIL_FROM_NAME
+  };
+}
+
+function customerRenewMailLog_(line, adapters) {
+  if (adapters && typeof adapters.log === 'function') {
+    adapters.log(line);
+    return;
+  }
+  if (typeof Logger !== 'undefined' && Logger && typeof Logger.log === 'function') {
+    Logger.log(line);
+  }
+}
+
+function resolveCustomerMailService_(adapters, key, globalObj) {
+  adapters = adapters || {};
+  if (Object.prototype.hasOwnProperty.call(adapters, key)) return adapters[key];
+  if (typeof globalObj !== 'undefined') return globalObj;
+  return null;
+}
+
+function sendCustomerRenewEmail_(msg, adapters) {
+  adapters = adapters || {};
+  var opts = buildCustomerRenewMailOptions_(msg);
+  var gmail = resolveCustomerMailService_(adapters, 'GmailApp', typeof GmailApp !== 'undefined' ? GmailApp : undefined);
+  var mail = resolveCustomerMailService_(adapters, 'MailApp', typeof MailApp !== 'undefined' ? MailApp : undefined);
+  try {
+    if (gmail && typeof gmail.sendEmail === 'function') {
+      gmail.sendEmail(opts.to, opts.subject, opts.body, {
+        htmlBody: opts.htmlBody,
+        from: opts.from,
+        name: opts.name
+      });
+      return { ok: true, via: 'GmailApp', retryWithoutFrom: false };
+    }
+    if (mail && typeof mail.sendEmail === 'function') {
+      mail.sendEmail({
+        to: opts.to,
+        subject: opts.subject,
+        htmlBody: opts.htmlBody,
+        body: opts.body,
+        from: opts.from,
+        name: opts.name
+      });
+      return { ok: true, via: 'MailApp', retryWithoutFrom: false };
+    }
+    throw new Error('no mail service');
+  } catch (err) {
+    var detail = err && err.message ? err.message : String(err);
+    customerRenewMailLog_(
+      'customer renew mail FROM ' + CUSTOMER_MAIL_FROM +
+        ' failed (alias missing?). Do not silently send from HQ. Error: ' + detail,
+      adapters
+    );
+    return {
+      ok: false,
+      via: '',
+      reason: 'from-alias-failed',
+      retryWithoutFrom: false,
+      error: detail
+    };
+  }
+}
+
 function applyCustomerRenewMarkers_(rows, col, planned) {
   var copy = [];
   var i;
@@ -592,12 +668,10 @@ function runCustomerRenewMailJob_(opts) {
     var item = planned[i];
     var msg = buildCustomerRenewMessage_(item);
     try {
-      MailApp.sendEmail({
-        to: msg.to,
-        subject: msg.subject,
-        htmlBody: msg.htmlBody,
-        body: msg.textBody
-      });
+      var sentOk = sendCustomerRenewEmail_(msg);
+      if (!sentOk.ok) {
+        throw new Error(sentOk.error || sentOk.reason || 'from-alias-failed');
+      }
       var row1 = item.rowIndex0 + 1;
       var notes = sheet.getRange(row1, col.NOTES + 1).getValue();
       sheet.getRange(row1, col.NOTES + 1).setValue(notesAppendMarker_(notes, item.marker));
@@ -820,6 +894,8 @@ function cleanupLifecycleTests_() {
 if (typeof module === 'object' && module.exports) {
   module.exports = {
     LIFECYCLE_ADMIN_EMAIL: LIFECYCLE_ADMIN_EMAIL,
+    CUSTOMER_MAIL_FROM: CUSTOMER_MAIL_FROM,
+    CUSTOMER_MAIL_FROM_NAME: CUSTOMER_MAIL_FROM_NAME,
     PENDING_NUDGED_MARKER: PENDING_NUDGED_MARKER,
     notesHasMarker_: notesHasMarker_,
     notesAppendMarker_: notesAppendMarker_,
@@ -837,6 +913,8 @@ if (typeof module === 'object' && module.exports) {
     applyRenewToRow_: applyRenewToRow_,
     planCustomerRenewMails_: planCustomerRenewMails_,
     buildCustomerRenewMessage_: buildCustomerRenewMessage_,
+    buildCustomerRenewMailOptions_: buildCustomerRenewMailOptions_,
+    sendCustomerRenewEmail_: sendCustomerRenewEmail_,
     resolveCustomerCopyLang_: resolveCustomerCopyLang_,
     buildPremiumVipRenewCopy_: buildPremiumVipRenewCopy_,
     buildToneBRenewCopy_: buildToneBRenewCopy_,
