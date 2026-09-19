@@ -497,13 +497,21 @@ Google Sheet-এর **Source** কলামে দেখবে কোথা থ�
 2. **Extensions** → **Apps Script**
 3. যা আছে সব মুছে `apps-script/OrderProcessor.gs` ফাইলের সম্পূর্ণ কোড পেস্ট করো
 
-**ধাপ ২: Config বসাও**
-স্ক্রিপ্টের উপরে এই লাইনগুলো বদলাও:
-```javascript
-const SHEET_NAME   = 'Orders';          // তোমার Sheet-এর tab নাম
-const ADMIN_TOKEN  = 'CHANGE_ME_NOW';   // একটা লম্বা random পাসওয়ার্ড দাও (random.org থেকে)
-const DIGEST_EMAIL = 'methodmafia.hq@gmail.com';  // digest email ঠিকানা
-```
+**ধাপ ২: ADMIN_TOKEN (Script Properties — কোডে লাইভ সিক্রেট না)**
+
+`CHANGE_ME_NOW` প্লেসহোল্ডার। এটা **কাজ করবে না**। টোকেন GitHub / frontend JS-এ কখনো দিও না।
+
+Apps Script → ⚙️ **Project Settings** → **Script properties** → Add:
+
+| Property | Value |
+|---|---|
+| `ADMIN_TOKEN` | লম্বা random স্ট্রিং (random.org) |
+
+অথবা editor-এ: `setupAdminToken_("your-long-random-secret")` ▶ Run।
+
+Digest Activate লিংক এই Script Properties টোকেন ব্যবহার করে। না থাকলে admin `doGet` fail-closed (Unauthorized)।
+
+`DIGEST_EMAIL` কোডেই `methodmafia.hq@gmail.com` — বদলাবে না।
 
 **ধাপ ৩: Deploy করো**
 1. **Deploy** → **New deployment**
@@ -512,6 +520,19 @@ const DIGEST_EMAIL = 'methodmafia.hq@gmail.com';  // digest email ঠিকা�
 4. Who has access: **Anyone**
 5. **Deploy** চাপো → URL কপি করো
 6. সেই URL → `config.js`-এ `SHEET_URL:` লাইনে বসাও
+
+### Public order status (PR #9 client)
+
+`doGet` **টোকেন চেকের আগে** `action=status` হ্যান্ডেল করে। JSON only (CORS-friendly `ContentService`):
+
+```
+GET SHEET_URL?action=status&orderId=MM-2026-3007
+→ {ok:true, found:true, orderId:"MM-2026-3007", status:"Active", plan:"Entry"}
+```
+
+নাম / ইমেইল / টেলিগ্রাম / click ID ফেরত যায় না। Orders → Master → Archive_Rejected খোঁজে।
+
+টেস্ট: `MM-2026-3007` = Active, `MM-2026-5114` = reject। Deploy → **New version** লাগে।
 
 **ধাপ ৪: Sheet headers সেটআপ**
 Apps Script editor-এ `setupSheetHeaders` ফাংশন সিলেক্ট করে ▶ Run চাপো — **শুধু খালি sheet-এ**। লাইভ Orders-এ আগে থেকে সারি থাকলে হেডার বদলাবে না (স্ক্র্যাম্বল রোধ)।
@@ -552,14 +573,15 @@ Sheet-এর **Notes** কলামে `⚠️ DUPLICATE` লেখা দেখ
 
 ### C3: Daily Digest Setup
 
-Apps Script editor → **Triggers** (⏰ আইকন) → **Add Trigger**:
+Editor-এ `installDailyDigestTrigger` ▶ Run (9:00 **Asia/Dhaka**, already-installed হলে skip)।  
+অথবা ⏰ Triggers → Add Trigger:
 ```
 Function:     dailyDigestTrigger
 Event source: Time-driven
 Type:         Day timer
 Time:         9am to 10am
 ```
-এখন প্রতিদিন সকাল ৯টায় digest email আসবে।
+Digest `methodmafia.hq@gmail.com`-এ যাবে। Activate লিংক Script Properties `ADMIN_TOKEN` ছাড়া কাজ করবে না।
 
 ---
 
@@ -688,7 +710,9 @@ Event type:     On edit
 
 Authorize when Google asks (your Google account sends the events).
 
-This trigger is required. A normal `onEdit` cannot call the ads APIs.
+Or run `installOnOrderStatusEditTrigger` once from the editor (skips if already installed).
+
+This trigger is required. A normal `onEdit` cannot call the ads APIs. Status is live column **I**.
 
 ### 4) Test
 
@@ -715,9 +739,9 @@ If Notes never gets `PURCHASE_SENT`: tokens missing, trigger not installed, or P
 
 **ধাপ ১:** Sheet → Extensions → Apps Script। `OrderProcessor.gs` আপডেট করো। নতুন ফাইল `CapiPurchase` বানিয়ে `apps-script/CapiPurchase.gs` পেস্ট করো।
 
-**ধাপ ২:** ⚙️ Project Settings → Script properties-এ ৪টা key বসাও: `META_PIXEL_ID`, `META_ACCESS_TOKEN`, `TIKTOK_PIXEL_ID`, `TIKTOK_ACCESS_TOKEN`। টোকেন কোডে লিখবে না, GitHub-এও না।
+**ধাপ ২:** ⚙️ Project Settings → Script properties-এ ৫টা key বসাও: `ADMIN_TOKEN` (লম্বা random; কোডের `CHANGE_ME_NOW` কাজ করবে না), `META_PIXEL_ID`, `META_ACCESS_TOKEN`, `TIKTOK_PIXEL_ID`, `TIKTOK_ACCESS_TOKEN`। টোকেন কোডে লিখবে না, GitHub-এও না।
 
-**ধাপ ৩:** ⏰ Triggers → Add Trigger → Function `onOrderStatusEdit` → From spreadsheet → On edit। Authorize দাও।
+**ধাপ ৩:** ⏰ Triggers → Add Trigger → Function `onOrderStatusEdit` → From spreadsheet → On edit। Authorize দাও। অথবা `installOnOrderStatusEditTrigger` Run করো।
 
 **ধাপ ৪:** `testCapiConnection` Run করে Events Manager-এ event দেখো। তারপর একটা Entry রো-এর Status `Active` করো — Notes-এ `PURCHASE_SENT` আসবে, value $30।
 
@@ -754,7 +778,7 @@ Backup already taken (2026-09-19):
 
 Google Sheet → **Extensions** → **Apps Script**
 
-- Replace `OrderProcessor.gs` with repo `apps-script/OrderProcessor.gs` (keep your real `ADMIN_TOKEN`)
+- Replace `OrderProcessor.gs` with repo `apps-script/OrderProcessor.gs` (do **not** paste a live token into the file — Script properties `ADMIN_TOKEN`)
 - Replace `CapiPurchase.gs` with repo `apps-script/CapiPurchase.gs` (CAPI unchanged: Entry + Active → Purchase $30, `PURCHASE_SENT` dedupe)
 - **+** → Script → name it `SheetOrganize` → paste `apps-script/SheetOrganize.gs` **before** using the new OrderProcessor
 
@@ -807,7 +831,7 @@ cleanupOrganizeTests_        → deletes TEST_* tabs
 
 ## বাংলা — Swa একবারের সেটআপ
 
-**ধাপ ১:** Sheet → Extensions → Apps Script। তিনটা ফাইল পেস্ট করো: `OrderProcessor.gs`, `CapiPurchase.gs`, নতুন `SheetOrganize.gs`। `ADMIN_TOKEN` আগেরটাই রাখো। কলাম এদিক-ওদিক কোরো না। তারপর **Deploy → Manage deployments → New version** (আগের Web App URL রাখো) — নাহলে ওয়েবসাইটের নতুন অর্ডার পুরনো `doPost` চালাবে।
+**ধাপ ১:** Sheet → Extensions → Apps Script। তিনটা ফাইল পেস্ট করো: `OrderProcessor.gs`, `CapiPurchase.gs`, নতুন `SheetOrganize.gs`। লাইভ টোকেন কোডে পেস্ট কোরো না — ⚙️ Script properties → `ADMIN_TOKEN`। কলাম এদিক-ওদিক কোরো না। তারপর **Deploy → Manage deployments → New version** (আগের Web App URL রাখো) — নাহলে ওয়েবসাইটের নতুন অর্ডার পুরনো `doPost` চালাবে।
 
 **ধাপ ২:** ⚙️ Project Settings → Time zone: **Dhaka**।
 
@@ -825,6 +849,26 @@ cleanupOrganizeTests_        → deletes TEST_* tabs
 - `PURCHASE_SENT` Notes মুছবে না — CAPI আগের মতো Entry Active-এ একবারই যাবে
 
 `setupSheetHeaders` এখন লাইভ হেডার স্ক্র্যাম্বল করবে না। Medium/Campaign লাগলে শুধু `appendOptionalUtmHeaders` Run করো — কলাম **শেষে** যোগ হয়, মাঝখানে নয়।
+
+---
+
+# 🔐 PART 11 — Apps Script security + public status (Phase 1C)
+
+Short setup after PART 10. Master / Archive / midnight **বদলায় না**। Form JS (PR #9) এই ফাইলে নেই।
+
+## English
+
+1. **ADMIN_TOKEN** — ⚙️ Project Settings → Script properties → `ADMIN_TOKEN` = long random string. Or run `setupAdminToken_("…")`. Repo `CHANGE_ME_NOW` is a non-functional placeholder; missing token → admin URLs fail closed. Never put the token in frontend JS.
+2. **Public status** — `SHEET_URL?action=status&orderId=MM-…` (no token). JSON `{ok, found, orderId, status, plan}` via ContentService. Redeploy Web App **New version**.
+3. **Digest** — `installDailyDigestTrigger` (9am Asia/Dhaka) or the C3 time trigger. Activate links in the email use the Script Properties token. Digest still goes to `methodmafia.hq@gmail.com`.
+4. **onEdit Purchase** — Required: ⏰ `onOrderStatusEdit` → From spreadsheet → On edit. Or run `installOnOrderStatusEditTrigger`. Status is live column **I**. Entry only, value **$30**, `PURCHASE_SENT` once.
+
+## বাংলা
+
+1. **ADMIN_TOKEN** — Project Settings → Script properties-এ বসাও, কোডে না। `setupAdminToken_()`-ও চালানো যায়। `CHANGE_ME_NOW` কাজ করবে না।
+2. **স্ট্যাটাস** — `action=status&orderId=…` টোকেন ছাড়া। শুধু JSON (নাম/ইমেইল/টেলিগ্রাম নয়)। Deploy → New version।
+3. **Digest** — `installDailyDigestTrigger` (সকাল ৯টা ঢাকা)। Activate লিংক Script Properties টোকেন দিয়েই কাজ করে। ইমেইল: `methodmafia.hq@gmail.com`।
+4. **Purchase** — `onOrderStatusEdit` trigger লাগবে (বা `installOnOrderStatusEditTrigger`)। Status কলাম I। শুধু Entry $30, `PURCHASE_SENT` একবার।
 
 
 

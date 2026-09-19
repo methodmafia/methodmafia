@@ -15,8 +15,10 @@
  *
  * Installable trigger (required — simple onEdit cannot call UrlFetchApp):
  *   Triggers → Add Trigger → onOrderStatusEdit → From spreadsheet → On edit
+ *   or run installOnOrderStatusEditTrigger() once from the editor.
+ * Status is LIVE column I (COL.STATUS = 8). Entry $30 only. PURCHASE_SENT dedupes.
  *
- * See GUIDE.md → PART 9.
+ * See GUIDE.md → PART 9 + PART 11.
  */
 
 var CAPI_PURCHASE_SENT  = 'PURCHASE_SENT';
@@ -241,6 +243,22 @@ function onOrderStatusEdit(e) {
       Logger.log('onOrderStatusEdit organize row ' + r + ': ' + orgErr.message);
     }
   }
+}
+
+/** Optional installer. Simple onEdit cannot call UrlFetchApp — this must be installed. */
+function installOnOrderStatusEditTrigger() {
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'onOrderStatusEdit') {
+      Logger.log('onOrderStatusEdit already installed');
+      return;
+    }
+  }
+  ScriptApp.newTrigger('onOrderStatusEdit')
+    .forSpreadsheet(SpreadsheetApp.getActive())
+    .onEdit()
+    .create();
+  Logger.log('Installed onOrderStatusEdit (spreadsheet On edit). Status is live column I.');
 }
 
 /**
