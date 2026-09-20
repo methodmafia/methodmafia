@@ -21,7 +21,7 @@ test('CAPI Purchase only for Status Active + Plan Entry and not already sent', (
 
 test('Meta CAPI Purchase payload is $30 USD with hashed email and orderId event_id', () => {
   const body = capi.buildMetaPurchasePayload({
-    pixelId: '1152543677214096',
+    pixelId: '1402762621295852',
     orderId: 'MM-2026-4821',
     email: 'Rakib@Gmail.com',
     telegram: '@rakib_h',
@@ -111,8 +111,8 @@ test('OrderProcessor writes fbclid/ttclid at the end of the row', () => {
 
 test('Meta and TikTok endpoints match the documented APIs', () => {
   assert.equal(
-    capi.metaEventsUrl('1152543677214096'),
-    'https://graph.facebook.com/v18.0/1152543677214096/events'
+    capi.metaEventsUrl('1402762621295852'),
+    'https://graph.facebook.com/v18.0/1402762621295852/events'
   );
   assert.equal(
     capi.tiktokEventsUrl(),

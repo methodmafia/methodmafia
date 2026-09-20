@@ -55,7 +55,7 @@ const CONFIG = {
   /* ─── TRACKING ──────────────────────────────────────────
      Pixel ID বদলাতে চাইলে এখানে */
 
-  META_PIXEL: "1152543677214096",
+  META_PIXEL: "1402762621295852",
   TIKTOK_PIXEL: "DA6ITFJC77U72JPLUACG",
   GA_ID: "G-HG9ELWF8ER",
 
