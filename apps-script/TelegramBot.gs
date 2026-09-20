@@ -15,9 +15,11 @@
  *      + trySendPurchaseForRow_ (Entry $30 CAPI) + one-time VIP invite
  *      (createChatInviteLink member_limit=1). NEVER post the link in VIP/public.
  *   2) Pay/renew reminders → customer Telegram (email path stays in Lifecycle.gs).
- *      Copy is RENEW_COPY_PREMIUM_VIP.md (Premium VIP, $15). Language column
- *      en|bn|hi, default EN. Dedupe RENEW_TG_3/_2/_1. Pending-pay is Entry-only
- *      (no $15). Legacy ~3100 VIP members are never messaged by kick jobs.
+ *      Copy is LOCKED 2026-09-21 Premium VIP pack ($15). Language column
+ *      en|bn|hi, default EN. Telegram shorts are compressed from the locked
+ *      email bodies only (no new FOMO lines). Dedupe RENEW_TG_3/_2/_1.
+ *      Pending-pay is Entry-only (no $15). Legacy ~3100 VIP members are never
+ *      messaged by kick jobs.
  *   3) Kick jobs apply ONLY to members who entered via this new system
  *      (website order → pay → admin ✅ → Active + CAPI $30 + one-time VIP
  *      invite) and are now Sheet Expired. ALWAYS a confirm list, then admin ✅
@@ -643,53 +645,71 @@ function premiumVipRenewPack_() {
   return {
     en: {
       3: {
-        subject: "Your Premium VIP access ends in 3 days",
+        subject: "{name}, you still have a little time ⏳",
         body:
-          "Hey {name} 👋\n\nYour Premium VIP access ends in **3 days**.\n\nInside you still get the daily edge, private signals, and the circle that keeps compounding.\n\nRenew for **$15** and stay in — don’t let the streak break.\n\n→ {renew_link}\n\n— Method Mafia"
+          "Hey {name} 👋\n\nYour first month in Premium VIP is almost over. 3 days left.\n\nWhat you are using now — tools, methods, support — would cost a lot more per month if you bought each one separately outside. Here, one small renew keeps everything in one place. Some members use the methods and AI tools for personal work. Some use them for business. Some even earn by selling on marketplaces.\n\nWant to stay in the premium group? Lock your seat now:\n{renew_link}\n\nJust $15. Small step, keep the big advantage 💛\n— Method Mafia",
+        tg:
+          "Hey {name} 👋\n\nYour first month in Premium VIP is almost over. 3 days left.\n\nWant to stay in the premium group? Lock your seat now:\n{renew_link}\n\nJust $15. Small step, keep the big advantage 💛\n— Method Mafia"
       },
       2: {
-        subject: "2 days left in Premium VIP",
+        subject: "{name}, do the quick math ⚡",
         body:
-          "{name}, quick reminder ⚡\n\nOnly **2 days** left on your Premium VIP.\n\nPeople who stay usually keep the gains stacking. Stepping out now means missing the next moves.\n\nLock **$15** renew today and keep your seat.\n\n→ {renew_link}"
+          "{name},\n\n2 days left.\n\nOutside, one solid AI tool subscription alone often runs about $20+. Here, $15 keeps tools through support in one package. A lot of members also find their own income path from here.\n\nIf this advantage cuts off, you start paying piece by piece again. Stay inside and keep everything in one place.\n\nRenew and keep your seat:\n{renew_link}\n\nYou are already inside. Do not give it up lightly 👀",
+        tg:
+          "{name},\n\n2 days left.\n\nOutside, one solid AI tool subscription alone often runs about $20+. Here, $15 keeps tools through support in one package. A lot of members also find their own income path from here.\n\nRenew and keep your seat:\n{renew_link}\n\nYou are already inside. Do not give it up lightly 👀"
       },
       1: {
-        subject: "Last day — Premium VIP closes tonight",
+        subject: "Last email, {name} — access ends tonight 🔥",
         body:
-          "{name} — this is your last day 🔥\n\nPremium VIP access ends **tonight**. After that, the door closes and you’ll miss what’s coming next.\n\nOne small step: renew **$15** and stay inside.\n\n→ {renew_link}\n\nDon’t sleep on this."
+          "Hey {name} 👋\n\nThis is your last renew message. Premium VIP access ends tonight. You will not get another email on this after that.\n\nQuick reminder — outside, one AI tool subscription alone is often about $20+. Here, $15 kept tools, methods, and support in one place. Some members use it for personal work, some for business, some even earn by selling on marketplaces. After tonight, that one-place advantage goes away.\n\nIf this month helped you move forward, lock your seat today. Do it now — before tomorrow morning feels like “I should have renewed.”\n\nJust $15:\n{renew_link}\n\nDoor closes tonight. Keep your seat 💛\n— Method Mafia",
+        tg:
+          "Hey {name} 👋\n\nThis is your last renew message. Premium VIP access ends tonight. You will not get another email on this after that.\n\nJust $15:\n{renew_link}\n\nDoor closes tonight. Keep your seat 💛\n— Method Mafia"
       }
     },
     bn: {
       3: {
-        subject: "Premium VIP আর ৩ দিন বাকি",
+        subject: "{name}, আর একটু সময় আছে ⏳",
         body:
-          "হ্যালো {name} 👋\n\nতোমার Premium VIP এক্সেস আর **৩ দিন** পরে শেষ।\n\nভিতরে এখনো আছে ডেইলি এজ, প্রাইভেট সিগন্যাল, আর যে সার্কেল তোমার লাভ বাড়াচ্ছে।\n\nমাত্র **$15** রিনিউ করে ভিতরে থাকো — স্ট্রিক ভাঙতে দিও না।\n\n→ {renew_link}\n\n— Method Mafia"
+          "{name} ভাই 👋\n\nPremium VIP তে তোমার এক মাস প্রায় শেষ। আর ৩ দিন।\n\nএই সময়টায় তুমি যা ব্যবহার করছো — টুলস, মেথড, সাপোর্ট — বাইরে আলাদা আলাদা কিনলে মাসে অনেক বেশি টাকা খরচ হবে। এখানে একটা ছোট রিনিউতেই সব একসাথে থাকে। কেউ মেথড ব্যবহার করে বিভিন্ন AI আর টুলস নিজের পার্সোনাল কাজে লাগায়। আবার কেউ ব্যবসার কাজে ব্যবহার করে। আবার কেউ বিভিন্ন মার্কেটপ্লেসে সেল করে ইনকামও করে।\n\nপ্রিমিয়াম গ্রুপে থাকতে চাইলে এখন থেকেই সিট লক করে রাখো:\n{renew_link}\n\n$15। ছোট পদক্ষেপ, বড় সুবিধা ধরে রাখা 💛\n— Method Mafia",
+        tg:
+          "{name} ভাই 👋\n\nPremium VIP তে তোমার এক মাস প্রায় শেষ। আর ৩ দিন।\n\nপ্রিমিয়াম গ্রুপে থাকতে চাইলে এখন থেকেই সিট লক করে রাখো:\n{renew_link}\n\n$15। ছোট পদক্ষেপ, বড় সুবিধা ধরে রাখা 💛\n— Method Mafia"
       },
       2: {
-        subject: "Premium VIP — আর মাত্র ২ দিন",
+        subject: "{name}, হিসাব মিলিয়ে নাও ⚡",
         body:
-          "{name}, ছোট রিমাইন্ডার ⚡\n\nPremium VIP-তে আর মাত্র **২ দিন**।\n\nযারা থাকেন, তারা সাধারণত গেইন স্ট্যাক করতে থাকেন। এখন বের হলে পরের মুভগুলো মিস।\n\nআজই **$15** রিনিউ করে সিট লক করো।\n\n→ {renew_link}"
+          "{name},\n\nআর ২ দিন বাকি।\n\nবাইরে শুধু একটা ভালো AI টুলের সাবস্ক্রিপশনেই প্রায় $20+ চলে যায়। এখানে $15 এ টুলস থেকে সাপোর্ট পর্যন্ত এক প্যাকেজেই আছে। অনেকে এখান থেকে নিজের ইনকামের রাস্তাও খুঁজে নেয়।\n\nএই সুবিধা কেটে গেলে আবার টুকরো টুকরো খরচ শুরু। ভিতরে থাকলে এক জায়গায় সব।\n\nরিনিউ করে সিট রাখো:\n{renew_link}\n\nতুমি ইতিমধ্যে ভিতরে। হালকা মনে করে ছেড়ে দিও না 👀",
+        tg:
+          "{name},\n\nআর ২ দিন বাকি।\n\nবাইরে শুধু একটা ভালো AI টুলের সাবস্ক্রিপশনেই প্রায় $20+ চলে যায়। এখানে $15 এ টুলস থেকে সাপোর্ট পর্যন্ত এক প্যাকেজেই আছে। অনেকে এখান থেকে নিজের ইনকামের রাস্তাও খুঁজে নেয়।\n\nরিনিউ করে সিট রাখো:\n{renew_link}\n\nতুমি ইতিমধ্যে ভিতরে। হালকা মনে করে ছেড়ে দিও না 👀"
       },
       1: {
-        subject: "শেষ দিন — আজ রাত Premium VIP বন্ধ",
+        subject: "শেষ ইমেইল, {name} — আজ রাত কেটে যাচ্ছে 🔥",
         body:
-          "{name} — এটা তোমার শেষ দিন 🔥\n\nPremium VIP এক্সেস **আজ রাতে** শেষ। এরপর দরজা বন্ধ — পরের সুযোগগুলো হাতছাড়া।\n\nএকটা ছোট স্টেপ: **$15** রিনিউ করে ভিতরে থাকো।\n\n→ {renew_link}\n\nএটা স্লিপ করো না।"
+          "{name} ভাই 👋\n\nএটা তোমার শেষ রিনিউ মেসেজ। আজ রাত Premium VIP এক্সেস বন্ধ হয়ে যাচ্ছে। এর পর এই টপিকে আর মেইল আসবে না।\n\nএকটু মনে করো — বাইরে শুধু একটা AI টুলের সাবস্ক্রিপশনেই প্রায় $20+ চলে যায়। এখানে $15 এ টুলস, মেথড, সাপোর্ট একসাথে ছিল। কেউ এটা দিয়ে নিজের কাজ চালায়, কেউ ব্যবসা, কেউ মার্কেটপ্লেসে সেল করে ইনকামও করে। আজ রাতের পর সেই এক জায়গার সুবিধাটা থাকবে না।\n\nযদি মনে হয় এই এক মাসে তোমার কিছু এগিয়েছে, তাহলে আজই সিট লক করো। কাল সকালে “করে রাখতাম” ভাবার আগে আজ সেরে ফেলো।\n\nমাত্র $15:\n{renew_link}\n\nদরজা আজ রাত বন্ধ। তোমার সিট তোমারই রাখো 💛\n— Method Mafia",
+        tg:
+          "{name} ভাই 👋\n\nএটা তোমার শেষ রিনিউ মেসেজ। আজ রাত Premium VIP এক্সেস বন্ধ হয়ে যাচ্ছে। এর পর এই টপিকে আর মেইল আসবে না।\n\nমাত্র $15:\n{renew_link}\n\nদরজা আজ রাত বন্ধ। তোমার সিট তোমারই রাখো 💛\n— Method Mafia"
       }
     },
     hi: {
       3: {
-        subject: "Premium VIP में सिर्फ 3 दिन बाकी",
+        subject: "{name}, थोड़ा समय और बचा है ⏳",
         body:
-          "नमस्ते {name} 👋\n\nतुम्हारा Premium VIP एक्सेस **3 दिन** में खत्म हो रहा है।\n\nअंदर अभी भी डेली एज, प्राइवेट सिग्नल्स, और वो सर्कल है जो तुम्हारा फायदा बढ़ा रहा है।\n\nसिर्फ **$15** रिन्यू करके अंदर रहो — स्ट्रीक मत तोड़ो।\n\n→ {renew_link}\n\n— Method Mafia"
+          "{name} भाई 👋\n\nPremium VIP में तुम्हारा एक महीना लगभग खत्म। बस 3 दिन बचे हैं।\n\nजो तुम अभी यूज़ कर रहे हो — टूल्स, मेथड्स, सपोर्ट — बाहर अलग-अलग खरीदोगे तो महीने का खarcha बहुत बढ़ जाएगा। यहाँ एक छोटे रिन्यू में सब एक साथ रहता है। कोई मेथड और AI टूल्स पर्सनल काम में लगाता है। कोई बिज़नेस में यूज़ करता है। कोई मार्केटप्लेस पर सेल करके इनकम भी करता है।\n\nप्रीमियम ग्रुप में रहना है तो अभी से सीट लॉक कर लो:\n{renew_link}\n\nसिर्फ $15। छोटा कदम, बड़ा फायदा बचा के रखना 💛\n— Method Mafia",
+        tg:
+          "{name} भाई 👋\n\nPremium VIP में तुम्हारा एक महीना लगभग खत्म। बस 3 दिन बचे हैं।\n\nप्रीमियम ग्रुप में रहना है तो अभी से सीट लॉक कर लो:\n{renew_link}\n\nसिर्फ $15। छोटा कदम, बड़ा फायदा बचा के रखना 💛\n— Method Mafia"
       },
       2: {
-        subject: "Premium VIP — सिर्फ 2 दिन बचे",
+        subject: "{name}, हिसाब मिला लो ⚡",
         body:
-          "{name}, छोटा रिमाइंडर ⚡\n\nPremium VIP में सिर्फ **2 दिन** बचे हैं।\n\nजो लोग रहते हैं, वो आमतौर पर गेन स्टैक करते रहते हैं। अब बाहर निकले तो अगले मूव्स मिस।\n\nआज ही **$15** रिन्यू करके सीट लॉक करो।\n\n→ {renew_link}"
+          "{name},\n\n2 दिन बचे हैं।\n\nबाहर सिर्फ एक अच्छे AI टूल का सब्सक्रिप्शन ही लगभग $20+ बैठ जाता है। यहाँ $15 में टूल्स से सपोर्ट तक एक पैकेज में है। बहुत लोग यहाँ से अपनी इनकम की राह भी बनाते हैं।\n\nये सुविधा कट गई तो फिर टुकड़ों-टुकड़ों में खर्चा शुरू। अंदर रहोगे तो सब एक जगह।\n\nरिन्यू करके सीट रखो:\n{renew_link}\n\nतुम पहले से अंदर हो। हल्के में छोड़ मत देना 👀",
+        tg:
+          "{name},\n\n2 दिन बचे हैं।\n\nबाहर सिर्फ एक अच्छे AI टूल का सब्सक्रिप्शन ही लगभग $20+ बैठ जाता है। यहाँ $15 में टूल्स से सपोर्ट तक एक पैकेज में है। बहुत लोग यहाँ से अपनी इनकम की राह भी बनाते हैं।\n\nरिन्यू करके सीट रखो:\n{renew_link}\n\nतुम पहले से अंदर हो। हल्के में छोड़ मत देना 👀"
       },
       1: {
-        subject: "आखिरी दिन — आज रात Premium VIP बंद",
+        subject: "आखिरी ईमेल, {name} — आज रात कट जाएगा 🔥",
         body:
-          "{name} — ये तुम्हारा आखिरी दिन है 🔥\n\nPremium VIP एक्सेस **आज रात** खत्म। उसके बाद दरवाज़ा बंद — आगे के मौके हाथ से निकल जाएंगे।\n\nएक छोटा स्टेप: **$15** रिन्यू करके अंदर रहो।\n\n→ {renew_link}\n\nइसको स्लीप मत करो।"
+          "{name} भाई 👋\n\nये तुम्हारा आखिरी रिन्यू मैसेज है। आज रात Premium VIP एक्सेस बंद हो जाएगा। इसके बाद इस टॉपिक पर और मेल नहीं आएगा।\n\nथोड़ा याद रखो — बाहर सिर्फ एक AI टूल के सब्सक्रिप्शन में ही लगभग $20+ लग जाते हैं। यहाँ $15 में टूल्स, मेथड्स, सपोर्ट एक साथ थे। कोई अपना काम चलाता है, कोई बिज़नेस, कोई मार्केटप्लेस पर सेल करके इनकम भी करता है। आज रात के बाद वो एक जगह वाली सुविधा नहीं रहेगी।\n\nअगर लगता है इस एक महीने में तुम थोड़ा आगे बढ़े हो, तो आज ही सीट लॉक करो। कल सुबह “कर लेता” सोचने से पहले आज कर लो।\n\nसिर्फ $15:\n{renew_link}\n\nदरवाज़ा आज रात बंद। अपनी सीट अपने पास रखो 💛\n— Method Mafia",
+        tg:
+          "{name} भाई 👋\n\nये तुम्हारा आखिरी रिन्यू मैसेज है। आज रात Premium VIP एक्सेस बंद हो जाएगा। इसके बाद इस टॉपिक पर और मेल नहीं आएगा।\n\nसिर्फ $15:\n{renew_link}\n\nदरवाज़ा आज रात बंद। अपनी सीट अपने पास रखो 💛\n— Method Mafia"
       }
     }
   };
@@ -704,7 +724,8 @@ function buildPremiumVipRenewCopy_(lang, daysLeft, item) {
   var entry = pack[code][n];
   return {
     subject: fillRenewPlaceholders_(entry.subject, item),
-    body: fillRenewPlaceholders_(entry.body, item)
+    body: fillRenewPlaceholders_(entry.body, item),
+    tg: fillRenewPlaceholders_(entry.tg || entry.body, item)
   };
 }
 
@@ -753,7 +774,8 @@ function buildCustomerPayTelegramMessage_(item) {
 function buildCustomerRenewTelegramMessage_(item) {
   item = item || {};
   var lang = resolveCustomerCopyLang_(item.notes, item.locale || item.lang || item.language);
-  return stripMarkdownBold_(buildPremiumVipRenewCopy_(lang, item.daysLeft, item).body);
+  var copy = buildPremiumVipRenewCopy_(lang, item.daysLeft, item);
+  return copy.tg || copy.body;
 }
 
 /* ── Lifecycle planners (email stays in Lifecycle.gs) ───── */
@@ -1639,6 +1661,7 @@ if (typeof module === 'object' && module.exports) {
     buildCustomerRenewTelegramMessage_: buildCustomerRenewTelegramMessage_,
     resolveCustomerCopyLang_: resolveCustomerCopyLang_,
     buildPremiumVipRenewCopy_: buildPremiumVipRenewCopy_,
+    premiumVipRenewPack_: premiumVipRenewPack_,
     planTelegramPayReminders_: planTelegramPayReminders_,
     planTelegramRenewReminders_: planTelegramRenewReminders_,
     planTelegramKickAsks_: planTelegramKickAsks_,

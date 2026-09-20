@@ -251,7 +251,7 @@ test('pay/renew TG jobs select Pending>24h and Active 3/2/1 without double-send 
   assert.equal(renew.filter((p) => p.orderId === 'MM-R1')[0].marker, 'RENEW_TG_1');
 });
 
-test('customer pay/renew Telegram copy: pack shorts, EN default, Entry pay has no $15', () => {
+test('customer pay/renew Telegram copy: LOCKED 2026-09-21 shorts, EN default, Entry pay has no $15', () => {
   const pay = tg.buildCustomerPayTelegramMessage_({
     name: 'Rakib',
     orderId: 'MM-2026-4821',
@@ -268,45 +268,64 @@ test('customer pay/renew Telegram copy: pack shorts, EN default, Entry pay has n
     daysLeft: 3,
     language: 'en'
   });
-  assert.match(en3, /Hey Felix/);
-  assert.match(en3, /Premium VIP/);
-  assert.match(en3, /3 days/);
-  assert.match(en3, /\$15/);
+  assert.match(en3, /Hey Felix 👋/);
+  assert.match(en3, /Your first month in Premium VIP is almost over\. 3 days left\./);
+  assert.match(en3, /Just \$15/);
   assert.match(en3, /@MMHQ_Support/);
   assert.ok(en3.length <= 420);
-  assert.doesNotMatch(en3, /Premium VIP আর ৩ দिन बাকি|Premium VIP আর ৩ দিন বাকি/);
+  assert.doesNotMatch(en3, /private signals|daily edge|streak|Your Premium VIP access ends in 3 days/);
   assert.doesNotMatch(en3, /t\.me\/\+/);
   assert.doesNotMatch(en3, /kick|ban/i);
   assert.doesNotMatch(en3, /\$30/);
 
   const bn3 = tg.buildCustomerRenewTelegramMessage_({ name: 'Rakib', daysLeft: 3, language: 'bn' });
-  assert.match(bn3, /হ্যালো Rakib/);
-  assert.match(bn3, /৩ দিন/);
+  assert.match(bn3, /Rakib ভাই 👋/);
+  assert.match(bn3, /আর ৩ দিন/);
   assert.match(bn3, /\$15/);
-  assert.doesNotMatch(bn3, /Your Premium VIP access ends in 3 days/);
+  assert.doesNotMatch(bn3, /you still have a little time/);
   assert.ok(bn3.length <= 420);
 
   const hi3 = tg.buildCustomerRenewTelegramMessage_({ name: 'Amit', daysLeft: 3, language: 'hi' });
-  assert.match(hi3, /नमस्ते Amit/);
-  assert.match(hi3, /3 दिन/);
+  assert.match(hi3, /Amit भाई 👋/);
+  assert.match(hi3, /3 दिन बचे हैं/);
   assert.match(hi3, /\$15/);
-  assert.doesNotMatch(hi3, /Your Premium VIP access ends in 3 days/);
+  assert.doesNotMatch(hi3, /you still have a little time/);
 
   const blank = tg.buildCustomerRenewTelegramMessage_({ name: 'Felix', daysLeft: 3, language: '' });
-  assert.match(blank, /Hey Felix/);
+  assert.match(blank, /Hey Felix 👋/);
   assert.equal(tg.resolveCustomerCopyLang_('', ''), 'en');
 });
 
-test('Telegram renew pack shorts isolate BN/HI and escalate day2/day1', () => {
+test('Telegram renew shorts are compressed from locked email bodies; day2/day1 escalate', () => {
+  const pack = tg.premiumVipRenewPack_();
+  ['en', 'bn', 'hi'].forEach((lang) => {
+    [3, 2, 1].forEach((day) => {
+      const email = pack[lang][day].body;
+      const short = pack[lang][day].tg;
+      assert.ok(short, lang + ' day' + day + ' missing tg key');
+      short.split(/\n\n/).forEach((para) => {
+        assert.equal(email.includes(para), true, lang + ' day' + day + ' tg invented: ' + para.slice(0, 80));
+      });
+      assert.match(short, /\$15/);
+      assert.match(short, /\{renew_link\}/);
+    });
+  });
+
   const en2 = tg.buildCustomerRenewTelegramMessage_({ name: 'Felix', daysLeft: 2, language: 'en' });
-  assert.match(en2, /2 days left|Only \*\*2 days\*\*|Only 2 days/);
+  assert.match(en2, /2 days left/);
   assert.match(en2, /\$15/);
+  assert.ok(en2.length <= 420);
   const en1 = tg.buildCustomerRenewTelegramMessage_({ name: 'Felix', daysLeft: 1, language: 'en' });
-  assert.match(en1, /last day|tonight/i);
+  assert.match(en1, /last renew message/i);
+  assert.match(en1, /tonight/i);
   assert.match(en1, /\$15/);
+  assert.ok(en1.length <= 420);
   const hi2 = tg.buildCustomerRenewTelegramMessage_({ name: 'Amit', daysLeft: 2, notes: 'LANG_HI' });
-  assert.match(hi2, /2 दिन/);
-  assert.doesNotMatch(hi2, /হ্যালো/);
+  assert.match(hi2, /2 दिन बचे हैं/);
+  assert.doesNotMatch(hi2, /ভাই/);
+  const bn1 = tg.buildCustomerRenewTelegramMessage_({ name: 'Rakib', daysLeft: 1, language: 'bn' });
+  assert.match(bn1, /শেষ রিনিউ মেসেজ/);
+  assert.match(bn1, /\$15/);
 });
 
 test('kick is confirm-first: job only asks admin; ban runs only after admin k: callback', () => {

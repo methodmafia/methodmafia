@@ -220,7 +220,31 @@ test('Customer renew emails plan 3/2/1 day Active rows with Email, deduped by RE
   assert.equal(byId['MM-PEND'], undefined);
 });
 
-test('Customer renew mail uses pack copy: EN default, Language column, no cross-language leak', () => {
+test('Customer renew mail uses LOCKED 2026-09-21 pack: EN/BN/HI × Day 3/2/1, old FOMO gone', () => {
+  const pack = life.premiumVipRenewPack_();
+  assert.equal(pack.en[3].subject, '{name}, you still have a little time ⏳');
+  assert.equal(pack.en[2].subject, '{name}, do the quick math ⚡');
+  assert.equal(pack.en[1].subject, 'Last email, {name} — access ends tonight 🔥');
+  assert.equal(pack.bn[3].subject, '{name}, আর একটু সময় আছে ⏳');
+  assert.equal(pack.bn[2].subject, '{name}, হিসাব মিলিয়ে নাও ⚡');
+  assert.equal(pack.bn[1].subject, 'শেষ ইমেইল, {name} — আজ রাত কেটে যাচ্ছে 🔥');
+  assert.equal(pack.hi[3].subject, '{name}, थोड़ा समय और बचा है ⏳');
+  assert.equal(pack.hi[2].subject, '{name}, हिसाब मिला लो ⚡');
+  assert.equal(pack.hi[1].subject, 'आखिरी ईमेल, {name} — आज रात कट जाएगा 🔥');
+  assert.match(pack.en[3].body, /^Hey \{name\} 👋\n\nYour first month in Premium VIP is almost over\. 3 days left\./);
+  assert.match(pack.bn[1].body, /^\{name\} ভাই 👋\n\nএটা তোমার শেষ রিনিউ মেসেজ/);
+  assert.match(pack.hi[2].body, /2 दिन बचे हैं/);
+
+  const oldFomo = /private signals|daily edge|streak|Your Premium VIP access ends in 3 days|2 days left in Premium VIP|Last day — Premium VIP closes tonight|Premium VIP আর ৩ দিন বাকি|compounding|Don't sleep on this|এটা স্লিপ করো না|स्ट्रीक/;
+  ['en', 'bn', 'hi'].forEach((lang) => {
+    [3, 2, 1].forEach((day) => {
+      const blob = pack[lang][day].subject + '\n' + pack[lang][day].body + '\n' + (pack[lang][day].tg || '');
+      assert.doesNotMatch(blob, oldFomo);
+      assert.match(pack[lang][day].body, /\$15/);
+      assert.match(pack[lang][day].body, /\{renew_link\}/);
+    });
+  });
+
   const en3 = life.buildCustomerRenewMessage_({
     name: 'Felix',
     email: 'felix@example.com',
@@ -228,15 +252,14 @@ test('Customer renew mail uses pack copy: EN default, Language column, no cross-
   });
   assert.equal(en3.to, 'felix@example.com');
   assert.notEqual(en3.to, life.LIFECYCLE_ADMIN_EMAIL);
-  assert.equal(en3.subject, 'Your Premium VIP access ends in 3 days');
-  assert.match(en3.textBody, /Hey Felix/);
-  assert.match(en3.textBody, /Premium VIP access ends in \*\*3 days\*\*/);
-  assert.match(en3.textBody, /\$15/);
+  assert.equal(en3.subject, 'Felix, you still have a little time ⏳');
+  assert.match(en3.textBody, /Hey Felix 👋/);
+  assert.match(en3.textBody, /Your first month in Premium VIP is almost over\. 3 days left\./);
+  assert.match(en3.textBody, /Just \$15/);
   assert.match(en3.textBody, /@MMHQ_Support/);
-  assert.doesNotMatch(en3.textBody, /Premium VIP আর ৩ দিন বাকি/);
-  assert.doesNotMatch(en3.textBody, /सिर्फ 3 दिन बाकी/);
+  assert.doesNotMatch(en3.textBody, oldFomo);
   assert.doesNotMatch(en3.textBody, /\$30/);
-  assert.doesNotMatch(en3.textBody, /kick|ban|bot/i);
+  assert.doesNotMatch(en3.textBody, /\bkick\b|\bban\b/i);
   assert.equal(life.resolveCustomerCopyLang_('', ''), 'en');
   assert.equal(life.resolveCustomerCopyLang_('', 'bn'), 'bn');
   assert.equal(life.resolveCustomerCopyLang_('LANG_HI', ''), 'hi');
@@ -244,28 +267,59 @@ test('Customer renew mail uses pack copy: EN default, Language column, no cross-
   const bn3 = life.buildCustomerRenewMessage_({
     name: 'Rakib', email: 'r@example.com', daysLeft: 3, language: 'bn'
   });
-  assert.equal(bn3.subject, 'Premium VIP আর ৩ দিন বাকি');
-  assert.match(bn3.textBody, /হ্যালো Rakib/);
+  assert.equal(bn3.subject, 'Rakib, আর একটু সময় আছে ⏳');
+  assert.match(bn3.textBody, /Rakib ভাই 👋/);
+  assert.match(bn3.textBody, /আর ৩ দিন/);
   assert.match(bn3.textBody, /\$15/);
-  assert.doesNotMatch(bn3.textBody, /Your Premium VIP access ends in 3 days/);
+  assert.doesNotMatch(bn3.textBody, /Felix, you still have a little time/);
+  assert.doesNotMatch(bn3.textBody, /হ্যালো/);
+
+  const en2 = life.buildCustomerRenewMessage_({
+    name: 'Felix', email: 'f@example.com', daysLeft: 2, language: 'en'
+  });
+  assert.equal(en2.subject, 'Felix, do the quick math ⚡');
+  assert.match(en2.textBody, /2 days left/);
+  assert.match(en2.textBody, /\$20\+/);
+  assert.match(en2.textBody, /\$15/);
 
   const hi2 = life.buildCustomerRenewMessage_({
     name: 'Amit', email: 'a@example.com', daysLeft: 2, language: 'HI'
   });
-  assert.equal(hi2.subject, 'Premium VIP — सिर्फ 2 दिन बचे');
+  assert.equal(hi2.subject, 'Amit, हिसाब मिला लो ⚡');
   assert.match(hi2.textBody, /Amit/);
+  assert.match(hi2.textBody, /2 दिन बचे हैं/);
   assert.match(hi2.textBody, /\$15/);
-  assert.doesNotMatch(hi2.textBody, /2 days left in Premium VIP/);
+  assert.doesNotMatch(hi2.textBody, /do the quick math/);
+
+  const hi3 = life.buildCustomerRenewMessage_({
+    name: 'Amit', email: 'a@example.com', daysLeft: 3, language: 'hi'
+  });
+  assert.equal(hi3.subject, 'Amit, थोड़ा समय और बचा है ⏳');
+  assert.match(hi3.textBody, /Amit भाई 👋/);
 
   const bn1 = life.buildCustomerRenewMessage_({
     name: 'Rakib', email: 'r@example.com', daysLeft: 1, notes: 'LANG_BN'
   });
-  assert.equal(bn1.subject, 'শেষ দিন — আজ রাত Premium VIP বন্ধ');
+  assert.equal(bn1.subject, 'শেষ ইমেইল, Rakib — আজ রাত কেটে যাচ্ছে 🔥');
+  assert.match(bn1.textBody, /এটা তোমার শেষ রিনিউ মেসেজ/);
+  assert.match(bn1.textBody, /মাত্র \$15/);
+
+  const en1 = life.buildCustomerRenewMessage_({
+    name: 'Felix', email: 'f@example.com', daysLeft: 1, language: 'en'
+  });
+  assert.equal(en1.subject, 'Last email, Felix — access ends tonight 🔥');
+  assert.match(en1.textBody, /This is your last renew message/);
+
+  const hi1 = life.buildCustomerRenewMessage_({
+    name: 'Amit', email: 'a@example.com', daysLeft: 1, language: 'hi'
+  });
+  assert.equal(hi1.subject, 'आखिरी ईमेल, Amit — आज रात कट जाएगा 🔥');
+  assert.match(hi1.textBody, /आखिरी रिन्यू मैसेज/);
 
   const blank = life.buildCustomerRenewMessage_({
     name: 'Felix', email: 'f@example.com', daysLeft: 3, language: ''
   });
-  assert.equal(blank.subject, 'Your Premium VIP access ends in 3 days');
+  assert.equal(blank.subject, 'Felix, you still have a little time ⏳');
 });
 
 test('customer renew send options From info@themethodmafia.com, never HQ Gmail', () => {
@@ -447,5 +501,7 @@ test('GUIDE documents Phase 2A triggers, renew URL, and Days Left on Expiry', ()
   assert.match(guide, /repairDaysLeftFormulas/);
   assert.match(guide, /methodmafia\.hq@gmail\.com/);
   assert.match(guide, /\$15|Premium VIP|Language/i);
+  assert.match(guide, /2026-09-21/);
   assert.doesNotMatch(guide, /Telegram bot send|bot\.sendMessage/i);
+  assert.doesNotMatch(guide, /tone B|private signals|daily edge/i);
 });
