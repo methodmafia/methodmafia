@@ -373,6 +373,25 @@ function toggleFaq(btn){
   if(!open) item.classList.add('open');
 }
 
+/* ─── Preferred language (order field; independent of page LANG) ─── */
+let SELECTED_PREF_LANG = 'en';
+function selectPrefLang(el, code){
+  const lang = (typeof MMSheet !== 'undefined')
+    ? MMSheet.normalizeOrderLanguage(code)
+    : (code === 'bn' || code === 'hi' ? code : 'en');
+  document.querySelectorAll('.lang-pref-opt').forEach(b=>{
+    b.classList.remove('sel');
+    b.setAttribute('aria-pressed', 'false');
+  });
+  if(el){
+    el.classList.add('sel');
+    el.setAttribute('aria-pressed', 'true');
+  }
+  SELECTED_PREF_LANG = lang;
+  const hidden = document.getElementById('iLanguage');
+  if(hidden) hidden.value = lang;
+}
+
 /* ─── প্ল্যান সিলেক্ট ─── */
 let SELECTED_PLAN = 'entry';
 function selectPlan(el, plan){
@@ -514,11 +533,15 @@ function submitOrder(){
   const track = (typeof MMTracking !== 'undefined')
     ? MMTracking.buildSheetTrackingFields(utmData)
     : {source:utmData.utm_source, medium:utmData.utm_medium, campaign:utmData.utm_campaign, fbclid:utmData.fbclid||'', ttclid:utmData.ttclid||''};
+  const prefLangInput = document.getElementById('iLanguage');
   const payload = {
     orderId: orderId,
     name: name.value.trim(),
     email: email.value.trim(),
     telegram: handle,
+    language: (typeof MMSheet !== 'undefined')
+      ? MMSheet.normalizeOrderLanguage(prefLangInput ? prefLangInput.value : SELECTED_PREF_LANG)
+      : (SELECTED_PREF_LANG === 'bn' || SELECTED_PREF_LANG === 'hi' ? SELECTED_PREF_LANG : 'en'),
     plan: SELECTED_PLAN === 'entry' ? 'Entry' : 'Monthly',
     amount: SELECTED_PLAN === 'entry' ? CONFIG.ENTRY_USD : CONFIG.MONTHLY_USD,
     payment: SELECTED_PAY,
@@ -603,6 +626,9 @@ function submitOrder(){
         'Name     : ' + payload.name + '\n' +
         'Email    : ' + payload.email + '\n' +
         'Telegram : ' + handle + '\n' +
+        'Language : ' + ((typeof MMSheet !== 'undefined')
+          ? MMSheet.sheetLanguageLabel(payload.language)
+          : String(payload.language || 'en').toUpperCase()) + '\n' +
         '━━━━━━━━━━━━━━\n' +
         'Plan     : ' + payload.plan + '\n' +
         'Amount   : ' + payload.amount + localLine + '\n' +

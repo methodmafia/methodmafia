@@ -46,7 +46,8 @@ const COL = {
   DAYS_LEFT  : 13,  // N  ← formula-driven
   NOTES      : 14,  // O
   FBCLID     : 15,  // P  ← Facebook click id (ads)
-  TTCLID     : 16   // Q  ← TikTok click id (ads)
+  TTCLID     : 16,  // Q  ← TikTok click id (ads)
+  LANGUAGE   : 17   // R  ← Preferred language EN/BN/HI
 };
 
 /* ────────────────────────────────────────────────────────────
@@ -81,7 +82,8 @@ function doPost(e) {
       '',                         // N: Days Left (formula added below)
       isDupe ? '⚠️ DUPLICATE' : '',        // O: Notes
       data.fbclid || '',          // P: FBclid
-      data.ttclid || ''           // Q: TTclid
+      data.ttclid || '',          // Q: TTclid
+      sheetLanguageLabel_(data.language)  // R: Language (EN/BN/HI)
     ];
 
     const lastRow = sheet.getLastRow();
@@ -227,11 +229,11 @@ function sendDailyDigest() {
 
   if (todayOrders.length > 0) {
     body += '<h3>New Orders</h3><table border="1" cellpadding="6" style="border-collapse:collapse">';
-    body += '<tr><th>Order ID</th><th>Name</th><th>Telegram</th><th>Plan</th><th>Payment</th><th>Source</th><th>Medium</th><th>Campaign</th></tr>';
+    body += '<tr><th>Order ID</th><th>Name</th><th>Telegram</th><th>Plan</th><th>Payment</th><th>Language</th><th>Source</th><th>Medium</th><th>Campaign</th></tr>';
     todayOrders.forEach(r => {
       body += '<tr><td>' + r[COL.ORDER_ID] + '</td><td>' + r[COL.NAME] + '</td>'
             + '<td>' + r[COL.TELEGRAM] + '</td><td>' + r[COL.PLAN] + '</td>'
-            + '<td>' + r[COL.PAYMENT] + '</td><td>' + (r[COL.SOURCE]||'direct') + '</td>'
+            + '<td>' + r[COL.PAYMENT] + '</td><td>' + (r[COL.LANGUAGE]||'EN') + '</td><td>' + (r[COL.SOURCE]||'direct') + '</td>'
             + '<td>' + (r[COL.MEDIUM]||'') + '</td><td>' + (r[COL.CAMPAIGN]||'') + '</td></tr>';
     });
     body += '</table>';
@@ -330,6 +332,14 @@ function sendExpiryReminders() {
 /* ────────────────────────────────────────────────────────────
    Helpers
    ──────────────────────────────────────────────────────────── */
+function sheetLanguageLabel_(code) {
+  /* Keep in sync with js/sheet-client.js → sheetLanguageLabel */
+  const s = String(code || '').trim().toLowerCase();
+  if (s === 'bn') return 'BN';
+  if (s === 'hi') return 'HI';
+  return 'EN';
+}
+
 function findOrderRow(sheet, orderId) {
   const data = sheet.getDataRange().getValues();
   for (let i = 1; i < data.length; i++) {
@@ -359,7 +369,7 @@ function setupSheetHeaders() {
   const headers = [
     'Timestamp','Order ID','Name','Email','Telegram',
     'Plan','Amount','Payment','Source','Medium','Campaign',
-    'Status','Expiry','Days Left','Notes','FBclid','TTclid'
+    'Status','Expiry','Days Left','Notes','FBclid','TTclid','Language'
   ];
 
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
