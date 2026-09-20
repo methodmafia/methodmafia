@@ -11,13 +11,24 @@
  * Notes markers (dedupe, never wipe PURCHASE_SENT):
  *   PENDING_NUDGED, RENEW_MAIL_3, RENEW_MAIL_2, RENEW_MAIL_1
  *
- * NO Telegram bot sends. CAPI Purchase is NOT sent on renew (Entry $30 stays first Active only).
- * See GUIDE.md → PART 12.
+ * Customer 3/2/1 renew copy is LOCKED 2026-09-21 Premium VIP pack
+ * (not tone-B FOMO). Language from Sheet column Language (en|bn|hi);
+ * default EN if blank. Telegram path uses compressed pack.tg lines
+ * taken from the same email bodies (RENEW_TG_3/_2/_1).
+ *
+ * Email path only in this file. After customer mail + Auto Expired, OrderProcessor
+ * expiryReminderTrigger calls runTelegramLifecycleHook_ if present (pay/renew/kick).
+ * Customer renew From is info@themethodmafia.com (never HQ Gmail). Digest / pending
+ * nudge / admin expiry stay TO methodmafia.hq@gmail.com with default From.
+ * CAPI Purchase is NOT sent on renew (Entry $30 stays first Active only).
+ * See GUIDE.md → PART 12 + PART 13.
  */
 
 var LIFECYCLE_ADMIN_EMAIL = (typeof DIGEST_EMAIL !== 'undefined')
   ? DIGEST_EMAIL
   : 'methodmafia.hq@gmail.com';
+var CUSTOMER_MAIL_FROM = 'info@themethodmafia.com';
+var CUSTOMER_MAIL_FROM_NAME = 'Method Mafia';
 var PENDING_NUDGE_MS = 24 * 60 * 60 * 1000;
 var PENDING_NUDGED_MARKER = 'PENDING_NUDGED';
 var RENEW_MARKERS = { 3: 'RENEW_MAIL_3', 2: 'RENEW_MAIL_2', 1: 'RENEW_MAIL_1' };
@@ -260,6 +271,8 @@ function planCustomerRenewMails_(rows, col, today) {
       email: email,
       daysLeft: days,
       expiry: rows[i][col.EXPIRY],
+      notes: rows[i][col.NOTES],
+      language: (col.LANGUAGE >= 0) ? rows[i][col.LANGUAGE] : '',
       marker: marker
     });
   }
@@ -272,32 +285,213 @@ function formatExpiryLabel_(expiry) {
   return lifecycleDhakaYmd_(d);
 }
 
+function resolveCustomerCopyLang_(notes, locale) {
+  var loc = String(locale || '').trim().toLowerCase();
+  if (loc === 'en' || loc === 'english') return 'en';
+  if (loc === 'bn' || loc === 'bangla' || loc === 'bengali' || loc === 'bd') return 'bn';
+  if (loc === 'hi' || loc === 'hindi' || loc === 'hn') return 'hi';
+  var blob = String(notes || '').toUpperCase();
+  if (blob.indexOf('LANG_EN') !== -1) return 'en';
+  if (blob.indexOf('LANG_HI') !== -1) return 'hi';
+  if (blob.indexOf('LANG_BN') !== -1) return 'bn';
+  return 'en';
+}
+
+var DEFAULT_RENEW_LINK = 'Pay, then send Order ID + screenshot to @MMHQ_Support';
+
+function fillRenewPlaceholders_(text, item) {
+  item = item || {};
+  var name = String(item.name || '').trim() || 'there';
+  var link = String(item.renewLink || item.renew_link || '').trim() || DEFAULT_RENEW_LINK;
+  return String(text || '').replace(/\{name\}/g, name).replace(/\{renew_link\}/g, link);
+}
+
+function premiumVipRenewPack_() {
+  return {
+    en: {
+      3: {
+        subject: "{name}, you still have a little time ⏳",
+        body:
+          "Hey {name} 👋\n\nYour first month in Premium VIP is almost over. 3 days left.\n\nWhat you are using now — tools, methods, support — would cost a lot more per month if you bought each one separately outside. Here, one small renew keeps everything in one place. Some members use the methods and AI tools for personal work. Some use them for business. Some even earn by selling on marketplaces.\n\nWant to stay in the premium group? Lock your seat now:\n{renew_link}\n\nJust $15. Small step, keep the big advantage 💛\n— Method Mafia",
+        tg:
+          "Hey {name} 👋\n\nYour first month in Premium VIP is almost over. 3 days left.\n\nWant to stay in the premium group? Lock your seat now:\n{renew_link}\n\nJust $15. Small step, keep the big advantage 💛\n— Method Mafia"
+      },
+      2: {
+        subject: "{name}, do the quick math ⚡",
+        body:
+          "{name},\n\n2 days left.\n\nOutside, one solid AI tool subscription alone often runs about $20+. Here, $15 keeps tools through support in one package. A lot of members also find their own income path from here.\n\nIf this advantage cuts off, you start paying piece by piece again. Stay inside and keep everything in one place.\n\nRenew and keep your seat:\n{renew_link}\n\nYou are already inside. Do not give it up lightly 👀",
+        tg:
+          "{name},\n\n2 days left.\n\nOutside, one solid AI tool subscription alone often runs about $20+. Here, $15 keeps tools through support in one package. A lot of members also find their own income path from here.\n\nRenew and keep your seat:\n{renew_link}\n\nYou are already inside. Do not give it up lightly 👀"
+      },
+      1: {
+        subject: "Last email, {name} — access ends tonight 🔥",
+        body:
+          "Hey {name} 👋\n\nThis is your last renew message. Premium VIP access ends tonight. You will not get another email on this after that.\n\nQuick reminder — outside, one AI tool subscription alone is often about $20+. Here, $15 kept tools, methods, and support in one place. Some members use it for personal work, some for business, some even earn by selling on marketplaces. After tonight, that one-place advantage goes away.\n\nIf this month helped you move forward, lock your seat today. Do it now — before tomorrow morning feels like “I should have renewed.”\n\nJust $15:\n{renew_link}\n\nDoor closes tonight. Keep your seat 💛\n— Method Mafia",
+        tg:
+          "Hey {name} 👋\n\nThis is your last renew message. Premium VIP access ends tonight. You will not get another email on this after that.\n\nJust $15:\n{renew_link}\n\nDoor closes tonight. Keep your seat 💛\n— Method Mafia"
+      }
+    },
+    bn: {
+      3: {
+        subject: "{name}, আর একটু সময় আছে ⏳",
+        body:
+          "{name} ভাই 👋\n\nPremium VIP তে তোমার এক মাস প্রায় শেষ। আর ৩ দিন।\n\nএই সময়টায় তুমি যা ব্যবহার করছো — টুলস, মেথড, সাপোর্ট — বাইরে আলাদা আলাদা কিনলে মাসে অনেক বেশি টাকা খরচ হবে। এখানে একটা ছোট রিনিউতেই সব একসাথে থাকে। কেউ মেথড ব্যবহার করে বিভিন্ন AI আর টুলস নিজের পার্সোনাল কাজে লাগায়। আবার কেউ ব্যবসার কাজে ব্যবহার করে। আবার কেউ বিভিন্ন মার্কেটপ্লেসে সেল করে ইনকামও করে।\n\nপ্রিমিয়াম গ্রুপে থাকতে চাইলে এখন থেকেই সিট লক করে রাখো:\n{renew_link}\n\n$15। ছোট পদক্ষেপ, বড় সুবিধা ধরে রাখা 💛\n— Method Mafia",
+        tg:
+          "{name} ভাই 👋\n\nPremium VIP তে তোমার এক মাস প্রায় শেষ। আর ৩ দিন।\n\nপ্রিমিয়াম গ্রুপে থাকতে চাইলে এখন থেকেই সিট লক করে রাখো:\n{renew_link}\n\n$15। ছোট পদক্ষেপ, বড় সুবিধা ধরে রাখা 💛\n— Method Mafia"
+      },
+      2: {
+        subject: "{name}, হিসাব মিলিয়ে নাও ⚡",
+        body:
+          "{name},\n\nআর ২ দিন বাকি।\n\nবাইরে শুধু একটা ভালো AI টুলের সাবস্ক্রিপশনেই প্রায় $20+ চলে যায়। এখানে $15 এ টুলস থেকে সাপোর্ট পর্যন্ত এক প্যাকেজেই আছে। অনেকে এখান থেকে নিজের ইনকামের রাস্তাও খুঁজে নেয়।\n\nএই সুবিধা কেটে গেলে আবার টুকরো টুকরো খরচ শুরু। ভিতরে থাকলে এক জায়গায় সব।\n\nরিনিউ করে সিট রাখো:\n{renew_link}\n\nতুমি ইতিমধ্যে ভিতরে। হালকা মনে করে ছেড়ে দিও না 👀",
+        tg:
+          "{name},\n\nআর ২ দিন বাকি।\n\nবাইরে শুধু একটা ভালো AI টুলের সাবস্ক্রিপশনেই প্রায় $20+ চলে যায়। এখানে $15 এ টুলস থেকে সাপোর্ট পর্যন্ত এক প্যাকেজেই আছে। অনেকে এখান থেকে নিজের ইনকামের রাস্তাও খুঁজে নেয়।\n\nরিনিউ করে সিট রাখো:\n{renew_link}\n\nতুমি ইতিমধ্যে ভিতরে। হালকা মনে করে ছেড়ে দিও না 👀"
+      },
+      1: {
+        subject: "শেষ ইমেইল, {name} — আজ রাত কেটে যাচ্ছে 🔥",
+        body:
+          "{name} ভাই 👋\n\nএটা তোমার শেষ রিনিউ মেসেজ। আজ রাত Premium VIP এক্সেস বন্ধ হয়ে যাচ্ছে। এর পর এই টপিকে আর মেইল আসবে না।\n\nএকটু মনে করো — বাইরে শুধু একটা AI টুলের সাবস্ক্রিপশনেই প্রায় $20+ চলে যায়। এখানে $15 এ টুলস, মেথড, সাপোর্ট একসাথে ছিল। কেউ এটা দিয়ে নিজের কাজ চালায়, কেউ ব্যবসা, কেউ মার্কেটপ্লেসে সেল করে ইনকামও করে। আজ রাতের পর সেই এক জায়গার সুবিধাটা থাকবে না।\n\nযদি মনে হয় এই এক মাসে তোমার কিছু এগিয়েছে, তাহলে আজই সিট লক করো। কাল সকালে “করে রাখতাম” ভাবার আগে আজ সেরে ফেলো।\n\nমাত্র $15:\n{renew_link}\n\nদরজা আজ রাত বন্ধ। তোমার সিট তোমারই রাখো 💛\n— Method Mafia",
+        tg:
+          "{name} ভাই 👋\n\nএটা তোমার শেষ রিনিউ মেসেজ। আজ রাত Premium VIP এক্সেস বন্ধ হয়ে যাচ্ছে। এর পর এই টপিকে আর মেইল আসবে না।\n\nমাত্র $15:\n{renew_link}\n\nদরজা আজ রাত বন্ধ। তোমার সিট তোমারই রাখো 💛\n— Method Mafia"
+      }
+    },
+    hi: {
+      3: {
+        subject: "{name}, थोड़ा समय और बचा है ⏳",
+        body:
+          "{name} भाई 👋\n\nPremium VIP में तुम्हारा एक महीना लगभग खत्म। बस 3 दिन बचे हैं।\n\nजो तुम अभी यूज़ कर रहे हो — टूल्स, मेथड्स, सपोर्ट — बाहर अलग-अलग खरीदोगे तो महीने का खarcha बहुत बढ़ जाएगा। यहाँ एक छोटे रिन्यू में सब एक साथ रहता है। कोई मेथड और AI टूल्स पर्सनल काम में लगाता है। कोई बिज़नेस में यूज़ करता है। कोई मार्केटप्लेस पर सेल करके इनकम भी करता है।\n\nप्रीमियम ग्रुप में रहना है तो अभी से सीट लॉक कर लो:\n{renew_link}\n\nसिर्फ $15। छोटा कदम, बड़ा फायदा बचा के रखना 💛\n— Method Mafia",
+        tg:
+          "{name} भाई 👋\n\nPremium VIP में तुम्हारा एक महीना लगभग खत्म। बस 3 दिन बचे हैं।\n\nप्रीमियम ग्रुप में रहना है तो अभी से सीट लॉक कर लो:\n{renew_link}\n\nसिर्फ $15। छोटा कदम, बड़ा फायदा बचा के रखना 💛\n— Method Mafia"
+      },
+      2: {
+        subject: "{name}, हिसाब मिला लो ⚡",
+        body:
+          "{name},\n\n2 दिन बचे हैं।\n\nबाहर सिर्फ एक अच्छे AI टूल का सब्सक्रिप्शन ही लगभग $20+ बैठ जाता है। यहाँ $15 में टूल्स से सपोर्ट तक एक पैकेज में है। बहुत लोग यहाँ से अपनी इनकम की राह भी बनाते हैं।\n\nये सुविधा कट गई तो फिर टुकड़ों-टुकड़ों में खर्चा शुरू। अंदर रहोगे तो सब एक जगह।\n\nरिन्यू करके सीट रखो:\n{renew_link}\n\nतुम पहले से अंदर हो। हल्के में छोड़ मत देना 👀",
+        tg:
+          "{name},\n\n2 दिन बचे हैं।\n\nबाहर सिर्फ एक अच्छे AI टूल का सब्सक्रिप्शन ही लगभग $20+ बैठ जाता है। यहाँ $15 में टूल्स से सपोर्ट तक एक पैकेज में है। बहुत लोग यहाँ से अपनी इनकम की राह भी बनाते हैं।\n\nरिन्यू करके सीट रखो:\n{renew_link}\n\nतुम पहले से अंदर हो। हल्के में छोड़ मत देना 👀"
+      },
+      1: {
+        subject: "आखिरी ईमेल, {name} — आज रात कट जाएगा 🔥",
+        body:
+          "{name} भाई 👋\n\nये तुम्हारा आखिरी रिन्यू मैसेज है। आज रात Premium VIP एक्सेस बंद हो जाएगा। इसके बाद इस टॉपिक पर और मेल नहीं आएगा।\n\nथोड़ा याद रखो — बाहर सिर्फ एक AI टूल के सब्सक्रिप्शन में ही लगभग $20+ लग जाते हैं। यहाँ $15 में टूल्स, मेथड्स, सपोर्ट एक साथ थे। कोई अपना काम चलाता है, कोई बिज़नेस, कोई मार्केटप्लेस पर सेल करके इनकम भी करता है। आज रात के बाद वो एक जगह वाली सुविधा नहीं रहेगी।\n\nअगर लगता है इस एक महीने में तुम थोड़ा आगे बढ़े हो, तो आज ही सीट लॉक करो। कल सुबह “कर लेता” सोचने से पहले आज कर लो।\n\nसिर्फ $15:\n{renew_link}\n\nदरवाज़ा आज रात बंद। अपनी सीट अपने पास रखो 💛\n— Method Mafia",
+        tg:
+          "{name} भाई 👋\n\nये तुम्हारा आखिरी रिन्यू मैसेज है। आज रात Premium VIP एक्सेस बंद हो जाएगा। इसके बाद इस टॉपिक पर और मेल नहीं आएगा।\n\nसिर्फ $15:\n{renew_link}\n\nदरवाज़ा आज रात बंद। अपनी सीट अपने पास रखो 💛\n— Method Mafia"
+      }
+    }
+  };
+}
+
+function buildPremiumVipRenewCopy_(lang, daysLeft, item) {
+  var pack = premiumVipRenewPack_();
+  var code = String(lang || 'en').toLowerCase();
+  if (code !== 'bn' && code !== 'hi') code = 'en';
+  var n = Number(daysLeft);
+  if (n !== 1 && n !== 2 && n !== 3) n = 3;
+  var entry = pack[code][n];
+  return {
+    subject: fillRenewPlaceholders_(entry.subject, item),
+    body: fillRenewPlaceholders_(entry.body, item),
+    tg: fillRenewPlaceholders_(entry.tg || entry.body, item)
+  };
+}
+
+function buildToneBRenewCopy_(lang, daysLeft, item) {
+  return buildPremiumVipRenewCopy_(lang, daysLeft, item);
+}
+
+function lifecycleTextToHtml_(text) {
+  var blocks = String(text || '').split(/\n\n+/);
+  var html = '';
+  var i;
+  for (i = 0; i < blocks.length; i++) {
+    html += '<p>' + lifecycleEscape_(blocks[i])
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/\n/g, '<br>') + '</p>';
+  }
+  return html;
+}
+
 function buildCustomerRenewMessage_(item) {
   item = item || {};
-  var n = Number(item.daysLeft);
-  var dayWord = n === 1 ? '1 day' : (n + ' days');
-  var expiryLabel = formatExpiryLabel_(item.expiry);
-  var name = String(item.name || 'there').trim() || 'there';
-  var subject = 'Method Mafia — your access expires in ' + dayWord;
-  var textBody =
-    'Hi ' + name + ',\n\n' +
-    'Your Method Mafia membership expires on ' + expiryLabel + ' (' + dayWord + ' left).\n\n' +
-    'If you would like to stay in, reply to this email or message support and we will add another 30 days.\n\n' +
-    'Thank you for being with Method Mafia.\n\n' +
-    '— Method Mafia\n';
-  var htmlBody =
-    '<p>Hi ' + lifecycleEscape_(name) + ',</p>' +
-    '<p>Your Method Mafia membership expires on <strong>' + lifecycleEscape_(expiryLabel) +
-    '</strong> (' + lifecycleEscape_(dayWord) + ' left).</p>' +
-    '<p>If you would like to stay in, reply to this email or message support and we will add another 30 days.</p>' +
-    '<p>Thank you for being with Method Mafia.</p>' +
-    '<p>— Method Mafia</p>';
+  var lang = resolveCustomerCopyLang_(item.notes, item.locale || item.lang || item.language);
+  var copy = buildPremiumVipRenewCopy_(lang, item.daysLeft, item);
   return {
     to: String(item.email || '').trim(),
-    subject: subject,
-    textBody: textBody,
-    htmlBody: htmlBody
+    subject: copy.subject,
+    textBody: copy.body + '\n',
+    htmlBody: lifecycleTextToHtml_(copy.body)
   };
+}
+
+function buildCustomerRenewMailOptions_(msg) {
+  msg = msg || {};
+  return {
+    to: String(msg.to || '').trim(),
+    subject: String(msg.subject || ''),
+    htmlBody: msg.htmlBody || '',
+    body: msg.textBody || msg.body || '',
+    from: CUSTOMER_MAIL_FROM,
+    name: CUSTOMER_MAIL_FROM_NAME
+  };
+}
+
+function customerRenewMailLog_(line, adapters) {
+  if (adapters && typeof adapters.log === 'function') {
+    adapters.log(line);
+    return;
+  }
+  if (typeof Logger !== 'undefined' && Logger && typeof Logger.log === 'function') {
+    Logger.log(line);
+  }
+}
+
+function resolveCustomerMailService_(adapters, key, globalObj) {
+  adapters = adapters || {};
+  if (Object.prototype.hasOwnProperty.call(adapters, key)) return adapters[key];
+  if (typeof globalObj !== 'undefined') return globalObj;
+  return null;
+}
+
+function sendCustomerRenewEmail_(msg, adapters) {
+  adapters = adapters || {};
+  var opts = buildCustomerRenewMailOptions_(msg);
+  var gmail = resolveCustomerMailService_(adapters, 'GmailApp', typeof GmailApp !== 'undefined' ? GmailApp : undefined);
+  var mail = resolveCustomerMailService_(adapters, 'MailApp', typeof MailApp !== 'undefined' ? MailApp : undefined);
+  try {
+    if (gmail && typeof gmail.sendEmail === 'function') {
+      gmail.sendEmail(opts.to, opts.subject, opts.body, {
+        htmlBody: opts.htmlBody,
+        from: opts.from,
+        name: opts.name
+      });
+      return { ok: true, via: 'GmailApp', retryWithoutFrom: false };
+    }
+    if (mail && typeof mail.sendEmail === 'function') {
+      mail.sendEmail({
+        to: opts.to,
+        subject: opts.subject,
+        htmlBody: opts.htmlBody,
+        body: opts.body,
+        from: opts.from,
+        name: opts.name
+      });
+      return { ok: true, via: 'MailApp', retryWithoutFrom: false };
+    }
+    throw new Error('no mail service');
+  } catch (err) {
+    var detail = err && err.message ? err.message : String(err);
+    customerRenewMailLog_(
+      'customer renew mail FROM ' + CUSTOMER_MAIL_FROM +
+        ' failed (alias missing?). Do not silently send from HQ. Error: ' + detail,
+      adapters
+    );
+    return {
+      ok: false,
+      via: '',
+      reason: 'from-alias-failed',
+      retryWithoutFrom: false,
+      error: detail
+    };
+  }
 }
 
 function applyCustomerRenewMarkers_(rows, col, planned) {
@@ -494,12 +688,10 @@ function runCustomerRenewMailJob_(opts) {
     var item = planned[i];
     var msg = buildCustomerRenewMessage_(item);
     try {
-      MailApp.sendEmail({
-        to: msg.to,
-        subject: msg.subject,
-        htmlBody: msg.htmlBody,
-        body: msg.textBody
-      });
+      var sentOk = sendCustomerRenewEmail_(msg);
+      if (!sentOk.ok) {
+        throw new Error(sentOk.error || sentOk.reason || 'from-alias-failed');
+      }
       var row1 = item.rowIndex0 + 1;
       var notes = sheet.getRange(row1, col.NOTES + 1).getValue();
       sheet.getRange(row1, col.NOTES + 1).setValue(notesAppendMarker_(notes, item.marker));
@@ -524,6 +716,11 @@ function expiryLifecycleTrigger() {
     if (typeof sendExpiryReminders === 'function') sendExpiryReminders();
   } catch (err3) {
     Logger.log('expiryLifecycle admin digest: ' + err3.message);
+  }
+  try {
+    if (typeof runTelegramLifecycleHook_ === 'function') runTelegramLifecycleHook_();
+  } catch (err4) {
+    Logger.log('expiryLifecycle telegram: ' + err4.message);
   }
 }
 
@@ -717,6 +914,8 @@ function cleanupLifecycleTests_() {
 if (typeof module === 'object' && module.exports) {
   module.exports = {
     LIFECYCLE_ADMIN_EMAIL: LIFECYCLE_ADMIN_EMAIL,
+    CUSTOMER_MAIL_FROM: CUSTOMER_MAIL_FROM,
+    CUSTOMER_MAIL_FROM_NAME: CUSTOMER_MAIL_FROM_NAME,
     PENDING_NUDGED_MARKER: PENDING_NUDGED_MARKER,
     notesHasMarker_: notesHasMarker_,
     notesAppendMarker_: notesAppendMarker_,
@@ -734,6 +933,12 @@ if (typeof module === 'object' && module.exports) {
     applyRenewToRow_: applyRenewToRow_,
     planCustomerRenewMails_: planCustomerRenewMails_,
     buildCustomerRenewMessage_: buildCustomerRenewMessage_,
+    buildCustomerRenewMailOptions_: buildCustomerRenewMailOptions_,
+    sendCustomerRenewEmail_: sendCustomerRenewEmail_,
+    resolveCustomerCopyLang_: resolveCustomerCopyLang_,
+    buildPremiumVipRenewCopy_: buildPremiumVipRenewCopy_,
+    premiumVipRenewPack_: premiumVipRenewPack_,
+    buildToneBRenewCopy_: buildToneBRenewCopy_,
     applyCustomerRenewMarkers_: applyCustomerRenewMarkers_
   };
 }
