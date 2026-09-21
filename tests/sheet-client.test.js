@@ -203,6 +203,33 @@ test('write fetch is CORS + text/plain so the JSON body can be read', () => {
   assert.equal(JSON.parse(opts.body).fbclid, 'abc');
 });
 
+test('sheet write timeout is 8–12 seconds and hanging fetch is aborted', async () => {
+  assert.equal(typeof sheet.fetchWithTimeout, 'function');
+  assert.ok(sheet.SHEET_WRITE_TIMEOUT_MS >= 8000);
+  assert.ok(sheet.SHEET_WRITE_TIMEOUT_MS <= 12000);
+
+  let aborted = false;
+  const hanging = function(url, opts){
+    return new Promise(function(_, reject){
+      if(opts && opts.signal){
+        opts.signal.addEventListener('abort', function(){
+          aborted = true;
+          const err = new Error('Aborted');
+          err.name = 'AbortError';
+          reject(err);
+        });
+      }
+    });
+  };
+  const t0 = Date.now();
+  await assert.rejects(
+    () => sheet.fetchWithTimeout('https://example.invalid', {}, 40, hanging),
+    function(err){ return err && err.reason === 'timeout'; }
+  );
+  assert.ok(Date.now() - t0 < 400, 'timeout must not hang');
+  assert.equal(aborted, true);
+});
+
 test('normalizeStatus maps reject aliases and known Sheet values', () => {
   assert.equal(sheet.normalizeStatus('Active'), 'active');
   assert.equal(sheet.normalizeStatus('PENDING'), 'pending');

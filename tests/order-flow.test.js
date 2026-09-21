@@ -32,11 +32,18 @@ test('buildSupportTelegramUrl opens @MMHQ_Support with encoded payment-proof tex
 test('buildPaymentProofMessage includes order, plan, amount and selected payment method', () => {
   const msg = flow.buildPaymentProofMessage({
     orderId: 'MM-2026-3007',
+    name: 'Rakib',
+    email: 'rakib@example.com',
+    telegram: '@rakib_h',
+    language: 'EN',
     plan: 'Entry',
     amount: '$30',
     payment: 'Binance Pay'
   });
   assert.match(msg, /MM-2026-3007/);
+  assert.match(msg, /Rakib/);
+  assert.match(msg, /rakib@example.com/);
+  assert.match(msg, /@rakib_h/);
   assert.match(msg, /Entry/);
   assert.match(msg, /\$30/);
   assert.match(msg, /Binance Pay/);
@@ -154,6 +161,21 @@ test('main.js uses interpretWriteResult, shows success recap, and opens Support 
   assert.match(main, /thankDupeTitle/);
   assert.doesNotMatch(main, /Please send me the payment details/);
   assert.doesNotMatch(main, /createChatInviteLink/);
+});
+
+test('submitOrder opens Support immediately and never waits forever on the Sheet', () => {
+  const main = read('js/main.js');
+  const submit = main.match(/function submitOrder\(\)\{[\s\S]*?\nfunction showOrderOutcome/);
+  assert.ok(submit, 'submitOrder must be followed by showOrderOutcome');
+  const body = submit[0];
+  assert.match(body, /fetchWithTimeout/);
+  assert.match(body, /SHEET_WRITE_TIMEOUT_MS|10000|11000|8000|9000|12000/);
+  const outcomeAt = body.indexOf('showOrderOutcome(');
+  const fetchAt = body.indexOf('fetchWithTimeout');
+  assert.ok(outcomeAt !== -1 && fetchAt !== -1, 'must open Support UI and fetch sheet');
+  assert.ok(outcomeAt < fetchAt, 'Telegram/recap must start before waiting on Sheet');
+  assert.match(body, /recoverSubmitButton\(btn\)|btn\.disabled\s*=\s*false/);
+  assert.doesNotMatch(main, /showOrderOutcome[\s\S]{0,400}disabled\s*=\s*true/);
 });
 
 test('OrderProcessor refuses a new row when Telegram\/email already Pending', () => {

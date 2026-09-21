@@ -583,8 +583,27 @@ function submitOrder(){
     });
   }
 
-  /* Sheet write: CORS + readable JSON only. Opaque no-cors used to
-     look like success even when Apps Script / Sheet write failed. */
+  try{ localStorage.setItem('mm_last_order', orderId); }catch(e){}
+
+  /* Open Support immediately (still in the click gesture). Sheet write is
+     best-effort in parallel and must never block this path. */
+  showOrderOutcome({
+    orderId: orderId,
+    name: payload.name,
+    email: payload.email,
+    telegram: handle,
+    language: (typeof MMSheet !== 'undefined')
+      ? MMSheet.sheetLanguageLabel(payload.language)
+      : String(payload.language || 'en').toUpperCase(),
+    plan: payload.plan,
+    amount: payload.amount,
+    payment: SELECTED_PAY,
+    dupe: false
+  });
+  recoverSubmitButton(btn);
+
+  /* Sheet write: CORS + readable JSON only. Timed out so a hung Apps Script
+     cannot leave the customer on a disabled button forever. */
   const sheetOpts = (typeof MMSheet !== 'undefined')
     ? MMSheet.writeFetchOptions(payload)
     : {
@@ -595,8 +614,14 @@ function submitOrder(){
         headers:{'Content-Type':'text/plain;charset=utf-8'},
         body: JSON.stringify(payload)
       };
+  const timeoutMs = (typeof MMSheet !== 'undefined' && MMSheet.SHEET_WRITE_TIMEOUT_MS)
+    ? MMSheet.SHEET_WRITE_TIMEOUT_MS
+    : 10000;
+  const writeFetch = (typeof MMSheet !== 'undefined' && MMSheet.fetchWithTimeout)
+    ? MMSheet.fetchWithTimeout(CONFIG.SHEET_URL, sheetOpts, timeoutMs)
+    : fetch(CONFIG.SHEET_URL, sheetOpts);
 
-  fetch(CONFIG.SHEET_URL, sheetOpts)
+  writeFetch
     .then(function(res){
       return (typeof MMSheet !== 'undefined')
         ? MMSheet.readResponse(res)
@@ -619,30 +644,45 @@ function submitOrder(){
         toast(t('toastDupe'));
         showOrderOutcome({
           orderId: existingId,
+          name: payload.name,
+          email: payload.email,
+          telegram: handle,
+          language: (typeof MMSheet !== 'undefined')
+            ? MMSheet.sheetLanguageLabel(payload.language)
+            : String(payload.language || 'en').toUpperCase(),
           plan: payload.plan,
           amount: payload.amount,
           payment: SELECTED_PAY,
           dupe: true
         });
+        recoverSubmitButton(btn);
         return;
       }
 
-      if(!result.ok) throw new Error('sheet_write_failed');
+      if(!result.ok){
+        toast(t('toastSheetFail'), true);
+        recoverSubmitButton(btn);
+        return;
+      }
 
-      try{ localStorage.setItem('mm_last_order', orderId); }catch(e){}
       toast(t('toastOk'));
-      showOrderOutcome({
-        orderId: orderId,
-        plan: payload.plan,
-        amount: payload.amount,
-        payment: SELECTED_PAY,
-        dupe: false
-      });
+      recoverSubmitButton(btn);
     })
     .catch(function(){
       toast(t('toastSheetFail'), true);
-      btn.disabled = false;
+      recoverSubmitButton(btn);
     });
+}
+
+function recoverSubmitButton(btn){
+  const el = btn || document.getElementById('submitBtn');
+  if(!el) return;
+  el.disabled = false;
+  el.removeAttribute('aria-busy');
+  if(el.dataset && el.dataset.t){
+    const label = t(el.dataset.t);
+    if(label) el.textContent = label;
+  }
 }
 
 function showOrderOutcome(opts){
@@ -658,7 +698,7 @@ function showOrderOutcome(opts){
 
   box.hidden = false;
   box.classList.toggle('is-dupe', dupe);
-  if(document.getElementById('submitBtn')) document.getElementById('submitBtn').disabled = true;
+  recoverSubmitButton(document.getElementById('submitBtn'));
 
   const oid = document.getElementById('okOrderId');
   const opl = document.getElementById('okPlan');
@@ -683,7 +723,16 @@ function showOrderOutcome(opts){
 
   const flow = (typeof MMOrderFlow !== 'undefined') ? MMOrderFlow : null;
   const msg = flow
-    ? flow.buildPaymentProofMessage({ orderId: orderId, plan: plan, amount: amount, payment: payment })
+    ? flow.buildPaymentProofMessage({
+        orderId: orderId,
+        name: opts.name || '',
+        email: opts.email || '',
+        telegram: opts.telegram || '',
+        language: opts.language || '',
+        plan: plan,
+        amount: amount,
+        payment: payment
+      })
     : ('Order ID : ' + orderId + '\nI will send my payment screenshot here.');
   const support = (typeof CONFIG !== 'undefined' && CONFIG.SUPPORT) ? CONFIG.SUPPORT : 'https://t.me/MMHQ_Support';
   const opened = flow

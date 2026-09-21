@@ -27,15 +27,22 @@
 
   function buildPaymentProofMessage(opts){
     opts = opts || {};
+    var lang = opts.language || '';
     return [
-      'Hi, I placed an order.',
-      '',
+      '🧾 NEW ORDER',
+      '━━━━━━━━━━━━━━',
       'Order ID : ' + (opts.orderId || ''),
+      'Name     : ' + (opts.name || ''),
+      'Email    : ' + (opts.email || ''),
+      'Telegram : ' + (opts.telegram || ''),
+      'Language : ' + lang,
+      '━━━━━━━━━━━━━━',
       'Plan     : ' + (opts.plan || ''),
       'Amount   : ' + (opts.amount || ''),
       'Payment  : ' + (opts.payment || ''),
+      '━━━━━━━━━━━━━━',
       '',
-      'I will send my payment screenshot here.'
+      'I placed my order. I will send my payment screenshot here.'
     ].join('\n');
   }
 

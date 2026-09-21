@@ -18,6 +18,7 @@ test('order form no longer treats opaque no-cors fetch as success', () => {
   assert.equal(main.includes("mode: 'no-cors'"), false);
   assert.match(main, /isWriteSuccess|interpretWriteResult/);
   assert.match(main, /toastSheetFail/);
+  assert.match(main, /fetchWithTimeout/);
 });
 
 test('order-status looks up the Sheet instead of localStorage fake status', () => {

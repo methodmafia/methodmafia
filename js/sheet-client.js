@@ -147,6 +147,53 @@
     };
   }
 
+  var SHEET_WRITE_TIMEOUT_MS = 10000;
+
+  function fetchWithTimeout(url, opts, timeoutMs, fetchFn){
+    var ms = Number(timeoutMs);
+    if(!(ms > 0)) ms = SHEET_WRITE_TIMEOUT_MS;
+    var run = fetchFn || (typeof fetch === 'function' ? fetch : null);
+    if(!run){
+      return Promise.reject(new Error('fetch_unavailable'));
+    }
+    var options = {};
+    var src = opts || {};
+    for(var k in src){ if(Object.prototype.hasOwnProperty.call(src, k)) options[k] = src[k]; }
+    var ctrl = null;
+    if(typeof AbortController !== 'undefined' && !options.signal){
+      ctrl = new AbortController();
+      options.signal = ctrl.signal;
+    }
+    return new Promise(function(resolve, reject){
+      var done = false;
+      var timer = setTimeout(function(){
+        if(done) return;
+        done = true;
+        if(ctrl){ try{ ctrl.abort(); }catch(e){} }
+        var err = new Error('sheet_timeout');
+        err.reason = 'timeout';
+        reject(err);
+      }, ms);
+      Promise.resolve(run(url, options)).then(function(res){
+        if(done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve(res);
+      }, function(err){
+        if(done) return;
+        done = true;
+        clearTimeout(timer);
+        if(err && err.name === 'AbortError'){
+          var te = new Error('sheet_timeout');
+          te.reason = 'timeout';
+          reject(te);
+          return;
+        }
+        reject(err);
+      });
+    });
+  }
+
   function normalizeOrderLanguage(code){
     var s = String(code == null ? '' : code).trim().toLowerCase();
     if(s === 'bn' || s === 'hi' || s === 'en') return s;
@@ -177,6 +224,8 @@
     interpretStatusResult: interpretStatusResult,
     readResponse: readResponse,
     writeFetchOptions: writeFetchOptions,
+    fetchWithTimeout: fetchWithTimeout,
+    SHEET_WRITE_TIMEOUT_MS: SHEET_WRITE_TIMEOUT_MS,
     statusFetchOptions: statusFetchOptions,
     normalizeOrderLanguage: normalizeOrderLanguage,
     sheetLanguageLabel: sheetLanguageLabel
