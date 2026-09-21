@@ -160,6 +160,40 @@ test('status lookup fails closed on opaque, HTML, or unauthorized payloads', () 
   assert.equal(sheet.interpretStatusResult(null).kind, 'lookup_failed');
 });
 
+test('interpretWriteResult treats pending duplicate as a soft client path, not a generic fail', () => {
+  const pending = sheet.interpretWriteResult({
+    type: 'cors',
+    ok: true,
+    status: 200,
+    json: { ok: false, dupe: true, reason: 'pending', orderId: 'MM-2026-1111' },
+    text: '{"ok":false,"dupe":true}'
+  });
+  assert.equal(pending.ok, false);
+  assert.equal(pending.reason, 'duplicate_pending');
+  assert.equal(pending.dupe, true);
+  assert.equal(pending.orderId, 'MM-2026-1111');
+
+  const writtenDupe = sheet.interpretWriteResult({
+    type: 'cors',
+    ok: true,
+    status: 200,
+    json: { ok: true, dupe: true },
+    text: '{"ok":true,"dupe":true}'
+  });
+  assert.equal(writtenDupe.ok, true);
+  assert.equal(writtenDupe.dupe, true);
+
+  const boom = sheet.interpretWriteResult({
+    type: 'cors',
+    ok: true,
+    status: 200,
+    json: { ok: false, error: 'boom' },
+    text: '{"ok":false}'
+  });
+  assert.equal(boom.ok, false);
+  assert.equal(boom.reason, 'sheet');
+});
+
 test('write fetch is CORS + text/plain so the JSON body can be read', () => {
   const opts = sheet.writeFetchOptions({ orderId: 'MM-2026-3007', fbclid: 'abc' });
   assert.equal(opts.method, 'POST');

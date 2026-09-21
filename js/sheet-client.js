@@ -33,14 +33,31 @@
     return !!(parsed.json && parsed.json.ok === true);
   }
 
+  function isPendingDuplicateJson(json){
+    if(!json || json.dupe !== true) return false;
+    var reason = String(json.reason || json.error || '').toLowerCase();
+    return reason === 'pending' || reason === 'duplicate_pending';
+  }
+
   function interpretWriteResult(parsed){
-    if(isWriteSuccess(parsed)) return { ok: true };
+    if(isWriteSuccess(parsed)){
+      return { ok: true, dupe: !!(parsed.json && parsed.json.dupe) };
+    }
+    var json = parsed && parsed.json;
+    if(isPendingDuplicateJson(json)){
+      return {
+        ok: false,
+        reason: 'duplicate_pending',
+        dupe: true,
+        orderId: String(json.orderId || '')
+      };
+    }
     var reason = 'invalid';
     if(!parsed || parsed.networkError) reason = 'network';
     else if(parsed.type === 'opaque') reason = 'opaque';
     else if(parsed.json && parsed.json.ok === false) reason = 'sheet';
     else if(parsed.ok === false) reason = 'http';
-    return { ok: false, reason: reason };
+    return { ok: false, reason: reason, dupe: false };
   }
 
   function stripTokenFromSearch(searchParams){

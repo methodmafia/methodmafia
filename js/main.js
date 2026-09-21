@@ -607,44 +607,83 @@ function submitOrder(){
           });
     })
     .then(function(parsed){
-      const ok = (typeof MMSheet !== 'undefined')
-        ? MMSheet.isWriteSuccess(parsed)
-        : !!(parsed && parsed.ok && parsed.json && parsed.json.ok === true);
-      if(!ok) throw new Error('sheet_write_failed');
+      const result = (typeof MMSheet !== 'undefined')
+        ? MMSheet.interpretWriteResult(parsed)
+        : (parsed && parsed.ok && parsed.json && parsed.json.ok === true
+            ? { ok: true, dupe: !!(parsed.json && parsed.json.dupe) }
+            : { ok: false, reason: 'invalid' });
+
+      if(result.reason === 'duplicate_pending'){
+        const existingId = result.orderId || orderId;
+        try{ localStorage.setItem('mm_last_order', existingId); }catch(e){}
+        toast(t('toastDupe'));
+        showOrderOutcome({
+          orderId: existingId,
+          plan: payload.plan,
+          amount: payload.amount,
+          payment: SELECTED_PAY,
+          dupe: true
+        });
+        return;
+      }
+
+      if(!result.ok) throw new Error('sheet_write_failed');
 
       try{ localStorage.setItem('mm_last_order', orderId); }catch(e){}
       toast(t('toastOk'));
-
-      const localLine = (LANG === 'bn')
-        ? '\nAmount (BDT): ' + (SELECTED_PLAN === 'entry' ? CONFIG.ENTRY_BDT : CONFIG.MONTHLY_BDT)
-        : '';
-
-      const msg = encodeURIComponent(
-        '🧾 NEW ORDER\n' +
-        '━━━━━━━━━━━━━━\n' +
-        'Order ID : ' + orderId + '\n' +
-        'Name     : ' + payload.name + '\n' +
-        'Email    : ' + payload.email + '\n' +
-        'Telegram : ' + handle + '\n' +
-        'Language : ' + ((typeof MMSheet !== 'undefined')
-          ? MMSheet.sheetLanguageLabel(payload.language)
-          : String(payload.language || 'en').toUpperCase()) + '\n' +
-        '━━━━━━━━━━━━━━\n' +
-        'Plan     : ' + payload.plan + '\n' +
-        'Amount   : ' + payload.amount + localLine + '\n' +
-        'Payment  : ' + SELECTED_PAY + '\n' +
-        '━━━━━━━━━━━━━━\n\n' +
-        'I have placed my order. Please send me the payment details.'
-      );
-      setTimeout(()=>{
-        window.open(CONFIG.SUPPORT + '?text=' + msg, '_blank');
-        btn.disabled = false;
-      }, 900);
+      showOrderOutcome({
+        orderId: orderId,
+        plan: payload.plan,
+        amount: payload.amount,
+        payment: SELECTED_PAY,
+        dupe: false
+      });
     })
     .catch(function(){
       toast(t('toastSheetFail'), true);
       btn.disabled = false;
     });
+}
+
+function showOrderOutcome(opts){
+  opts = opts || {};
+  const box = document.getElementById('orderSuccess');
+  if(!box) return;
+
+  const orderId = opts.orderId || '';
+  const plan = opts.plan || '';
+  const amount = opts.amount == null ? '' : String(opts.amount);
+  const payment = opts.payment || '';
+  const dupe = !!opts.dupe;
+
+  box.hidden = false;
+  box.classList.toggle('is-dupe', dupe);
+
+  const oid = document.getElementById('okOrderId');
+  const opl = document.getElementById('okPlan');
+  const opy = document.getElementById('okPay');
+  if(oid) oid.textContent = orderId;
+  if(opl) opl.textContent = amount ? (plan + ' · ' + amount) : plan;
+  if(opy) opy.textContent = payment;
+
+  const flow = (typeof MMOrderFlow !== 'undefined') ? MMOrderFlow : null;
+  const msg = flow
+    ? flow.buildPaymentProofMessage({ orderId: orderId, plan: plan, amount: amount, payment: payment })
+    : ('Order ID : ' + orderId + '\nI will send my payment screenshot here.');
+  const support = (typeof CONFIG !== 'undefined' && CONFIG.SUPPORT) ? CONFIG.SUPPORT : 'https://t.me/MMHQ_Support';
+  const opened = flow
+    ? flow.openSupportTelegram(support, msg)
+    : { url: support, blocked: true };
+
+  const tgBtn = document.getElementById('okTgBtn');
+  if(tgBtn){
+    tgBtn.href = opened.url;
+    tgBtn.target = '_blank';
+    tgBtn.rel = 'noopener';
+  }
+  box.classList.toggle('tg-blocked', !!opened.blocked);
+
+  try{ box.scrollIntoView({ behavior: 'smooth', block: 'center' }); }catch(e){}
 }
 
 /* ─── স্ক্রল রিভিল + প্রোগ্রেস ─── */

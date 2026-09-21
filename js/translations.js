@@ -190,8 +190,9 @@ en: {
   ftRights: "All rights reserved.",
 
   /* Toast */
-  toastOk: "Order received! Redirecting to Telegram...",
+  toastOk: "Order received. Pay using the method shown, then send Order ID + screenshot to @MMHQ_Support.",
   toastSheetFail: "Could not save your order. Please try again or message @MMHQ_Support.",
+  toastDupe: "You already have a pending order. No need to submit again — message @MMHQ_Support with your Order ID and payment screenshot.",
   errFill: "Please fill in all fields.",
   errName: "Please enter a valid name (letters only).",
   errEmail: "Please enter a valid email address.",
@@ -204,10 +205,16 @@ en: {
 
   /* Next steps after ordering (A1/A5) */
   nextStepsTitle: "✅ What happens next",
-  nextStep1: "1. A Telegram window just opened — or message <strong>@MMHQ_Support</strong> directly",
-  nextStep2: "2. Send your <strong>Order ID</strong> + your <strong>payment screenshot / TXN ID</strong>",
+  nextStep1: "1. Pay the amount for your plan using the <strong>payment method shown</strong> on this page",
+  nextStep2: "2. Message <strong>@MMHQ_Support</strong> with your <strong>Order ID</strong> + payment screenshot (SS)",
   nextStep3: "3. Our team verifies manually — your <strong>VIP invite arrives in 30 min–3 hrs</strong>",
   nextStepsNote: "Keep your Order ID safe. You will need it to confirm payment.",
+  thankTitle: "Order received",
+  thankBody: "Pay to the plan + payment method shown below. Then message <strong>@MMHQ_Support</strong> with your Order ID and payment screenshot (SS).",
+  thankOrderId: "Order ID",
+  thankPlan: "Plan",
+  thankPay: "Pay via",
+  thankTgBtn: "Message @MMHQ_Support on Telegram",
 
   /* FAQ — new items (A4) */
   q11: "What exactly do I send to confirm payment?",
@@ -400,8 +407,9 @@ bn: {
   ftRefund: "রিফান্ড", ftPayment: "পেমেন্ট", ftOrder: "অর্ডার স্ট্যাটাস",
   ftRights: "সর্বস্বত্ব সংরক্ষিত।",
 
-  toastOk: "অর্ডার পেয়েছি! টেলিগ্রামে নিয়ে যাচ্ছি...",
+  toastOk: "অর্ডার পেয়েছি। দেখানো মেথডে পেমেন্ট করুন, তারপর Order ID + স্ক্রিনশট @MMHQ_Support-এ পাঠান।",
   toastSheetFail: "অর্ডার সেভ করা যায়নি। আবার চেষ্টা করুন অথবা @MMHQ_Support-এ মেসেজ করুন।",
+  toastDupe: "আপনার একটি Pending অর্ডার আগে থেকেই আছে। আবার সাবমিট করার দরকার নেই — @MMHQ_Support-এ Order ID + পেমেন্ট স্ক্রিনশট পাঠান।",
   errFill: "অনুগ্রহ করে সব ঘর পূরণ করুন।",
   errName: "সঠিক নাম লিখুন (শুধু অক্ষর)।",
   errEmail: "সঠিক ইমেইল ঠিকানা লিখুন।",
@@ -414,10 +422,16 @@ bn: {
 
   /* Next steps after ordering (A1/A5) */
   nextStepsTitle: "✅ পরের ধাপ",
-  nextStep1: "১. একটি Telegram উইন্ডো খুলেছে — অথবা সরাসরি <strong>@MMHQ_Support</strong>-এ মেসেজ করুন",
-  nextStep2: "২. আপনার <strong>Order ID</strong> + <strong>পেমেন্ট স্ক্রিনশট / TXN ID</strong> পাঠান",
+  nextStep1: "১. এই পেজে দেখানো <strong>প্ল্যান ও পেমেন্ট মেথডে</strong> টাকা পাঠান",
+  nextStep2: "২. <strong>@MMHQ_Support</strong>-এ <strong>Order ID</strong> + পেমেন্ট স্ক্রিনশট (SS) পাঠান",
   nextStep3: "৩. আমরা নিজে যাচাই করব — <strong>৩০ মিনিট থেকে ৩ ঘণ্টার মধ্যে</strong> VIP ইনভাইট পাবেন",
   nextStepsNote: "Order ID সংরক্ষণ করুন — পেমেন্ট কনফার্ম করতে লাগবে।",
+  thankTitle: "অর্ডার পেয়েছি",
+  thankBody: "নিচে দেখানো প্ল্যান ও পেমেন্ট মেথডে টাকা পাঠান। তারপর <strong>@MMHQ_Support</strong>-এ Order ID এবং পেমেন্ট স্ক্রিনশট (SS) পাঠান।",
+  thankOrderId: "Order ID",
+  thankPlan: "প্ল্যান",
+  thankPay: "পেমেন্ট",
+  thankTgBtn: "টেলিগ্রামে @MMHQ_Support-এ মেসেজ করুন",
 
   /* FAQ — new items (A4) */
   q11: "পেমেন্ট নিশ্চিত করতে ঠিক কী পাঠাব?",
@@ -609,8 +623,9 @@ hi: {
   ftRefund: "रिफंड", ftPayment: "पेमेंट", ftOrder: "ऑर्डर स्टेटस",
   ftRights: "सर्वाधिकार सुरक्षित।",
 
-  toastOk: "ऑर्डर मिल गया! टेलीग्राम पर ले जा रहे हैं...",
+  toastOk: "ऑर्डर मिल गया। दिखाए गए मेथड से पेमेंट करें, फिर Order ID + स्क्रीनशॉट @MMHQ_Support पर भेजें।",
   toastSheetFail: "ऑर्डर सेव नहीं हो सका। फिर कोशिश करें या @MMHQ_Support पर मैसेज करें।",
+  toastDupe: "आपका एक Pending ऑर्डर पहले से है। दोबारा सबमिट करने की ज़रूरत नहीं — @MMHQ_Support को Order ID और पेमेंट स्क्रीनशॉट भेजें।",
   errFill: "कृपया सभी फील्ड भरें।",
   errName: "कृपया सही नाम लिखें (केवल अक्षर)।",
   errEmail: "कृपया सही ईमेल पता लिखें।",
@@ -623,10 +638,16 @@ hi: {
 
   /* Next steps after ordering (A1/A5) */
   nextStepsTitle: "✅ अब क्या करें",
-  nextStep1: "1. एक Telegram विंडो खुली है — या सीधे <strong>@MMHQ_Support</strong> पर मैसेज करें",
-  nextStep2: "2. अपनी <strong>Order ID</strong> + <strong>पेमेंट स्क्रीनशॉट / TXN ID</strong> भेजें",
+  nextStep1: "1. इस पेज पर दिखाए गए <strong>प्लान और पेमेंट मेथड</strong> पर पेमेंट करें",
+  nextStep2: "2. <strong>@MMHQ_Support</strong> पर अपनी <strong>Order ID</strong> + पेमेंट स्क्रीनशॉट (SS) भेजें",
   nextStep3: "3. हम मैन्युअली जांच करते हैं — <strong>30 मिनट से 3 घंटे में</strong> VIP इनवाइट मिलेगा",
   nextStepsNote: "Order ID संभाल कर रखें — पेमेंट कन्फर्म करने में काम आएगी।",
+  thankTitle: "ऑर्डर मिल गया",
+  thankBody: "नीचे दिखाए गए प्लान और पेमेंट मेथड पर पेमेंट करें। फिर <strong>@MMHQ_Support</strong> को Order ID और पेमेंट स्क्रीनशॉट (SS) भेजें।",
+  thankOrderId: "Order ID",
+  thankPlan: "प्लान",
+  thankPay: "पेमेंट",
+  thankTgBtn: "टेलीग्राम पर @MMHQ_Support को मैसेज करें",
 
   /* FAQ — new items (A4) */
   q11: "पेमेंट कन्फर्म करने के लिए ठीक क्या भेजूं?",

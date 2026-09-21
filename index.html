@@ -382,13 +382,23 @@
     <button class="submit-btn" id="submitBtn" onclick="submitOrder()" data-t="btnSubmit">Submit Order</button>
     <p class="form-footer" data-t="formFooter"></p>
 
-    <!-- A1/A5: Next steps after ordering -->
-    <div class="next-steps-box" style="margin-top:18px">
-      <div class="next-steps-title" data-t="nextStepsTitle">✅ What happens next</div>
-      <div class="next-step" data-t="nextStep1"></div>
-      <div class="next-step" data-t="nextStep2"></div>
-      <div class="next-step" data-t="nextStep3"></div>
-      <div class="next-steps-note" data-t="nextStepsNote"></div>
+    <!-- Post-submit: plan + payment recap, then Support Telegram -->
+    <div class="order-success" id="orderSuccess" hidden>
+      <div class="next-steps-title" data-t="thankTitle">Order received</div>
+      <p class="order-success-body" data-t="thankBody">Pay to the plan + payment method shown below. Then message <strong>@MMHQ_Support</strong> with your Order ID and payment screenshot (SS).</p>
+      <div class="order-success-recap" role="status" aria-live="polite">
+        <div class="o-row"><span data-t="thankOrderId">Order ID</span><strong class="o-gold" id="okOrderId"></strong></div>
+        <div class="o-row"><span data-t="thankPlan">Plan</span><strong class="o-gold" id="okPlan"></strong></div>
+        <div class="o-row total"><span data-t="thankPay">Pay via</span><strong class="o-gold" id="okPay"></strong></div>
+      </div>
+      <a class="tg-support-btn" id="okTgBtn" href="https://t.me/MMHQ_Support" target="_blank" rel="noopener">✈️ <span data-t="thankTgBtn">Message @MMHQ_Support on Telegram</span></a>
+      <div class="next-steps-box" style="margin-top:16px">
+        <div class="next-steps-title" data-t="nextStepsTitle">✅ What happens next</div>
+        <div class="next-step" data-t="nextStep1"></div>
+        <div class="next-step" data-t="nextStep2"></div>
+        <div class="next-step" data-t="nextStep3"></div>
+        <div class="next-steps-note" data-t="nextStepsNote"></div>
+      </div>
     </div>
   </div>
 </section>
@@ -500,6 +510,7 @@
 <script src="js/translations.js"></script>
 <script src="js/pages.js"></script>
 <script src="js/sheet-client.js"></script>
+<script src="js/order-flow.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>
