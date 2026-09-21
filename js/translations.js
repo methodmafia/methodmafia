@@ -203,18 +203,23 @@ en: {
   upsellTitle: "Why $30 first, then $15?",
   upsellText: "The $30 entry covers your <strong>first full month</strong> plus the one-time work our team does to onboard you into the private channel. From month 2 it is just <strong>$15/month</strong> — pay when you want, stop when you want. No card stored. No auto-charges.",
 
-  /* Next steps after ordering (A1/A5) */
+  /* Next steps after ordering (A1/A5) — shared by payment/status pages */
   nextStepsTitle: "✅ What happens next",
-  nextStep1: "1. Pay the amount for your plan using the <strong>payment method shown</strong> on this page",
-  nextStep2: "2. Message <strong>@MMHQ_Support</strong> with your <strong>Order ID</strong> + payment screenshot (SS)",
+  nextStep1: "1. A Telegram window just opened — or message <strong>@MMHQ_Support</strong> directly",
+  nextStep2: "2. Send your <strong>Order ID</strong> + your <strong>payment screenshot / TXN ID</strong>",
   nextStep3: "3. Our team verifies manually — your <strong>VIP invite arrives in 30 min–3 hrs</strong>",
   nextStepsNote: "Keep your Order ID safe. You will need it to confirm payment.",
   thankTitle: "Order received",
-  thankBody: "Pay to the plan + payment method shown below. Then message <strong>@MMHQ_Support</strong> with your Order ID and payment screenshot (SS).",
+  thankBody: "Pay using the plan + payment method shown below. Then message <strong>@MMHQ_Support</strong> with your Order ID and payment screenshot (SS).",
+  thankDupeTitle: "You already have a pending order",
+  thankDupeBody: "No need to submit again. Use the plan + payment method shown, then message <strong>@MMHQ_Support</strong> with this Order ID and payment screenshot (SS).",
   thankOrderId: "Order ID",
   thankPlan: "Plan",
   thankPay: "Pay via",
   thankTgBtn: "Message @MMHQ_Support on Telegram",
+  thankStep1: "1. Pay using the <strong>plan + payment method shown</strong> on this page",
+  thankStep2: "2. Message <strong>@MMHQ_Support</strong> with your <strong>Order ID</strong> + payment screenshot (SS)",
+  thankStep3: "3. Our team verifies manually — your <strong>VIP invite arrives in 30 min–3 hrs</strong>",
 
   /* FAQ — new items (A4) */
   q11: "What exactly do I send to confirm payment?",
@@ -422,16 +427,21 @@ bn: {
 
   /* Next steps after ordering (A1/A5) */
   nextStepsTitle: "✅ পরের ধাপ",
-  nextStep1: "১. এই পেজে দেখানো <strong>প্ল্যান ও পেমেন্ট মেথডে</strong> টাকা পাঠান",
-  nextStep2: "২. <strong>@MMHQ_Support</strong>-এ <strong>Order ID</strong> + পেমেন্ট স্ক্রিনশট (SS) পাঠান",
+  nextStep1: "১. একটি Telegram উইন্ডো খুলেছে — অথবা সরাসরি <strong>@MMHQ_Support</strong>-এ মেসেজ করুন",
+  nextStep2: "২. আপনার <strong>Order ID</strong> + <strong>পেমেন্ট স্ক্রিনশট / TXN ID</strong> পাঠান",
   nextStep3: "৩. আমরা নিজে যাচাই করব — <strong>৩০ মিনিট থেকে ৩ ঘণ্টার মধ্যে</strong> VIP ইনভাইট পাবেন",
   nextStepsNote: "Order ID সংরক্ষণ করুন — পেমেন্ট কনফার্ম করতে লাগবে।",
   thankTitle: "অর্ডার পেয়েছি",
   thankBody: "নিচে দেখানো প্ল্যান ও পেমেন্ট মেথডে টাকা পাঠান। তারপর <strong>@MMHQ_Support</strong>-এ Order ID এবং পেমেন্ট স্ক্রিনশট (SS) পাঠান।",
+  thankDupeTitle: "আপনার একটি Pending অর্ডার আগে থেকেই আছে",
+  thankDupeBody: "আবার সাবমিট করার দরকার নেই। দেখানো প্ল্যান ও পেমেন্ট মেথড ব্যবহার করুন, তারপর <strong>@MMHQ_Support</strong>-এ এই Order ID + পেমেন্ট স্ক্রিনশট (SS) পাঠান।",
   thankOrderId: "Order ID",
   thankPlan: "প্ল্যান",
   thankPay: "পেমেন্ট",
   thankTgBtn: "টেলিগ্রামে @MMHQ_Support-এ মেসেজ করুন",
+  thankStep1: "১. এই পেজে দেখানো <strong>প্ল্যান ও পেমেন্ট মেথডে</strong> টাকা পাঠান",
+  thankStep2: "২. <strong>@MMHQ_Support</strong>-এ <strong>Order ID</strong> + পেমেন্ট স্ক্রিনশট (SS) পাঠান",
+  thankStep3: "৩. আমরা নিজে যাচাই করব — <strong>৩০ মিনিট থেকে ৩ ঘণ্টার মধ্যে</strong> VIP ইনভাইট পাবেন",
 
   /* FAQ — new items (A4) */
   q11: "পেমেন্ট নিশ্চিত করতে ঠিক কী পাঠাব?",
@@ -638,16 +648,21 @@ hi: {
 
   /* Next steps after ordering (A1/A5) */
   nextStepsTitle: "✅ अब क्या करें",
-  nextStep1: "1. इस पेज पर दिखाए गए <strong>प्लान और पेमेंट मेथड</strong> पर पेमेंट करें",
-  nextStep2: "2. <strong>@MMHQ_Support</strong> पर अपनी <strong>Order ID</strong> + पेमेंट स्क्रीनशॉट (SS) भेजें",
+  nextStep1: "1. एक Telegram विंडो खुली है — या सीधे <strong>@MMHQ_Support</strong> पर मैसेज करें",
+  nextStep2: "2. अपनी <strong>Order ID</strong> + <strong>पेमेंट स्क्रीनशॉट / TXN ID</strong> भेजें",
   nextStep3: "3. हम मैन्युअली जांच करते हैं — <strong>30 मिनट से 3 घंटे में</strong> VIP इनवाइट मिलेगा",
   nextStepsNote: "Order ID संभाल कर रखें — पेमेंट कन्फर्म करने में काम आएगी।",
   thankTitle: "ऑर्डर मिल गया",
   thankBody: "नीचे दिखाए गए प्लान और पेमेंट मेथड पर पेमेंट करें। फिर <strong>@MMHQ_Support</strong> को Order ID और पेमेंट स्क्रीनशॉट (SS) भेजें।",
+  thankDupeTitle: "आपका एक Pending ऑर्डर पहले से है",
+  thankDupeBody: "दोबारा सबमिट करने की ज़रूरत नहीं। दिखाए गए प्लान और पेमेंट मेथड से पेमेंट करें, फिर <strong>@MMHQ_Support</strong> को यही Order ID और पेमेंट स्क्रीनशॉट (SS) भेजें।",
   thankOrderId: "Order ID",
   thankPlan: "प्लान",
   thankPay: "पेमेंट",
   thankTgBtn: "टेलीग्राम पर @MMHQ_Support को मैसेज करें",
+  thankStep1: "1. इस पेज पर दिखाए गए <strong>प्लान और पेमेंट मेथड</strong> पर पेमेंट करें",
+  thankStep2: "2. <strong>@MMHQ_Support</strong> पर अपनी <strong>Order ID</strong> + पेमेंट स्क्रीनशॉट (SS) भेजें",
+  thankStep3: "3. हम मैन्युअली जांच करते हैं — <strong>30 मिनट से 3 घंटे में</strong> VIP इनवाइट मिलेगा",
 
   /* FAQ — new items (A4) */
   q11: "पेमेंट कन्फर्म करने के लिए ठीक क्या भेजूं?",

@@ -55,7 +55,7 @@
     }
     var win = null;
     if(typeof opener === 'function'){
-      try{ win = opener(url, '_blank'); }catch(e){ win = null; }
+      try{ win = opener(url, '_blank', 'noopener'); }catch(e){ win = null; }
     }
     return { url: url, blocked: wasPopupBlocked(win) };
   }
@@ -70,7 +70,7 @@
 
   function isPendingStatus(status){
     var s = String(status == null ? '' : status).trim().toLowerCase();
-    return s === 'pending' || s === 'submitted';
+    return s === 'pending' || s === 'submitted' || s === 'verifying';
   }
 
   function findContactMatch(rows, telegram, email, cols){
@@ -79,19 +79,22 @@
     var tg = normalizeHandle(telegram);
     var eml = normalizeEmail(email);
     var match = null;
+    var pending = null;
     for(var i = 1; i < rows.length; i++){
       var row = rows[i] || [];
       var rowTg = normalizeHandle(row[cols.telegram]);
       var rowEml = normalizeEmail(row[cols.email]);
       if((tg && rowTg === tg) || (eml && rowEml === eml)){
-        match = {
+        var item = {
           orderId: String(row[cols.orderId] || ''),
           status: String(row[cols.status] || ''),
           pending: isPendingStatus(row[cols.status])
         };
+        match = item;
+        if(item.pending) pending = item;
       }
     }
-    return match;
+    return pending || match;
   }
 
   return {

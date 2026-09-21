@@ -192,7 +192,7 @@ function normalizeHandle_(value) {
 
 function isPendingStatus_(status) {
   const s = String(status || '').trim().toLowerCase();
-  return s === 'pending' || s === 'submitted';
+  return s === 'pending' || s === 'submitted' || s === 'verifying';
 }
 
 function findExistingOrder(sheet, telegram, email) {
@@ -200,19 +200,22 @@ function findExistingOrder(sheet, telegram, email) {
   const tgLower  = normalizeHandle_(telegram);
   const emlLower = String(email || '').trim().toLowerCase();
   let match = null;
+  let pending = null;
   for (let i = 1; i < data.length; i++) {
     const rowTg  = normalizeHandle_(data[i][COL.TELEGRAM]);
     const rowEml = String(data[i][COL.EMAIL] || '').trim().toLowerCase();
     if ((tgLower && rowTg === tgLower) || (emlLower && rowEml === emlLower)) {
       const status = data[i][COL.STATUS];
-      match = {
+      const item = {
         orderId: String(data[i][COL.ORDER_ID] || ''),
         status: String(status || ''),
         pending: isPendingStatus_(status)
       };
+      match = item;
+      if (item.pending) pending = item;
     }
   }
-  return match;
+  return pending || match;
 }
 
 function checkDuplicate(sheet, telegram, email) {

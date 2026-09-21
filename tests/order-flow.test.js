@@ -79,16 +79,27 @@ test('findContactMatch treats newest Pending/Submitted row as a soft duplicate',
   assert.equal(submitted.orderId, 'MM-2026-2222');
 });
 
-test('findContactMatch does not treat Active/Expired last match as pending (renewals allowed)', () => {
+test('findContactMatch prefers an existing Pending row over a later Active row', () => {
   const rows = [
     ['h'],
     ['t','MM-1','A','a@x.com','@rakib','Entry','30','bKash','','','','Pending'],
     ['t','MM-2','A','a@x.com','@rakib','Monthly','15','bKash','','','','Active']
   ];
   const hit = flow.findContactMatch(rows, 'rakib', 'A@X.COM');
+  assert.equal(hit.orderId, 'MM-1');
+  assert.equal(hit.pending, true);
+  assert.equal(flow.findContactMatch(rows, '@nobody', 'nope@x.com'), null);
+});
+
+test('findContactMatch allows renew when no matching row is still Pending', () => {
+  const rows = [
+    ['h'],
+    ['t','MM-1','A','a@x.com','@rakib','Entry','30','bKash','','','','Expired'],
+    ['t','MM-2','A','a@x.com','@rakib','Monthly','15','bKash','','','','Active']
+  ];
+  const hit = flow.findContactMatch(rows, 'rakib', 'A@X.COM');
   assert.equal(hit.orderId, 'MM-2');
   assert.equal(hit.pending, false);
-  assert.equal(flow.findContactMatch(rows, '@nobody', 'nope@x.com'), null);
 });
 
 test('thank-you copy exists in EN/BN/HI and tells customer to pay then message Support with Order ID + SS', () => {
@@ -98,9 +109,12 @@ test('thank-you copy exists in EN/BN/HI and tells customer to pay then message S
     assert.ok(tr[lang].thankBody, lang + ' thankBody');
     assert.ok(tr[lang].thankTgBtn, lang + ' thankTgBtn');
     assert.ok(tr[lang].toastDupe, lang + ' toastDupe');
+    assert.ok(tr[lang].thankDupeTitle, lang + ' thankDupeTitle');
+    assert.ok(tr[lang].thankDupeBody, lang + ' thankDupeBody');
     const blob = [
       tr[lang].thankTitle, tr[lang].thankBody, tr[lang].thankTgBtn,
-      tr[lang].toastOk, tr[lang].toastDupe, tr[lang].nextStep1, tr[lang].nextStep2
+      tr[lang].thankDupeTitle, tr[lang].thankDupeBody,
+      tr[lang].toastOk, tr[lang].toastDupe, tr[lang].thankStep1, tr[lang].thankStep2
     ].join(' ');
     assert.match(blob, /MMHQ_Support/);
     assert.match(blob.toLowerCase(), /order id/);
@@ -125,6 +139,8 @@ test('index keeps payment selector and shows post-submit recap + Support CTA', (
   const flowAt = html.indexOf('src="js/order-flow.js"');
   const mainAt = html.indexOf('src="js/main.js"');
   assert.ok(flowAt !== -1 && flowAt < mainAt, 'order-flow.js must load before main.js');
+  assert.match(html, /data-t="thankStep1"/);
+  assert.match(html, /data-t="thankDupeTitle"|thankTitle/);
   assert.doesNotMatch(html, /createChatInviteLink|AUTO_VIP|auto.?invite/i);
 });
 
@@ -135,6 +151,7 @@ test('main.js uses interpretWriteResult, shows success recap, and opens Support 
   assert.match(main, /showOrderOutcome|orderSuccess/);
   assert.match(main, /openSupportTelegram/);
   assert.match(main, /toastDupe/);
+  assert.match(main, /thankDupeTitle/);
   assert.doesNotMatch(main, /Please send me the payment details/);
   assert.doesNotMatch(main, /createChatInviteLink/);
 });

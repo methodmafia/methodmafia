@@ -658,6 +658,7 @@ function showOrderOutcome(opts){
 
   box.hidden = false;
   box.classList.toggle('is-dupe', dupe);
+  if(document.getElementById('submitBtn')) document.getElementById('submitBtn').disabled = true;
 
   const oid = document.getElementById('okOrderId');
   const opl = document.getElementById('okPlan');
@@ -665,6 +666,20 @@ function showOrderOutcome(opts){
   if(oid) oid.textContent = orderId;
   if(opl) opl.textContent = amount ? (plan + ' · ' + amount) : plan;
   if(opy) opy.textContent = payment;
+
+  const titleEl = box.querySelector('[data-t="thankTitle"], [data-t="thankDupeTitle"]');
+  const bodyEl = box.querySelector('[data-t="thankBody"], [data-t="thankDupeBody"]');
+  if(titleEl){
+    titleEl.setAttribute('data-t', dupe ? 'thankDupeTitle' : 'thankTitle');
+    titleEl.textContent = t(dupe ? 'thankDupeTitle' : 'thankTitle');
+  }
+  if(bodyEl){
+    const key = dupe ? 'thankDupeBody' : 'thankBody';
+    bodyEl.setAttribute('data-t', key);
+    const copy = t(key);
+    if(String(copy).indexOf('<') !== -1) bodyEl.innerHTML = copy;
+    else bodyEl.textContent = copy;
+  }
 
   const flow = (typeof MMOrderFlow !== 'undefined') ? MMOrderFlow : null;
   const msg = flow
