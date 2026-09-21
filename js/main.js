@@ -625,6 +625,11 @@ function submitOrder(){
     );
   const msg = encodeURIComponent(msgText);
 
+  setTimeout(()=>{
+    window.open(CONFIG.SUPPORT + '?text=' + msg, '_blank');
+    btn.disabled = false;
+  }, 900);
+
   showOrderOutcome({
     orderId: orderId,
     name: payload.name,
@@ -636,11 +641,6 @@ function submitOrder(){
     payment: SELECTED_PAY,
     supportUrl: CONFIG.SUPPORT + '?text=' + msg
   });
-
-  setTimeout(()=>{
-    window.open(CONFIG.SUPPORT + '?text=' + msg, '_blank');
-    btn.disabled = false;
-  }, 900);
 }
 
 function showOrderOutcome(opts){
