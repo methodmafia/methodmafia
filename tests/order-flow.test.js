@@ -151,29 +151,30 @@ test('index keeps payment selector and shows post-submit recap + Support CTA', (
   assert.doesNotMatch(html, /createChatInviteLink|AUTO_VIP|auto.?invite/i);
 });
 
-test('main.js uses interpretWriteResult, shows success recap, and opens Support with fallback button', () => {
+test('main.js shows success recap and opens Support with fallback button', () => {
   const main = read('js/main.js');
-  assert.match(main, /interpretWriteResult/);
-  assert.match(main, /duplicate_pending/);
   assert.match(main, /showOrderOutcome|orderSuccess/);
   assert.match(main, /openSupportTelegram/);
-  assert.match(main, /toastDupe/);
   assert.match(main, /thankDupeTitle/);
+  assert.match(main, /recoverSubmitButton/);
   assert.doesNotMatch(main, /Please send me the payment details/);
   assert.doesNotMatch(main, /createChatInviteLink/);
 });
 
-test('submitOrder opens Support immediately and never waits forever on the Sheet', () => {
+test('submitOrder is no-cors fire-and-forget then opens Support without awaiting Sheet JSON', () => {
   const main = read('js/main.js');
-  const submit = main.match(/function submitOrder\(\)\{[\s\S]*?\nfunction showOrderOutcome/);
-  assert.ok(submit, 'submitOrder must be followed by showOrderOutcome');
+  const submit = main.match(/function submitOrder\(\)\{[\s\S]*?\nfunction recoverSubmitButton/);
+  assert.ok(submit, 'submitOrder must be followed by recoverSubmitButton');
   const body = submit[0];
-  assert.match(body, /fetchWithTimeout/);
-  assert.match(body, /SHEET_WRITE_TIMEOUT_MS|10000|11000|8000|9000|12000/);
+  assert.match(body, /mode:'no-cors'|mode:\s*['"]no-cors['"]/);
+  assert.match(body, /\.catch\(\(\)=>\{\}\)/);
+  assert.doesNotMatch(body, /fetchWithTimeout/);
+  assert.doesNotMatch(body, /mode:'cors'|mode:\s*['"]cors['"]/);
+  assert.doesNotMatch(body, /interpretWriteResult|\.then\(/);
+  const fetchAt = body.search(/fetch\(CONFIG\.SHEET_URL/);
   const outcomeAt = body.indexOf('showOrderOutcome(');
-  const fetchAt = body.indexOf('fetchWithTimeout');
-  assert.ok(outcomeAt !== -1 && fetchAt !== -1, 'must open Support UI and fetch sheet');
-  assert.ok(outcomeAt < fetchAt, 'Telegram/recap must start before waiting on Sheet');
+  assert.ok(fetchAt !== -1 && outcomeAt !== -1, 'must write sheet and open Support UI');
+  assert.ok(fetchAt < outcomeAt, 'fire-and-forget write must start before Support/recap');
   assert.match(body, /recoverSubmitButton\(btn\)|btn\.disabled\s*=\s*false/);
   assert.doesNotMatch(main, /showOrderOutcome[\s\S]{0,400}disabled\s*=\s*true/);
 });

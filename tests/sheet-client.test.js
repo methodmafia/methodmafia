@@ -194,13 +194,18 @@ test('interpretWriteResult treats pending duplicate as a soft client path, not a
   assert.equal(boom.reason, 'sheet');
 });
 
-test('write fetch is CORS + text/plain so the JSON body can be read', () => {
+test('write fetch is no-cors + text/plain fire-and-forget (opaque is expected)', () => {
   const opts = sheet.writeFetchOptions({ orderId: 'MM-2026-3007', fbclid: 'abc' });
   assert.equal(opts.method, 'POST');
-  assert.equal(opts.mode, 'cors');
-  assert.equal(opts.credentials, 'omit');
+  assert.equal(opts.mode, 'no-cors');
   assert.match(opts.headers['Content-Type'], /text\/plain/);
   assert.equal(JSON.parse(opts.body).fbclid, 'abc');
+});
+
+test('status lookup fetch stays CORS so JSON can be read', () => {
+  const opts = sheet.statusFetchOptions();
+  assert.equal(opts.method, 'GET');
+  assert.equal(opts.mode, 'cors');
 });
 
 test('sheet write timeout is 8–12 seconds and hanging fetch is aborted', async () => {

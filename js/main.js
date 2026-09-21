@@ -585,8 +585,20 @@ function submitOrder(){
 
   try{ localStorage.setItem('mm_last_order', orderId); }catch(e){}
 
-  /* Open Support immediately (still in the click gesture). Sheet write is
-     best-effort in parallel and must never block this path. */
+  /* FINAL: no-cors fire-and-forget. Never await Sheet JSON before UX.
+     Opaque response is expected; Support must open in this click. */
+  const sheetOpts = (typeof MMSheet !== 'undefined')
+    ? MMSheet.writeFetchOptions(payload)
+    : {
+        method:'POST',
+        mode:'no-cors',
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify(payload)
+      };
+  fetch(CONFIG.SHEET_URL, sheetOpts).catch(()=>{});
+
+  toast(t('toastOk'));
+
   showOrderOutcome({
     orderId: orderId,
     name: payload.name,
@@ -601,77 +613,6 @@ function submitOrder(){
     dupe: false
   });
   recoverSubmitButton(btn);
-
-  /* Sheet write: CORS + readable JSON only. Timed out so a hung Apps Script
-     cannot leave the customer on a disabled button forever. */
-  const sheetOpts = (typeof MMSheet !== 'undefined')
-    ? MMSheet.writeFetchOptions(payload)
-    : {
-        method:'POST',
-        mode:'cors',
-        redirect:'follow',
-        credentials:'omit',
-        headers:{'Content-Type':'text/plain;charset=utf-8'},
-        body: JSON.stringify(payload)
-      };
-  const timeoutMs = (typeof MMSheet !== 'undefined' && MMSheet.SHEET_WRITE_TIMEOUT_MS)
-    ? MMSheet.SHEET_WRITE_TIMEOUT_MS
-    : 10000;
-  const writeFetch = (typeof MMSheet !== 'undefined' && MMSheet.fetchWithTimeout)
-    ? MMSheet.fetchWithTimeout(CONFIG.SHEET_URL, sheetOpts, timeoutMs)
-    : fetch(CONFIG.SHEET_URL, sheetOpts);
-
-  writeFetch
-    .then(function(res){
-      return (typeof MMSheet !== 'undefined')
-        ? MMSheet.readResponse(res)
-        : res.text().then(function(text){
-            var json = null;
-            try{ json = JSON.parse(text); }catch(e){}
-            return { type: res.type, ok: !!res.ok, status: res.status, json: json, text: text };
-          });
-    })
-    .then(function(parsed){
-      const result = (typeof MMSheet !== 'undefined')
-        ? MMSheet.interpretWriteResult(parsed)
-        : (parsed && parsed.ok && parsed.json && parsed.json.ok === true
-            ? { ok: true, dupe: !!(parsed.json && parsed.json.dupe) }
-            : { ok: false, reason: 'invalid' });
-
-      if(result.reason === 'duplicate_pending'){
-        const existingId = result.orderId || orderId;
-        try{ localStorage.setItem('mm_last_order', existingId); }catch(e){}
-        toast(t('toastDupe'));
-        showOrderOutcome({
-          orderId: existingId,
-          name: payload.name,
-          email: payload.email,
-          telegram: handle,
-          language: (typeof MMSheet !== 'undefined')
-            ? MMSheet.sheetLanguageLabel(payload.language)
-            : String(payload.language || 'en').toUpperCase(),
-          plan: payload.plan,
-          amount: payload.amount,
-          payment: SELECTED_PAY,
-          dupe: true
-        });
-        recoverSubmitButton(btn);
-        return;
-      }
-
-      if(!result.ok){
-        toast(t('toastSheetFail'), true);
-        recoverSubmitButton(btn);
-        return;
-      }
-
-      toast(t('toastOk'));
-      recoverSubmitButton(btn);
-    })
-    .catch(function(){
-      toast(t('toastSheetFail'), true);
-      recoverSubmitButton(btn);
-    });
 }
 
 function recoverSubmitButton(btn){

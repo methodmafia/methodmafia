@@ -1,7 +1,8 @@
 /* ═══════════════════════════════════════════════════════════
    THE METHOD MAFIA — Sheet web-app client (browser + Node)
-   Write success is only JSON {ok:true}. Status lookup is
-   public (action=status) and never sends an admin token.
+   Writes are no-cors fire-and-forget (opaque is expected).
+   Status lookup GET is CORS + public (action=status) and
+   never sends an admin token.
    ═══════════════════════════════════════════════════════════ */
 (function(root, factory){
   if(typeof module === 'object' && module.exports){
@@ -139,9 +140,7 @@
   function writeFetchOptions(payload){
     return {
       method: 'POST',
-      mode: 'cors',
-      redirect: 'follow',
-      credentials: 'omit',
+      mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload || {})
     };
