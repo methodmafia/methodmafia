@@ -583,47 +583,64 @@ function submitOrder(){
     });
   }
 
+  fetch(CONFIG.SHEET_URL, {
+    method:'POST',
+    mode:'no-cors',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify(payload)
+  }).catch(()=>{});
+
   try{ localStorage.setItem('mm_last_order', orderId); }catch(e){}
 
-  /* FINAL: no-cors fire-and-forget. Never await Sheet JSON before UX.
-     Opaque response is expected; Support must open in this click. */
-  const sheetOpts = (typeof MMSheet !== 'undefined')
-    ? MMSheet.writeFetchOptions(payload)
-    : {
-        method:'POST',
-        mode:'no-cors',
-        headers:{'Content-Type':'text/plain;charset=utf-8'},
-        body: JSON.stringify(payload)
-      };
-  fetch(CONFIG.SHEET_URL, sheetOpts).catch(()=>{});
-
   toast(t('toastOk'));
+
+  const langLabel = (typeof MMSheet !== 'undefined')
+    ? MMSheet.sheetLanguageLabel(payload.language)
+    : String(payload.language || 'en').toUpperCase();
+  const msgText = (typeof MMOrderFlow !== 'undefined')
+    ? MMOrderFlow.buildPaymentProofMessage({
+        orderId: orderId,
+        name: payload.name,
+        email: payload.email,
+        telegram: handle,
+        language: langLabel,
+        plan: payload.plan,
+        amount: payload.amount,
+        payment: SELECTED_PAY
+      })
+    : (
+      '🧾 NEW ORDER\n' +
+      '━━━━━━━━━━━━━━\n' +
+      'Order ID : ' + orderId + '\n' +
+      'Name     : ' + payload.name + '\n' +
+      'Email    : ' + payload.email + '\n' +
+      'Telegram : ' + handle + '\n' +
+      'Language : ' + langLabel + '\n' +
+      '━━━━━━━━━━━━━━\n' +
+      'Plan     : ' + payload.plan + '\n' +
+      'Amount   : ' + payload.amount + '\n' +
+      'Payment  : ' + SELECTED_PAY + '\n' +
+      '━━━━━━━━━━━━━━\n\n' +
+      'I placed my order. I will send my payment screenshot here.'
+    );
+  const msg = encodeURIComponent(msgText);
 
   showOrderOutcome({
     orderId: orderId,
     name: payload.name,
     email: payload.email,
     telegram: handle,
-    language: (typeof MMSheet !== 'undefined')
-      ? MMSheet.sheetLanguageLabel(payload.language)
-      : String(payload.language || 'en').toUpperCase(),
+    language: langLabel,
     plan: payload.plan,
     amount: payload.amount,
     payment: SELECTED_PAY,
-    dupe: false
+    supportUrl: CONFIG.SUPPORT + '?text=' + msg
   });
-  recoverSubmitButton(btn);
-}
 
-function recoverSubmitButton(btn){
-  const el = btn || document.getElementById('submitBtn');
-  if(!el) return;
-  el.disabled = false;
-  el.removeAttribute('aria-busy');
-  if(el.dataset && el.dataset.t){
-    const label = t(el.dataset.t);
-    if(label) el.textContent = label;
-  }
+  setTimeout(()=>{
+    window.open(CONFIG.SUPPORT + '?text=' + msg, '_blank');
+    btn.disabled = false;
+  }, 900);
 }
 
 function showOrderOutcome(opts){
@@ -635,11 +652,8 @@ function showOrderOutcome(opts){
   const plan = opts.plan || '';
   const amount = opts.amount == null ? '' : String(opts.amount);
   const payment = opts.payment || '';
-  const dupe = !!opts.dupe;
 
   box.hidden = false;
-  box.classList.toggle('is-dupe', dupe);
-  recoverSubmitButton(document.getElementById('submitBtn'));
 
   const oid = document.getElementById('okOrderId');
   const opl = document.getElementById('okPlan');
@@ -651,42 +665,25 @@ function showOrderOutcome(opts){
   const titleEl = box.querySelector('[data-t="thankTitle"], [data-t="thankDupeTitle"]');
   const bodyEl = box.querySelector('[data-t="thankBody"], [data-t="thankDupeBody"]');
   if(titleEl){
-    titleEl.setAttribute('data-t', dupe ? 'thankDupeTitle' : 'thankTitle');
-    titleEl.textContent = t(dupe ? 'thankDupeTitle' : 'thankTitle');
+    titleEl.setAttribute('data-t', 'thankTitle');
+    titleEl.textContent = t('thankTitle');
   }
   if(bodyEl){
-    const key = dupe ? 'thankDupeBody' : 'thankBody';
-    bodyEl.setAttribute('data-t', key);
-    const copy = t(key);
+    bodyEl.setAttribute('data-t', 'thankBody');
+    const copy = t('thankBody');
     if(String(copy).indexOf('<') !== -1) bodyEl.innerHTML = copy;
     else bodyEl.textContent = copy;
   }
 
-  const flow = (typeof MMOrderFlow !== 'undefined') ? MMOrderFlow : null;
-  const msg = flow
-    ? flow.buildPaymentProofMessage({
-        orderId: orderId,
-        name: opts.name || '',
-        email: opts.email || '',
-        telegram: opts.telegram || '',
-        language: opts.language || '',
-        plan: plan,
-        amount: amount,
-        payment: payment
-      })
-    : ('Order ID : ' + orderId + '\nI will send my payment screenshot here.');
-  const support = (typeof CONFIG !== 'undefined' && CONFIG.SUPPORT) ? CONFIG.SUPPORT : 'https://t.me/MMHQ_Support';
-  const opened = flow
-    ? flow.openSupportTelegram(support, msg)
-    : { url: support, blocked: true };
-
+  const supportUrl = opts.supportUrl || ((typeof CONFIG !== 'undefined' && CONFIG.SUPPORT)
+    ? CONFIG.SUPPORT
+    : 'https://t.me/MMHQ_Support');
   const tgBtn = document.getElementById('okTgBtn');
   if(tgBtn){
-    tgBtn.href = opened.url;
+    tgBtn.href = supportUrl;
     tgBtn.target = '_blank';
     tgBtn.rel = 'noopener';
   }
-  box.classList.toggle('tg-blocked', !!opened.blocked);
 
   try{ box.scrollIntoView({ behavior: 'smooth', block: 'center' }); }catch(e){}
 }

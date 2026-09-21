@@ -516,7 +516,7 @@ const DIGEST_EMAIL = 'info@themethodmafia.com';  // digest email ঠিকান
 
 ### Web App / CORS (form + order-status)
 
-**Write (doPost):** ফর্ম `mode: 'no-cors'` fire-and-forget POST করে (`Content-Type: text/plain`)। Success UI + Telegram Support **Sheet JSON-এর জন্য অপেক্ষা করে না** — opaque response expected। `doPost` এখনও `{ok:true}` JSON দিতে পারে, কিন্তু ফর্ম সেটা পড়ে না। নতুন deployment-এ **Anyone** access লাগে।
+**Write (doPost):** ফর্ম `mode: 'no-cors'` fire-and-forget POST করে (`Content-Type: text/plain`)। Success toast + Telegram Support **Sheet JSON-এর জন্য অপেক্ষা করে না** — opaque response expected। ~900ms পরে `window.open(CONFIG.SUPPORT + '?text=' + msg)` এবং বাটন আবার enable হয়। `doPost` এখনও `{ok:true}` JSON দিতে পারে, কিন্তু ফর্ম সেটা পড়ে না। নতুন deployment-এ **Anyone** access লাগে।
 
 **Status GET stays CORS:** `order-status.html` readable JSON চায়। Opaque/HTML/CORS error = lookup error UI।
 

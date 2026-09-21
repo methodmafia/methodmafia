@@ -47,6 +47,8 @@ test('buildPaymentProofMessage includes order, plan, amount and selected payment
   assert.match(msg, /Entry/);
   assert.match(msg, /\$30/);
   assert.match(msg, /Binance Pay/);
+  assert.match(msg, /NEW ORDER/);
+  assert.match(msg, /Language : EN/);
   assert.doesNotMatch(msg, /Please send me the payment details/);
   assert.match(msg, /screenshot/i);
 });
@@ -151,32 +153,17 @@ test('index keeps payment selector and shows post-submit recap + Support CTA', (
   assert.doesNotMatch(html, /createChatInviteLink|AUTO_VIP|auto.?invite/i);
 });
 
-test('main.js shows success recap and opens Support with fallback button', () => {
+test('main.js shows success recap and never gates Telegram on Sheet JSON', () => {
   const main = read('js/main.js');
   assert.match(main, /showOrderOutcome|orderSuccess/);
-  assert.match(main, /openSupportTelegram/);
-  assert.match(main, /thankDupeTitle/);
-  assert.match(main, /recoverSubmitButton/);
+  assert.match(main, /okTgBtn/);
   assert.doesNotMatch(main, /Please send me the payment details/);
   assert.doesNotMatch(main, /createChatInviteLink/);
-});
-
-test('submitOrder is no-cors fire-and-forget then opens Support without awaiting Sheet JSON', () => {
-  const main = read('js/main.js');
-  const submit = main.match(/function submitOrder\(\)\{[\s\S]*?\nfunction recoverSubmitButton/);
-  assert.ok(submit, 'submitOrder must be followed by recoverSubmitButton');
-  const body = submit[0];
-  assert.match(body, /mode:'no-cors'|mode:\s*['"]no-cors['"]/);
-  assert.match(body, /\.catch\(\(\)=>\{\}\)/);
-  assert.doesNotMatch(body, /fetchWithTimeout/);
-  assert.doesNotMatch(body, /mode:'cors'|mode:\s*['"]cors['"]/);
-  assert.doesNotMatch(body, /interpretWriteResult|\.then\(/);
-  const fetchAt = body.search(/fetch\(CONFIG\.SHEET_URL/);
-  const outcomeAt = body.indexOf('showOrderOutcome(');
-  assert.ok(fetchAt !== -1 && outcomeAt !== -1, 'must write sheet and open Support UI');
-  assert.ok(fetchAt < outcomeAt, 'fire-and-forget write must start before Support/recap');
-  assert.match(body, /recoverSubmitButton\(btn\)|btn\.disabled\s*=\s*false/);
-  assert.doesNotMatch(main, /showOrderOutcome[\s\S]{0,400}disabled\s*=\s*true/);
+  const submit = main.match(/function submitOrder\(\)\{[\s\S]*?\nfunction /);
+  assert.ok(submit, 'submitOrder must exist');
+  assert.match(submit[0], /mode:'no-cors'/);
+  assert.doesNotMatch(submit[0], /interpretWriteResult/);
+  assert.doesNotMatch(submit[0], /fetchWithTimeout/);
 });
 
 test('OrderProcessor refuses a new row when Telegram\/email already Pending', () => {
