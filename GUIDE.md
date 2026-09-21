@@ -26,7 +26,7 @@ methodmafia/
 │   ├── translations.js ← মূল পেজের লেখা (৩ ভাষা)
 │   ├── pages.js        ← বাকি পেজের লেখা (৩ ভাষা)
 │   ├── main.js         ← সব কাজ করার কোড
-│   ├── sheet-client.js ← Sheet write/status JSON (CORS, no token)
+│   ├── sheet-client.js ← Sheet write (no-cors) + status GET (CORS, no token)
 │   ├── tracking-lib.js ← click ID / UTM / event rules
 │   └── pixels.js       ← Meta + TikTok pixel (সব পেজে)
 │
@@ -516,9 +516,9 @@ const DIGEST_EMAIL = 'info@themethodmafia.com';  // digest email ঠিকান
 
 ### Web App / CORS (form + order-status)
 
-সাইট **কখনো** `mode: 'no-cors'` ব্যবহার করে না। ফর্ম শুধু তখনই success দেখায় যখন Web App readable JSON `{ok:true}` ফেরত দেয়। Opaque/HTML/CORS error = error UI।
+**Write (doPost):** ফর্ম `mode: 'no-cors'` fire-and-forget POST করে (`Content-Type: text/plain`)। Success toast + Telegram Support **Sheet JSON-এর জন্য অপেক্ষা করে না** — opaque response expected। ~900ms পরে `window.open(CONFIG.SUPPORT + '?text=' + msg)` এবং বাটন আবার enable হয়। `doPost` এখনও `{ok:true}` JSON দিতে পারে, কিন্তু ফর্ম সেটা পড়ে না। নতুন deployment-এ **Anyone** access লাগে।
 
-**Write (doPost):** `Content-Type: text/plain` (simple POST, preflight নেই)। `doPost` ইতিমধ্যে `{ok:true}` JSON দেয় — নতুন deployment-এ **Anyone** access লাগে।
+**Status GET stays CORS:** `order-status.html` readable JSON চায়। Opaque/HTML/CORS error = lookup error UI।
 
 **Status (doGet, public, no token):** `order-status.html` কল করে:
 `SHEET_URL?action=status&orderId=MM-2026-XXXX`

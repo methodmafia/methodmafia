@@ -11,13 +11,14 @@ function read(rel) {
   return fs.readFileSync(path.join(ROOT, rel), 'utf8');
 }
 
-test('order form no longer treats opaque no-cors fetch as success', () => {
+test('order form uses proven no-cors fire-and-forget so Telegram is not gated on Sheet JSON', () => {
   const main = read('js/main.js');
-  assert.equal(main.includes("mode:'no-cors'"), false);
-  assert.equal(main.includes('mode: "no-cors"'), false);
-  assert.equal(main.includes("mode: 'no-cors'"), false);
-  assert.match(main, /isWriteSuccess|interpretWriteResult/);
-  assert.match(main, /toastSheetFail/);
+  const submit = main.match(/function submitOrder\(\)\{[\s\S]*?\nfunction /);
+  assert.ok(submit, 'submitOrder must exist');
+  assert.equal(submit[0].includes("mode:'no-cors'"), true);
+  assert.match(submit[0], /\.catch\(\(\)=>\{\}\)/);
+  assert.doesNotMatch(submit[0], /fetchWithTimeout/);
+  assert.doesNotMatch(submit[0], /interpretWriteResult/);
 });
 
 test('order-status looks up the Sheet instead of localStorage fake status', () => {

@@ -59,8 +59,18 @@ function doPost(e) {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME)
                   || SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
 
-    /* C2: Duplicate detection */
-    const isDupe = checkDuplicate(sheet, data.telegram, data.email);
+    /* C2: Duplicate detection — Pending contact stays one order.
+       Active/Expired can still submit (renewals). */
+    const existing = findExistingOrder(sheet, data.telegram, data.email);
+    if (existing && existing.pending) {
+      return ContentService.createTextOutput(JSON.stringify({
+        ok: false,
+        dupe: true,
+        reason: 'pending',
+        orderId: existing.orderId || ''
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    const isDupe = !!existing;
 
     const now   = new Date();
     const expiry = new Date(now.getTime() + 30 * 24 * 3600 * 1000);
@@ -176,18 +186,40 @@ function doGet(e) {
 /* ────────────────────────────────────────────────────────────
    C2: Duplicate detection
    ──────────────────────────────────────────────────────────── */
-function checkDuplicate(sheet, telegram, email) {
-  const data      = sheet.getDataRange().getValues();
-  const tgLower   = (telegram || '').toLowerCase().replace(/^@/, '');
-  const emlLower  = (email    || '').toLowerCase();
+function normalizeHandle_(value) {
+  return String(value || '').trim().toLowerCase().replace(/^@+/, '');
+}
+
+function isPendingStatus_(status) {
+  const s = String(status || '').trim().toLowerCase();
+  return s === 'pending' || s === 'submitted' || s === 'verifying';
+}
+
+function findExistingOrder(sheet, telegram, email) {
+  const data     = sheet.getDataRange().getValues();
+  const tgLower  = normalizeHandle_(telegram);
+  const emlLower = String(email || '').trim().toLowerCase();
+  let match = null;
+  let pending = null;
   for (let i = 1; i < data.length; i++) {
-    const rowTg  = (data[i][COL.TELEGRAM] || '').toLowerCase().replace(/^@/, '');
-    const rowEml = (data[i][COL.EMAIL]    || '').toLowerCase();
+    const rowTg  = normalizeHandle_(data[i][COL.TELEGRAM]);
+    const rowEml = String(data[i][COL.EMAIL] || '').trim().toLowerCase();
     if ((tgLower && rowTg === tgLower) || (emlLower && rowEml === emlLower)) {
-      return true;
+      const status = data[i][COL.STATUS];
+      const item = {
+        orderId: String(data[i][COL.ORDER_ID] || ''),
+        status: String(status || ''),
+        pending: isPendingStatus_(status)
+      };
+      match = item;
+      if (item.pending) pending = item;
     }
   }
-  return false;
+  return pending || match;
+}
+
+function checkDuplicate(sheet, telegram, email) {
+  return !!findExistingOrder(sheet, telegram, email);
 }
 
 /* ────────────────────────────────────────────────────────────

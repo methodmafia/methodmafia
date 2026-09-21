@@ -583,68 +583,109 @@ function submitOrder(){
     });
   }
 
-  /* Sheet write: CORS + readable JSON only. Opaque no-cors used to
-     look like success even when Apps Script / Sheet write failed. */
-  const sheetOpts = (typeof MMSheet !== 'undefined')
-    ? MMSheet.writeFetchOptions(payload)
-    : {
-        method:'POST',
-        mode:'cors',
-        redirect:'follow',
-        credentials:'omit',
-        headers:{'Content-Type':'text/plain;charset=utf-8'},
-        body: JSON.stringify(payload)
-      };
+  fetch(CONFIG.SHEET_URL, {
+    method:'POST',
+    mode:'no-cors',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify(payload)
+  }).catch(()=>{});
 
-  fetch(CONFIG.SHEET_URL, sheetOpts)
-    .then(function(res){
-      return (typeof MMSheet !== 'undefined')
-        ? MMSheet.readResponse(res)
-        : res.text().then(function(text){
-            var json = null;
-            try{ json = JSON.parse(text); }catch(e){}
-            return { type: res.type, ok: !!res.ok, status: res.status, json: json, text: text };
-          });
-    })
-    .then(function(parsed){
-      const ok = (typeof MMSheet !== 'undefined')
-        ? MMSheet.isWriteSuccess(parsed)
-        : !!(parsed && parsed.ok && parsed.json && parsed.json.ok === true);
-      if(!ok) throw new Error('sheet_write_failed');
+  try{ localStorage.setItem('mm_last_order', orderId); }catch(e){}
 
-      try{ localStorage.setItem('mm_last_order', orderId); }catch(e){}
-      toast(t('toastOk'));
+  toast(t('toastOk'));
 
-      const localLine = (LANG === 'bn')
-        ? '\nAmount (BDT): ' + (SELECTED_PLAN === 'entry' ? CONFIG.ENTRY_BDT : CONFIG.MONTHLY_BDT)
-        : '';
+  const langLabel = (typeof MMSheet !== 'undefined')
+    ? MMSheet.sheetLanguageLabel(payload.language)
+    : String(payload.language || 'en').toUpperCase();
+  const msgText = (typeof MMOrderFlow !== 'undefined')
+    ? MMOrderFlow.buildPaymentProofMessage({
+        orderId: orderId,
+        name: payload.name,
+        email: payload.email,
+        telegram: handle,
+        language: langLabel,
+        plan: payload.plan,
+        amount: payload.amount,
+        payment: SELECTED_PAY
+      })
+    : (
+      '🧾 NEW ORDER\n' +
+      '━━━━━━━━━━━━━━\n' +
+      'Order ID : ' + orderId + '\n' +
+      'Name     : ' + payload.name + '\n' +
+      'Email    : ' + payload.email + '\n' +
+      'Telegram : ' + handle + '\n' +
+      'Language : ' + langLabel + '\n' +
+      '━━━━━━━━━━━━━━\n' +
+      'Plan     : ' + payload.plan + '\n' +
+      'Amount   : ' + payload.amount + '\n' +
+      'Payment  : ' + SELECTED_PAY + '\n' +
+      '━━━━━━━━━━━━━━\n\n' +
+      'I placed my order. I will send my payment screenshot here.'
+    );
+  const msg = encodeURIComponent(msgText);
 
-      const msg = encodeURIComponent(
-        '🧾 NEW ORDER\n' +
-        '━━━━━━━━━━━━━━\n' +
-        'Order ID : ' + orderId + '\n' +
-        'Name     : ' + payload.name + '\n' +
-        'Email    : ' + payload.email + '\n' +
-        'Telegram : ' + handle + '\n' +
-        'Language : ' + ((typeof MMSheet !== 'undefined')
-          ? MMSheet.sheetLanguageLabel(payload.language)
-          : String(payload.language || 'en').toUpperCase()) + '\n' +
-        '━━━━━━━━━━━━━━\n' +
-        'Plan     : ' + payload.plan + '\n' +
-        'Amount   : ' + payload.amount + localLine + '\n' +
-        'Payment  : ' + SELECTED_PAY + '\n' +
-        '━━━━━━━━━━━━━━\n\n' +
-        'I have placed my order. Please send me the payment details.'
-      );
-      setTimeout(()=>{
-        window.open(CONFIG.SUPPORT + '?text=' + msg, '_blank');
-        btn.disabled = false;
-      }, 900);
-    })
-    .catch(function(){
-      toast(t('toastSheetFail'), true);
-      btn.disabled = false;
-    });
+  setTimeout(()=>{
+    window.open(CONFIG.SUPPORT + '?text=' + msg, '_blank');
+    btn.disabled = false;
+  }, 900);
+
+  showOrderOutcome({
+    orderId: orderId,
+    name: payload.name,
+    email: payload.email,
+    telegram: handle,
+    language: langLabel,
+    plan: payload.plan,
+    amount: payload.amount,
+    payment: SELECTED_PAY,
+    supportUrl: CONFIG.SUPPORT + '?text=' + msg
+  });
+}
+
+function showOrderOutcome(opts){
+  opts = opts || {};
+  const box = document.getElementById('orderSuccess');
+  if(!box) return;
+
+  const orderId = opts.orderId || '';
+  const plan = opts.plan || '';
+  const amount = opts.amount == null ? '' : String(opts.amount);
+  const payment = opts.payment || '';
+
+  box.hidden = false;
+
+  const oid = document.getElementById('okOrderId');
+  const opl = document.getElementById('okPlan');
+  const opy = document.getElementById('okPay');
+  if(oid) oid.textContent = orderId;
+  if(opl) opl.textContent = amount ? (plan + ' · ' + amount) : plan;
+  if(opy) opy.textContent = payment;
+
+  const titleEl = box.querySelector('[data-t="thankTitle"], [data-t="thankDupeTitle"]');
+  const bodyEl = box.querySelector('[data-t="thankBody"], [data-t="thankDupeBody"]');
+  if(titleEl){
+    titleEl.setAttribute('data-t', 'thankTitle');
+    titleEl.textContent = t('thankTitle');
+  }
+  if(bodyEl){
+    bodyEl.setAttribute('data-t', 'thankBody');
+    const copy = t('thankBody');
+    if(String(copy).indexOf('<') !== -1) bodyEl.innerHTML = copy;
+    else bodyEl.textContent = copy;
+  }
+
+  const supportUrl = opts.supportUrl || ((typeof CONFIG !== 'undefined' && CONFIG.SUPPORT)
+    ? CONFIG.SUPPORT
+    : 'https://t.me/MMHQ_Support');
+  const tgBtn = document.getElementById('okTgBtn');
+  if(tgBtn){
+    tgBtn.href = supportUrl;
+    tgBtn.target = '_blank';
+    tgBtn.rel = 'noopener';
+  }
+
+  try{ box.scrollIntoView({ behavior: 'smooth', block: 'center' }); }catch(e){}
 }
 
 /* ─── স্ক্রল রিভিল + প্রোগ্রেস ─── */

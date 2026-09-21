@@ -1,7 +1,8 @@
 /* ═══════════════════════════════════════════════════════════
    THE METHOD MAFIA — Sheet web-app client (browser + Node)
-   Write success is only JSON {ok:true}. Status lookup is
-   public (action=status) and never sends an admin token.
+   Writes are no-cors fire-and-forget (opaque is expected).
+   Status lookup GET is CORS + public (action=status) and
+   never sends an admin token.
    ═══════════════════════════════════════════════════════════ */
 (function(root, factory){
   if(typeof module === 'object' && module.exports){
@@ -33,14 +34,31 @@
     return !!(parsed.json && parsed.json.ok === true);
   }
 
+  function isPendingDuplicateJson(json){
+    if(!json || json.dupe !== true) return false;
+    var reason = String(json.reason || json.error || '').toLowerCase();
+    return reason === 'pending' || reason === 'duplicate_pending';
+  }
+
   function interpretWriteResult(parsed){
-    if(isWriteSuccess(parsed)) return { ok: true };
+    if(isWriteSuccess(parsed)){
+      return { ok: true, dupe: !!(parsed.json && parsed.json.dupe) };
+    }
+    var json = parsed && parsed.json;
+    if(isPendingDuplicateJson(json)){
+      return {
+        ok: false,
+        reason: 'duplicate_pending',
+        dupe: true,
+        orderId: String(json.orderId || '')
+      };
+    }
     var reason = 'invalid';
     if(!parsed || parsed.networkError) reason = 'network';
     else if(parsed.type === 'opaque') reason = 'opaque';
     else if(parsed.json && parsed.json.ok === false) reason = 'sheet';
     else if(parsed.ok === false) reason = 'http';
-    return { ok: false, reason: reason };
+    return { ok: false, reason: reason, dupe: false };
   }
 
   function stripTokenFromSearch(searchParams){
@@ -122,12 +140,57 @@
   function writeFetchOptions(payload){
     return {
       method: 'POST',
-      mode: 'cors',
-      redirect: 'follow',
-      credentials: 'omit',
+      mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload || {})
     };
+  }
+
+  var SHEET_WRITE_TIMEOUT_MS = 10000;
+
+  function fetchWithTimeout(url, opts, timeoutMs, fetchFn){
+    var ms = Number(timeoutMs);
+    if(!(ms > 0)) ms = SHEET_WRITE_TIMEOUT_MS;
+    var run = fetchFn || (typeof fetch === 'function' ? fetch : null);
+    if(!run){
+      return Promise.reject(new Error('fetch_unavailable'));
+    }
+    var options = {};
+    var src = opts || {};
+    for(var k in src){ if(Object.prototype.hasOwnProperty.call(src, k)) options[k] = src[k]; }
+    var ctrl = null;
+    if(typeof AbortController !== 'undefined' && !options.signal){
+      ctrl = new AbortController();
+      options.signal = ctrl.signal;
+    }
+    return new Promise(function(resolve, reject){
+      var done = false;
+      var timer = setTimeout(function(){
+        if(done) return;
+        done = true;
+        if(ctrl){ try{ ctrl.abort(); }catch(e){} }
+        var err = new Error('sheet_timeout');
+        err.reason = 'timeout';
+        reject(err);
+      }, ms);
+      Promise.resolve(run(url, options)).then(function(res){
+        if(done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve(res);
+      }, function(err){
+        if(done) return;
+        done = true;
+        clearTimeout(timer);
+        if(err && err.name === 'AbortError'){
+          var te = new Error('sheet_timeout');
+          te.reason = 'timeout';
+          reject(te);
+          return;
+        }
+        reject(err);
+      });
+    });
   }
 
   function normalizeOrderLanguage(code){
@@ -160,6 +223,8 @@
     interpretStatusResult: interpretStatusResult,
     readResponse: readResponse,
     writeFetchOptions: writeFetchOptions,
+    fetchWithTimeout: fetchWithTimeout,
+    SHEET_WRITE_TIMEOUT_MS: SHEET_WRITE_TIMEOUT_MS,
     statusFetchOptions: statusFetchOptions,
     normalizeOrderLanguage: normalizeOrderLanguage,
     sheetLanguageLabel: sheetLanguageLabel
