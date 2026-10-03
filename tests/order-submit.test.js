@@ -79,6 +79,7 @@ function loadSubmitRuntime(opts) {
   };
   const navigatorObj = {
     userAgent: (opts && opts.ua) || UAS.desktop,
+    maxTouchPoints: (opts && opts.maxTouchPoints) || 0,
     sendBeacon: function(_url, body) {
       if (!net.beaconOk) return false;
       beacons.push(String(body));
@@ -292,18 +293,21 @@ test('submit opens the Telegram app in this tab and never calls window.open', ()
   assert.equal(phone.opens.length, 0);
   assert.equal(phone.location.href.indexOf('intent://resolve?domain=MMHQ_Support&text='), 0);
   assert.match(phone.location.href, /scheme=tg/);
-  assert.match(phone.location.href, /package=org\.telegram\.messenger/);
+  assert.equal(phone.location.href.includes('package='), false);
   const phoneFallback = decodeURIComponent(phone.location.href.split('browser_fallback_url=')[1].replace(/;end$/, ''));
   assert.equal(phoneFallback.indexOf('https://t.me/MMHQ_Support?text='), 0);
   assert.match(decodeURIComponent(phoneFallback.split('text=')[1]), /Swa Test/);
   assert.equal(phone.fields.orderHandoff.hidden, true);
   assert.equal(phone.fields.submitBtn.disabled, false);
+  assert.equal(phone.fields.submitBtn.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
 
   const ios = loadSubmitRuntime({ ua: UAS.iphone });
   assert.equal(ios.click(), false);
   assert.equal(ios.opens.length, 0);
-  assert.equal(ios.location.href.indexOf('tg://resolve?domain=MMHQ_Support&text='), 0);
+  assert.equal(ios.location.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
+  assert.equal(ios.location.href.includes('tg:'), false);
   assert.match(decodeURIComponent(ios.location.href.split('text=')[1]), /Swa Test/);
+  assert.equal(ios.fields.submitBtn.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
 
   const iosFb = loadSubmitRuntime({
     ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 [FBAN/FBIOS;FBAV/484.0.0.0.0;]'
@@ -316,40 +320,61 @@ test('submit opens the Telegram app in this tab and never calls window.open', ()
   fbAndroid.click();
   assert.equal(fbAndroid.opens.length, 0);
   assert.equal(fbAndroid.location.href.indexOf('intent://resolve?domain=MMHQ_Support&text='), 0);
+  assert.equal(fbAndroid.location.href.includes('package='), false);
+  assert.equal(fbAndroid.fields.submitBtn.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
 
   const desktop = loadSubmitRuntime({ ua: UAS.desktop });
   assert.equal(desktop.click(), false);
   assert.equal(desktop.opens.length, 0);
   assert.equal(desktop.location.href.indexOf('tg://resolve?domain=MMHQ_Support&text='), 0);
   assert.equal(desktop.fields.orderHandoff.hidden, false);
-  assert.equal(desktop.fields.orderTgLink.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
+  assert.equal(desktop.fields.submitBtn.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
+  assert.equal(desktop.fields.orderTgLink.href.indexOf('https://web.telegram.org/k/#?tgaddr='), 0);
+  const tgaddr = decodeURIComponent(desktop.fields.orderTgLink.href.split('tgaddr=')[1]);
+  assert.equal(tgaddr.indexOf('tg://resolve?domain=MMHQ_Support&text='), 0);
+  assert.match(decodeURIComponent(tgaddr.split('text=')[1]), /Swa Test/);
 });
 
 test('the app fallback runs only while the page is still visible', async () => {
   const desktop = loadSubmitRuntime({ ua: UAS.desktop });
   desktop.setFallbackMs(20);
   desktop.click();
-  assert.equal(desktop.location.href.indexOf('tg://resolve?domain=MMHQ_Support&text='), 0);
+  const desktopUrl = desktop.location.href;
+  const desktopTg = desktop.fields.orderTgLink.href;
+  assert.equal(desktopUrl.indexOf('tg://resolve?domain=MMHQ_Support&text='), 0);
+  assert.equal(desktop.fields.orderHandoff.hidden, false);
+  assert.equal(desktopTg.indexOf('https://web.telegram.org/k/#?tgaddr='), 0);
   await new Promise(function(resolve) { setTimeout(resolve, 50); });
-  assert.equal(desktop.location.href, 'https://web.telegram.org/k/#@MMHQ_Support');
+  assert.equal(desktop.location.href, desktopUrl);
+  assert.equal(desktop.fields.orderTgLink.href, desktopTg);
   assert.equal(desktop.opens.length, 0);
   assert.equal(desktop.fields.orderHandoff.hidden, false);
 
-  const blurred = loadSubmitRuntime({ ua: UAS.desktop });
+  const blurred = loadSubmitRuntime({ ua: UAS.android });
   blurred.setFallbackMs(20);
   blurred.click();
   const appUrl = blurred.location.href;
+  assert.equal(appUrl.indexOf('intent://'), 0);
   blurred.dispatch('blur');
   await new Promise(function(resolve) { setTimeout(resolve, 50); });
   assert.equal(blurred.location.href, appUrl);
 
-  const hidden = loadSubmitRuntime({ ua: UAS.iphone });
+  const hidden = loadSubmitRuntime({ ua: UAS.android });
   hidden.setFallbackMs(20);
   hidden.click();
-  const iosUrl = hidden.location.href;
+  const hiddenUrl = hidden.location.href;
   hidden.hidePage();
   await new Promise(function(resolve) { setTimeout(resolve, 50); });
-  assert.equal(hidden.location.href, iosUrl);
+  assert.equal(hidden.location.href, hiddenUrl);
+
+  const ios = loadSubmitRuntime({ ua: UAS.iphone });
+  ios.setFallbackMs(20);
+  ios.click();
+  const iosUrl = ios.location.href;
+  assert.equal(iosUrl.indexOf('https://t.me/MMHQ_Support?text='), 0);
+  ios.hidePage();
+  await new Promise(function(resolve) { setTimeout(resolve, 50); });
+  assert.equal(ios.location.href, iosUrl);
 
   const android = loadSubmitRuntime({ ua: UAS.android });
   android.setFallbackMs(20);
@@ -358,6 +383,68 @@ test('the app fallback runs only while the page is still visible', async () => {
   assert.equal(android.location.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
   assert.match(decodeURIComponent(android.location.href.split('text=')[1]), /Swa Test/);
   assert.equal(android.opens.length, 0);
+});
+
+test('pagehide and a persisted pageshow cancel the intent fallback', async () => {
+  const left = loadSubmitRuntime({ ua: UAS.android });
+  left.setFallbackMs(20);
+  left.click();
+  const intentUrl = left.location.href;
+  assert.equal(intentUrl.indexOf('intent://'), 0);
+  left.dispatch('pagehide');
+  await new Promise(function(resolve) { setTimeout(resolve, 50); });
+  assert.equal(left.location.href, intentUrl);
+  assert.equal(left.beacons.length, 1);
+  assert.equal(left.sentLatch() !== '', true);
+
+  const back = loadSubmitRuntime({ ua: UAS.android });
+  back.setFallbackMs(20);
+  back.click();
+  const backUrl = back.location.href;
+  assert.equal(backUrl.indexOf('intent://'), 0);
+  back.pageShow(true);
+  await new Promise(function(resolve) { setTimeout(resolve, 50); });
+  assert.equal(back.location.href, backUrl);
+  assert.equal(back.beacons.length, 1);
+
+  const fresh = loadSubmitRuntime({ ua: UAS.android });
+  fresh.setFallbackMs(20);
+  fresh.click();
+  fresh.pageShow(false);
+  await new Promise(function(resolve) { setTimeout(resolve, 50); });
+  assert.equal(fresh.location.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
+});
+
+test('Telegram in-app, plain Android WebView, and iPad use the https t.me link', () => {
+  const tg = loadSubmitRuntime({ ua: UAS.telegram });
+  assert.equal(tg.click(), false);
+  assert.equal(tg.opens.length, 0);
+  assert.equal(tg.location.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
+  assert.equal(tg.location.href.includes('intent:'), false);
+  assert.match(decodeURIComponent(tg.location.href.split('text=')[1]), /Swa Test/);
+
+  ['Mozilla/5.0 (Linux; Android 14; Pixel 7 Build/AP2A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/129.0.6668.70 Mobile Safari/537.36',
+    UAS.android + ' TikTok',
+    UAS.android + ' Line/14.11.0'
+  ].forEach(function(ua) {
+    const view = loadSubmitRuntime({ ua: ua });
+    view.click();
+    assert.equal(view.opens.length, 0, ua);
+    assert.equal(view.location.href.indexOf('https://t.me/MMHQ_Support?text='), 0, ua);
+    assert.equal(view.location.href.includes('intent:'), false, ua);
+  });
+
+  const macUa = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15';
+  const ipad = loadSubmitRuntime({ ua: macUa, maxTouchPoints: 5 });
+  ipad.click();
+  assert.equal(ipad.opens.length, 0);
+  assert.equal(ipad.location.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
+  assert.equal(ipad.location.href.includes('tg:'), false);
+
+  const mac = loadSubmitRuntime({ ua: macUa, maxTouchPoints: 0 });
+  mac.click();
+  assert.equal(mac.location.href.indexOf('tg://resolve?domain=MMHQ_Support&text='), 0);
+  assert.equal(mac.fields.orderHandoff.hidden, false);
 });
 
 test('submit stays a live t.me link: no disable, no Redirecting toast, no auto-copy', () => {
@@ -375,7 +462,9 @@ test('submit stays a live t.me link: no disable, no Redirecting toast, no auto-c
   assert.equal(submit.includes('await '), false);
   assert.equal(submit.includes('window.open'), false);
   assert.ok(submit.indexOf('postOrderToSheet(payload)') < submit.indexOf('window.location.href = instantUrl'));
-  assert.match(submit, /armTelegramFallback\(telegramFallbackUrl\(draft\.msgText\)\)/);
+  assert.match(submit, /btn\.href = telegramUrl/);
+  assert.equal(submit.includes('btn.href = instantUrl'), false);
+  assert.match(submit, /if\(instantUrl\.indexOf\('intent:'\) === 0\) armTelegramFallback\(orderTextUrl\(draft\.msgText\)\)/);
   assert.match(submit, /return true/);
 
   const tr = loadTranslations();
@@ -499,7 +588,12 @@ test('desktop second tap reopens the same tg:// link and does not beacon again',
 test('a valid draft stays unsent across persisted pageshow, then submit beacons once', () => {
   const main = read('js/main.js');
   assert.equal(main.includes('ORDER_SENT_ID = DRAFT_ORDER_ID'), false);
-  assert.equal(main.includes("addEventListener('pageshow'"), false);
+  assert.match(main, /addEventListener\('pagehide', clearTelegramFallback\)/);
+  const showAt = main.indexOf("addEventListener('pageshow'");
+  assert.ok(showAt !== -1);
+  const showChunk = main.slice(showAt, showAt + 160);
+  assert.match(showChunk, /clearTelegramFallback/);
+  assert.equal(showChunk.includes('ORDER_SENT_ID'), false);
   const submit = main.match(/function submitOrder\(e\)\{[\s\S]*?\n\}/)[0];
   const sendAt = submit.indexOf('ORDER_SENT_ID = orderId');
   const postAt = submit.indexOf('postOrderToSheet(payload)');
@@ -614,6 +708,7 @@ test('auxclick beacons and latches without preventDefault or contextmenu', () =>
   assert.equal(prevented, false);
   assert.equal(api.opens.length, 0);
   assert.equal(api.location.href, 'http://127.0.0.1/index.html');
+  assert.equal(api.fields.submitBtn.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
   assert.equal(api.beacons.length, 1);
   api.submitOrder(ev);
   assert.equal(api.beacons.length, 1);

@@ -564,38 +564,61 @@ function telegramAppUrl(text){
 function telegramIntentUrl(text){
   var web = orderTextUrl(text);
   return 'intent://resolve?domain=' + supportUsername() + '&text=' + encodeURIComponent(text || '') +
-    '#Intent;scheme=tg;package=org.telegram.messenger;S.browser_fallback_url=' +
+    '#Intent;scheme=tg;S.browser_fallback_url=' +
     encodeURIComponent(web) + ';end';
 }
 
-function desktopWebFallbackUrl(){
-  return 'https://web.telegram.org/k/#@' + supportUsername();
+function desktopWebDraftUrl(text){
+  return 'https://web.telegram.org/k/#?tgaddr=' + encodeURIComponent(telegramAppUrl(text));
 }
 
-/* Android, including Facebook and Instagram, uses intent:// so Chrome's own
-   fallback is the t.me link. iOS Facebook and Instagram block tg://, so they
-   go straight to t.me. iOS Safari, Telegram in-app, and desktop use tg://. */
+function isAppleTouch(){
+  var ua = browserUa();
+  if(/iPhone|iPad|iPod/i.test(ua)) return true;
+  var points = 0;
+  try{ points = navigator.maxTouchPoints || 0; }catch(e){ points = 0; }
+  return /Macintosh/i.test(ua) && points > 1;
+}
+
+function isMetaInApp(ua){
+  return /FBAN|FBAV|FB_IAB|Instagram/i.test(ua);
+}
+
+function isPlainAndroidWebView(ua){
+  if(!/Android/i.test(ua) || isMetaInApp(ua)) return false;
+  return /TikTok|Musical\.ly|Line\/|; wv\)/i.test(ua);
+}
+
+/* 1 Telegram in-app, 2 iPhone/iPad (a Mac UA with touch counts as iPad),
+   3 plain Android WebView: https t.me. 4 other Android, including Facebook
+   and Instagram: intent:// with no package. 5 desktop: tg://. */
 function instantTelegramUrl(text){
   var ua = browserUa();
+  if(/Telegram/i.test(ua)) return orderTextUrl(text);
+  if(isAppleTouch()) return orderTextUrl(text);
+  if(isPlainAndroidWebView(ua)) return orderTextUrl(text);
   if(/Android/i.test(ua)) return telegramIntentUrl(text);
-  if(/iPhone|iPad|iPod/i.test(ua) && /FBAN|FBAV|FB_IAB|Instagram/i.test(ua)) return orderTextUrl(text);
   return telegramAppUrl(text);
 }
 
-function telegramFallbackUrl(text){
-  if(!prefersSameTabTelegram()) return desktopWebFallbackUrl();
-  return orderTextUrl(text);
+var telegramFallbackTimer = null;
+
+function clearTelegramFallback(){
+  if(!telegramFallbackTimer) return;
+  try{ clearTimeout(telegramFallbackTimer); }catch(e){}
+  telegramFallbackTimer = null;
 }
 
 function armTelegramFallback(fallbackUrl){
   if(!fallbackUrl) return;
+  clearTelegramFallback();
   var finished = false;
   function finish(){
     if(finished) return;
     finished = true;
     try{ window.removeEventListener('blur', onBlur); }catch(e){}
     try{ document.removeEventListener('visibilitychange', onHide); }catch(e){}
-    try{ clearTimeout(timer); }catch(e){}
+    clearTelegramFallback();
   }
   function onBlur(){ finish(); }
   function onHide(){
@@ -603,7 +626,7 @@ function armTelegramFallback(fallbackUrl){
   }
   window.addEventListener('blur', onBlur);
   document.addEventListener('visibilitychange', onHide);
-  var timer = setTimeout(function(){
+  telegramFallbackTimer = setTimeout(function(){
     if(finished) return;
     var visible = true;
     try{ visible = document.visibilityState !== 'hidden'; }catch(e){}
@@ -611,6 +634,11 @@ function armTelegramFallback(fallbackUrl){
     if(visible) window.location.href = fallbackUrl;
   }, TELEGRAM_APP_FALLBACK_MS);
 }
+
+window.addEventListener('pagehide', clearTelegramFallback);
+window.addEventListener('pageshow', function(e){
+  if(e && e.persisted) clearTelegramFallback();
+});
 
 function showOrderHandoff(text, telegramUrl){
   var box = document.getElementById('orderHandoff');
@@ -773,7 +801,7 @@ function refreshSubmitHref(){
   var btn = document.getElementById('submitBtn');
   if(!btn || String(btn.tagName).toUpperCase() !== 'A') return;
   var draft = collectOrderDraft(false);
-  btn.href = draft ? instantTelegramUrl(draft.msgText) : supportBaseUrl();
+  btn.href = draft ? draft.telegramUrl : supportBaseUrl();
 }
 
 /* A sent order keeps its id. The next beacon waits until a field edit. */
@@ -786,9 +814,10 @@ function noteOrderFieldEdit(){
 }
 
 /* ─── অর্ডার সাবমিট ───
-   Beacon first, then this same tab goes to tg:// or intent://. No popup.
-   If the app does not blur the page, the https fallback runs. Auxclick keeps
-   the browser's own new tab. No success toast, no spinner, no auto-copy. */
+   Beacon first, then this same tab goes to the Telegram app. No popup.
+   The link href stays the https t.me text URL. Only intent:// arms a
+   fallback timer. Auxclick keeps the browser's own new tab.
+   No success toast, no spinner, no auto-copy. */
 function submitOrder(e){
   var draft = collectOrderDraft(true);
   var btn = document.getElementById('submitBtn');
@@ -802,7 +831,7 @@ function submitOrder(e){
   var payload = draft.payload;
   var orderId = payload.orderId;
   var instantUrl = instantTelegramUrl(draft.msgText);
-  if(btn && String(btn.tagName).toUpperCase() === 'A') btn.href = instantUrl;
+  if(btn && String(btn.tagName).toUpperCase() === 'A') btn.href = telegramUrl;
 
   if(ORDER_SENT_ID !== orderId && postOrderToSheet(payload)){
     ORDER_SENT_ID = orderId;
@@ -841,10 +870,8 @@ function submitOrder(e){
   if(e && e.type === 'auxclick') return true;
 
   if(e && e.preventDefault) e.preventDefault();
-  if(!prefersSameTabTelegram()) showOrderHandoff(draft.msgText, telegramUrl);
-  if(instantUrl.indexOf('tg:') === 0 || instantUrl.indexOf('intent:') === 0){
-    armTelegramFallback(telegramFallbackUrl(draft.msgText));
-  }
+  if(!prefersSameTabTelegram()) showOrderHandoff(draft.msgText, desktopWebDraftUrl(draft.msgText));
+  if(instantUrl.indexOf('intent:') === 0) armTelegramFallback(orderTextUrl(draft.msgText));
   window.location.href = instantUrl;
   return false;
 }
