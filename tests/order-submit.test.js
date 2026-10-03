@@ -22,32 +22,69 @@ function sliceFn(src, name) {
   return src.slice(start);
 }
 
-test('Telegram opens in the same click and a blocked popup does not unload the page', () => {
+function loadOpenHelpers(main) {
+  const start = main.indexOf('function prefersSameTabTelegram');
+  const end = main.indexOf('function armSubmitButton');
+  assert.ok(start !== -1 && end > start, 'telegram open helpers must exist');
+  return new Function('window', 'navigator', main.slice(start, end) + '\nreturn { prefersSameTabTelegram: prefersSameTabTelegram, openTelegramSameGesture: openTelegramSameGesture };');
+}
+
+test('mobile and in-app browsers go to t.me/MMHQ_Support in this tab; desktop popups stay on the page', () => {
   const main = read('js/main.js');
-  const fnSrc = sliceFn(main, 'openTelegramSameGesture').match(/function openTelegramSameGesture\(url\)\{[\s\S]*?\n\}/);
-  assert.ok(fnSrc, 'openTelegramSameGesture source');
-  assert.match(fnSrc[0], /window\.open\(url, '_blank'\)/);
-  assert.doesNotMatch(fnSrc[0], /location\.href/);
-  assert.doesNotMatch(fnSrc[0], /setTimeout/);
   assert.equal(main.includes('TELEGRAM_NAV_FALLBACK_MS'), false);
   assert.equal(main.includes(', 900'), false);
+  assert.equal(main.includes('MM_OrdersBot'), false);
+  assert.match(main, /https:\/\/t\.me\/MMHQ_Support/);
 
-  const run = new Function('window', fnSrc[0] + '\nreturn openTelegramSameGesture;');
-  const location = { href: 'http://127.0.0.1/index.html' };
-  const blocked = run({ open: function(){ return null; } });
-  assert.equal(blocked('https://t.me/MMHQ_Support?text=hi'), 'handoff');
-  assert.equal(location.href, 'http://127.0.0.1/index.html');
+  const UAS = {
+    android: 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.6668.70 Mobile Safari/537.36',
+    facebook: 'Mozilla/5.0 (Linux; Android 14; Pixel 7 Build/AP2A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/129.0.6668.70 Mobile Safari/537.36 [FB_IAB/FB4A;FBAV/484.0.0.63.85;]',
+    telegram: 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/129.0.6668.70 Mobile Safari/537.36 Telegram-Android/11.1.3',
+    desktop: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36'
+  };
+  const support = 'https://t.me/MMHQ_Support?text=' + encodeURIComponent('Order ID : MM-2026-6341\nName : simanto');
 
-  const popped = [];
-  const allow = run({
-    open: function(url, target){
-      popped.push({ url: url, target: target });
-      return { closed: false };
-    }
+  Object.keys(UAS).forEach(function(name) {
+    if (name === 'desktop') return;
+    const opened = [];
+    const location = { href: 'http://127.0.0.1/index.html' };
+    const api = loadOpenHelpers(main)(
+      { location: location, open: function(){ opened.push('open'); return { closed: false }; } },
+      { userAgent: UAS[name] }
+    );
+    assert.equal(api.prefersSameTabTelegram(), true, name);
+    assert.equal(api.openTelegramSameGesture(support), 'navigate', name);
+    assert.equal(location.href, support, name);
+    assert.equal(opened.length, 0, name + ' must not trust window.open');
+    assert.equal(location.href.indexOf('https://t.me/MMHQ_Support?text='), 0, name);
+    assert.equal(location.href.indexOf('MM_OrdersBot'), -1, name);
+    assert.match(decodeURIComponent(location.href.split('text=')[1]), /MM-2026-6341/);
+    assert.match(decodeURIComponent(location.href.split('text=')[1]), /simanto/);
   });
-  assert.equal(allow('https://t.me/MMHQ_Support?text=order'), 'popup');
+
+  const stayed = { href: 'http://127.0.0.1/index.html' };
+  const popped = [];
+  const desktopBlocked = loadOpenHelpers(main)(
+    { location: stayed, open: function(){ return null; } },
+    { userAgent: UAS.desktop }
+  );
+  assert.equal(desktopBlocked.prefersSameTabTelegram(), false);
+  assert.equal(desktopBlocked.openTelegramSameGesture(support), 'handoff');
+  assert.equal(stayed.href, 'http://127.0.0.1/index.html');
+
+  const desktopOpen = loadOpenHelpers(main)(
+    {
+      location: { href: 'stay' },
+      open: function(url, target){
+        popped.push({ url: url, target: target });
+        return { closed: false };
+      }
+    },
+    { userAgent: UAS.desktop }
+  );
+  assert.equal(desktopOpen.openTelegramSameGesture(support), 'popup');
   assert.equal(popped[0].target, '_blank');
-  assert.equal(popped[0].url, 'https://t.me/MMHQ_Support?text=order');
+  assert.equal(popped[0].url.indexOf('https://t.me/MMHQ_Support?text='), 0);
 });
 
 test('submit button is disabled only for a short guard, then restored with data-t', () => {

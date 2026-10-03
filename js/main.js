@@ -494,9 +494,11 @@ function toast(msg, isErr){
   el._timer = setTimeout(()=>el.classList.remove('show'), 4200);
 }
 
-/* Same click opens Telegram in a new tab. If the browser blocks the
-   popup, the page stays put so Copy order and the Telegram link remain.
-   Never wait on the Sheet, and never unload this page. */
+/* Desktop opens @MMHQ_Support in a new tab and keeps the Copy order box.
+   Android and in-app browsers (Telegram, Facebook) often swallow
+   window.open without saying it was blocked, so those go to the same
+   https://t.me/MMHQ_Support link in this tab. Never the orders bot.
+   Never wait on the Sheet. */
 var ORDER_SUBMIT_GUARD_MS = 2000;
 
 function buildOrderTelegramText(fields){
@@ -518,9 +520,22 @@ function buildOrderTelegramText(fields){
     'I would like to complete my payment. Please send me the payment details.';
 }
 
+function prefersSameTabTelegram(){
+  var ua = '';
+  try{ ua = String(navigator.userAgent || ''); }catch(e){ ua = ''; }
+  if(/FBAN|FBAV|FB_IAB|Instagram|Telegram|TikTok|Musical\.ly|MicroMessenger|Line\/|Snapchat|BytedanceWebview|; wv\)/i.test(ua)) return true;
+  if(/Android|iPhone|iPad|iPod/i.test(ua)) return true;
+  return false;
+}
+
 function openTelegramSameGesture(url){
+  var target = String(url || 'https://t.me/MMHQ_Support');
+  if(prefersSameTabTelegram()){
+    window.location.href = target;
+    return 'navigate';
+  }
   var popup = null;
-  try{ popup = window.open(url, '_blank'); }catch(err){ popup = null; }
+  try{ popup = window.open(target, '_blank'); }catch(err){ popup = null; }
   if(popup && popup.closed !== true) return 'popup';
   return 'handoff';
 }
