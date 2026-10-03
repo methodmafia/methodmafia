@@ -24,7 +24,7 @@ function sliceFn(src, name) {
 
 function loadOpenHelpers(main) {
   const start = main.indexOf('function prefersSameTabTelegram');
-  const end = main.indexOf('function armSubmitButton');
+  const end = main.indexOf('function showOrderHandoff');
   assert.ok(start !== -1 && end > start, 'telegram open helpers must exist');
   return new Function('window', 'navigator', main.slice(start, end) + '\nreturn { prefersSameTabTelegram: prefersSameTabTelegram, openTelegramSameGesture: openTelegramSameGesture };');
 }
@@ -69,8 +69,8 @@ test('mobile and in-app browsers go to t.me/MMHQ_Support in this tab; desktop po
     { userAgent: UAS.desktop }
   );
   assert.equal(desktopBlocked.prefersSameTabTelegram(), false);
-  assert.equal(desktopBlocked.openTelegramSameGesture(support), 'handoff');
-  assert.equal(stayed.href, 'http://127.0.0.1/index.html');
+  assert.equal(desktopBlocked.openTelegramSameGesture(support), 'navigate');
+  assert.equal(stayed.href, support);
 
   const desktopOpen = loadOpenHelpers(main)(
     {
@@ -87,61 +87,36 @@ test('mobile and in-app browsers go to t.me/MMHQ_Support in this tab; desktop po
   assert.equal(popped[0].url.indexOf('https://t.me/MMHQ_Support?text='), 0);
 });
 
-test('submit button is disabled only for a short guard, then restored with data-t', () => {
+test('submit stays a live t.me link: no disable, no Redirecting toast, no auto-copy', () => {
   const main = read('js/main.js');
-  assert.match(main, /ORDER_SUBMIT_GUARD_MS = 2000/);
-  const fnSrc = sliceFn(main, 'armSubmitButton').match(/function armSubmitButton\(btn\)\{[\s\S]*?\n\}/);
-  assert.ok(fnSrc, 'armSubmitButton source');
-  assert.match(fnSrc[0], /setAttribute\('data-t', 'handoffSent'\)/);
-  assert.match(fnSrc[0], /setAttribute\('data-t', 'btnSubmit'\)/);
-  assert.match(fnSrc[0], /btn\.disabled = false/);
-  assert.ok(fnSrc[0].indexOf('handoffSent') < fnSrc[0].indexOf('btnSubmit'));
+  const html = read('index.html');
+  assert.equal(main.includes('armSubmitButton'), false);
+  assert.equal(main.includes('ORDER_SUBMIT_GUARD_MS'), false);
+  assert.match(html, /<a class="submit-btn" id="submitBtn" href="https:\/\/t\.me\/MMHQ_Support" onclick="return submitOrder\(event\)" data-t="btnSubmit">/);
 
-  const submit = main.match(/function submitOrder\(\)\{[\s\S]*?\n\}/)[0];
-  const armAt = submit.indexOf('armSubmitButton(btn)');
-  const openAt = submit.indexOf('openTelegramSameGesture(telegramUrl)');
-  assert.ok(armAt !== -1 && armAt < openAt, 'guard starts before Telegram open');
-  assert.equal(submit.includes('btn.textContent = t(\'handoffSent\')'), false);
-  assert.doesNotMatch(submit, /location\.href/);
+  const submit = main.match(/function submitOrder\(e\)\{[\s\S]*?\n\}/)[0];
+  assert.equal(submit.includes('disabled'), false);
+  assert.equal(submit.includes('toastOk'), false);
+  assert.equal(submit.includes('clipboard'), false);
+  assert.equal(submit.includes('execCommand'), false);
+  assert.equal(submit.includes('await '), false);
+  assert.ok(submit.indexOf('postOrderToSheet(payload)') < submit.indexOf("window.open(telegramUrl, '_blank')"));
+  assert.match(submit, /popup\.closed === true/);
+  assert.match(submit, /window\.location\.href = telegramUrl/);
+  assert.match(submit, /return true/);
 
-  let queued = null;
-  const btn = {
-    disabled: false,
-    attrs: {},
-    textContent: '',
-    setAttribute: function(key, value){ this.attrs[key] = value; }
-  };
-  const arm = new Function('setTimeout', 't', 'ORDER_SUBMIT_GUARD_MS', fnSrc[0] + '\nreturn armSubmitButton;');
-  const run = arm(
-    function(fn, ms){ queued = { fn: fn, ms: ms }; return 1; },
-    function(key){ return 'label:' + key; },
-    2000
-  );
-  run(btn);
-  assert.equal(btn.disabled, true);
-  assert.equal(btn.attrs['data-t'], 'handoffSent');
-  assert.equal(btn.textContent, 'label:handoffSent');
-  assert.equal(queued.ms, 2000);
-
-  const labels = { en: 'Submit Order', bn: 'অর্ডার সাবমিট করুন', hi: 'ऑर्डर सबमिट करें' };
-  Object.keys(labels).forEach(function(lang){
-    btn.textContent = 'label:handoffSent';
-    const translated = new Function('setTimeout', 't', 'ORDER_SUBMIT_GUARD_MS', fnSrc[0] + '\nreturn armSubmitButton;')(
-      function(fn){ fn(); return 1; },
-      function(key){ return key === 'btnSubmit' ? labels[lang] : key; },
-      2000
-    );
-    const again = {
-      disabled: true,
-      attrs: { 'data-t': 'handoffSent' },
-      textContent: 'sent',
-      setAttribute: function(key, value){ this.attrs[key] = value; }
-    };
-    translated(again);
-    assert.equal(again.disabled, false, lang);
-    assert.equal(again.attrs['data-t'], 'btnSubmit', lang);
-    assert.equal(again.textContent, labels[lang], lang);
+  const tr = loadTranslations();
+  ['en', 'bn', 'hi'].forEach(function(lang) {
+    assert.doesNotMatch(tr[lang].toastOk, /Redirecting/i);
+    assert.equal(tr[lang].btnSubmit.length > 1, true);
   });
+
+  const handoffStart = main.indexOf('function showOrderHandoff');
+  const handoffEnd = main.indexOf('function postOrderToSheet');
+  const handoff = main.slice(handoffStart, handoffEnd);
+  assert.equal(handoff.includes('clipboard'), false);
+  assert.equal(handoff.includes('execCommand'), false);
+  assert.match(sliceFn(main, 'copyOrderHandoff'), /navigator\.clipboard\.writeText/);
 });
 
 test('order message includes the fields Swa expects and the FINAL closing line', () => {
@@ -207,14 +182,13 @@ test('handoff box and EN/BN/HI copy exist, and validation still returns before t
   assert.notEqual(tr.hi.handoffCopy, tr.en.handoffCopy);
 
   const main = read('js/main.js');
-  const submit = main.match(/function submitOrder\(\)\{[\s\S]*?\n\}/)[0];
-  const fetchAt = submit.indexOf('fetch(CONFIG.SHEET_URL');
-  const errAt = submit.indexOf("toast(t('errFill')");
-  const payAt = submit.indexOf("toast(t('errPay')");
-  assert.ok(errAt !== -1 && errAt < fetchAt);
-  assert.ok(payAt !== -1 && payAt < fetchAt);
-  assert.ok(submit.indexOf('showOrderHandoff') < submit.indexOf('openTelegramSameGesture'));
-  assert.match(main, /function showOrderHandoff\(text, telegramUrl\)\{[\s\S]*?navigator\.clipboard\.writeText\(text\)/);
+  const draft = main.match(/function collectOrderDraft\(showErrors\)\{[\s\S]*?\n\}/)[0];
+  const submit = main.match(/function submitOrder\(e\)\{[\s\S]*?\n\}/)[0];
+  assert.ok(draft.indexOf("toast(t('errFill')") !== -1);
+  assert.ok(draft.indexOf("toast(t('errPay')") !== -1);
+  assert.ok(submit.indexOf('collectOrderDraft(true)') < submit.indexOf('postOrderToSheet(payload)'));
+  assert.equal(submit.includes('navigator.clipboard'), false);
+  assert.equal(main.slice(main.indexOf('function showOrderHandoff'), main.indexOf('function postOrderToSheet')).includes('writeText'), false);
 });
 
 test('browser pages do not fire Purchase; order-status lookup and confirmed UI stay', () => {

@@ -13,18 +13,27 @@ function read(rel) {
 
 test('order form posts the Sheet as fire-and-forget and does not wait for {ok:true}', () => {
   const main = read('js/main.js');
-  const submit = main.match(/function submitOrder\(\)\{[\s\S]*?\n\}/);
+  const submit = main.match(/function submitOrder\(e\)\{[\s\S]*?\n\}/);
   assert.ok(submit, 'submitOrder must exist');
   const body = submit[0];
-  assert.match(body, /writeFetchOptions\(payload\)/);
-  assert.match(body, /fetch\(CONFIG\.SHEET_URL, sheetOpts\)\.catch\(function\(\)\{\}\)/);
+  const post = main.match(/function postOrderToSheet\(payload\)\{[\s\S]*?\n\}/);
+  assert.ok(post, 'postOrderToSheet must exist');
+  assert.match(body, /postOrderToSheet\(payload\)/);
+  assert.match(post[0], /navigator\.sendBeacon/);
+  assert.match(post[0], /writeFetchOptions\(payload\)/);
+  assert.match(post[0], /fetch\(url, sheetOpts\)\.catch\(function\(\)\{\}\)/);
+  assert.match(post[0], /keepalive/);
   assert.equal(body.includes('.then('), false);
   assert.equal(body.includes('isWriteSuccess'), false);
   assert.equal(body.includes('await '), false);
   assert.equal(body.includes('toastSheetFail'), false);
+  assert.equal(body.includes('toastOk'), false);
   assert.equal(body.includes(', 900'), false);
-  assert.ok(body.indexOf("fbq('track','Lead'") < body.indexOf('openTelegramSameGesture'));
-  assert.ok(body.indexOf("ttq.track('SubmitForm'") < body.indexOf('openTelegramSameGesture'));
+  assert.equal(body.includes('clipboard'), false);
+  const openAt = body.indexOf("window.open(telegramUrl, '_blank')");
+  assert.ok(body.indexOf('postOrderToSheet(payload)') < openAt);
+  assert.ok(body.indexOf("fbq('track','Lead'") < openAt);
+  assert.ok(body.indexOf("ttq.track('SubmitForm'") < openAt);
 });
 
 test('order-status looks up the Sheet instead of localStorage fake status', () => {

@@ -363,6 +363,7 @@ function selectPay(el){
   el.classList.add('sel');
   SELECTED_PAY = el.dataset.pay;
   SELECTED_PAY_INDEX = [...box.children].indexOf(el);
+  refreshSubmitHref();
 }
 
 /* ─── FAQ ─── */
@@ -390,6 +391,7 @@ function selectPrefLang(el, code){
   SELECTED_PREF_LANG = lang;
   const hidden = document.getElementById('iLanguage');
   if(hidden) hidden.value = lang;
+  refreshSubmitHref();
 }
 
 /* ─── প্ল্যান সিলেক্ট ─── */
@@ -399,6 +401,7 @@ function selectPlan(el, plan){
   el.classList.add('sel');
   SELECTED_PLAN = plan;
   updateOrderBox();
+  refreshSubmitHref();
   if(window.MMPixels && typeof MMPixels.fireViewContent === 'function'){
     MMPixels.fireViewContent();
   }
@@ -494,12 +497,11 @@ function toast(msg, isErr){
   el._timer = setTimeout(()=>el.classList.remove('show'), 4200);
 }
 
-/* Desktop opens @MMHQ_Support in a new tab and keeps the Copy order box.
-   Android and in-app browsers (Telegram, Facebook) often swallow
-   window.open without saying it was blocked, so those go to the same
-   https://t.me/MMHQ_Support link in this tab. Never the orders bot.
-   Never wait on the Sheet. */
-var ORDER_SUBMIT_GUARD_MS = 2000;
+/* Desktop: window.open in this click. If the browser blocks it, this tab
+   goes to https://t.me/MMHQ_Support. Phones and in-app browsers follow
+   the Submit link itself (no spinner, no toast, no auto-copy).
+   Never the orders bot. Never wait on the Sheet. */
+var DRAFT_ORDER_ID = '';
 
 function buildOrderTelegramText(fields){
   var localLine = fields.localAmount
@@ -528,8 +530,12 @@ function prefersSameTabTelegram(){
   return false;
 }
 
+function supportBaseUrl(){
+  return (typeof CONFIG !== 'undefined' && CONFIG.SUPPORT) ? CONFIG.SUPPORT : 'https://t.me/MMHQ_Support';
+}
+
 function openTelegramSameGesture(url){
-  var target = String(url || 'https://t.me/MMHQ_Support');
+  var target = String(url || supportBaseUrl());
   if(prefersSameTabTelegram()){
     window.location.href = target;
     return 'navigate';
@@ -537,19 +543,8 @@ function openTelegramSameGesture(url){
   var popup = null;
   try{ popup = window.open(target, '_blank'); }catch(err){ popup = null; }
   if(popup && popup.closed !== true) return 'popup';
-  return 'handoff';
-}
-
-function armSubmitButton(btn){
-  if(!btn) return;
-  btn.disabled = true;
-  btn.setAttribute('data-t', 'handoffSent');
-  btn.textContent = t('handoffSent');
-  setTimeout(function(){
-    btn.disabled = false;
-    btn.setAttribute('data-t', 'btnSubmit');
-    btn.textContent = t('btnSubmit');
-  }, ORDER_SUBMIT_GUARD_MS);
+  window.location.href = target;
+  return 'navigate';
 }
 
 function showOrderHandoff(text, telegramUrl){
@@ -557,18 +552,33 @@ function showOrderHandoff(text, telegramUrl){
   var summary = document.getElementById('orderHandoffSummary');
   var link = document.getElementById('orderTgLink');
   if(summary) summary.textContent = text;
-  if(link){
-    link.href = telegramUrl || (CONFIG.SUPPORT || 'https://t.me/MMHQ_Support');
-  }
+  if(link) link.href = telegramUrl || supportBaseUrl();
   if(box){
     box.hidden = false;
     box.classList.add('show');
   }
+}
+
+function postOrderToSheet(payload){
+  var body = JSON.stringify(payload || {});
+  var url = (typeof CONFIG !== 'undefined') ? CONFIG.SHEET_URL : '';
   try{
-    if(navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(text).catch(function(){});
+    if(url && navigator.sendBeacon){
+      var blob = new Blob([body], { type: 'text/plain;charset=UTF-8' });
+      if(navigator.sendBeacon(url, blob)) return;
     }
   }catch(e){}
+  var sheetOpts = (typeof MMSheet !== 'undefined')
+    ? MMSheet.writeFetchOptions(payload)
+    : {
+        method:'POST',
+        mode:'no-cors',
+        keepalive:true,
+        credentials:'omit',
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body: body
+      };
+  try{ fetch(url, sheetOpts).catch(function(){}); }catch(e){}
 }
 
 function copyOrderHandoff(){
@@ -602,46 +612,58 @@ function copyOrderTextFallback(text){
   }catch(e){ return false; }
 }
 
-/* ─── অর্ডার সাবমিট ─── */
-function submitOrder(){
-  const name = document.getElementById('iName');
-  const email = document.getElementById('iEmail');
-  const tg = document.getElementById('iTelegram');
-  const btn = document.getElementById('submitBtn');
+function currentOrderId(){
+  if(!DRAFT_ORDER_ID) DRAFT_ORDER_ID = makeOrderId();
+  return DRAFT_ORDER_ID;
+}
 
-  [name,email,tg].forEach(f=>f.classList.remove('error'));
+/* Silent while typing so the Submit link stays a real t.me URL.
+   showErrors is only the click, and it still returns before any Sheet post. */
+function collectOrderDraft(showErrors){
+  var name = document.getElementById('iName');
+  var email = document.getElementById('iEmail');
+  var tg = document.getElementById('iTelegram');
+  if(!name || !email || !tg) return null;
+
+  if(showErrors) [name, email, tg].forEach(function(f){ f.classList.remove('error'); });
 
   if(!name.value.trim() || !email.value.trim() || !tg.value.trim()){
-    [name,email,tg].forEach(f=>{ if(!f.value.trim()) f.classList.add('error'); });
-    return toast(t('errFill'), true);
+    if(showErrors){
+      [name, email, tg].forEach(function(f){ if(!f.value.trim()) f.classList.add('error'); });
+      toast(t('errFill'), true);
+    }
+    return null;
   }
-  const nameVal = name.value.trim();
+  var nameVal = name.value.trim();
   if(nameVal.length < 2 || !/[\p{L}]/u.test(nameVal)){
-    name.classList.add('error');
-    return toast(t('errName'), true);
+    if(showErrors){ name.classList.add('error'); toast(t('errName'), true); }
+    return null;
   }
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.value.trim())){
-    email.classList.add('error');
-    return toast(t('errEmail'), true);
+    if(showErrors){ email.classList.add('error'); toast(t('errEmail'), true); }
+    return null;
   }
-  let handle = tg.value.trim().replace(/^@+/, '').replace(/\s+/g,'');
+  var handle = tg.value.trim().replace(/^@+/, '').replace(/\s+/g, '');
   if(!/^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(handle)){
-    tg.classList.add('error');
-    return toast(t('errTgFormat'), true);
+    if(showErrors){ tg.classList.add('error'); toast(t('errTgFormat'), true); }
+    return null;
   }
   handle = '@' + handle;
   if(!SELECTED_PAY){
-    const pb = document.getElementById('payBadges');
-    if(pb){ pb.classList.add('error'); pb.scrollIntoView({behavior:'smooth',block:'center'}); }
-    return toast(t('errPay'), true);
+    if(showErrors){
+      var pb = document.getElementById('payBadges');
+      if(pb){ pb.classList.add('error'); pb.scrollIntoView({behavior:'smooth', block:'center'}); }
+      toast(t('errPay'), true);
+    }
+    return null;
   }
 
-  const orderId = makeOrderId();
-  const utmData = getUtmData();
-  const track = (typeof MMTracking !== 'undefined')
+  var orderId = currentOrderId();
+  var utmData = getUtmData();
+  var track = (typeof MMTracking !== 'undefined')
     ? MMTracking.buildSheetTrackingFields(utmData)
     : {source:utmData.utm_source, medium:utmData.utm_medium, campaign:utmData.utm_campaign, fbclid:utmData.fbclid||'', ttclid:utmData.ttclid||''};
-  const prefLangInput = document.getElementById('iLanguage');
+  var prefLangInput = document.getElementById('iLanguage');
   const payload = {
     orderId: orderId,
     name: name.value.trim(),
@@ -659,15 +681,61 @@ function submitOrder(){
     fbclid: track.fbclid,
     ttclid: track.ttclid
   };
+  var langLabel = (typeof MMSheet !== 'undefined')
+    ? MMSheet.sheetLanguageLabel(payload.language)
+    : String(payload.language || 'en').toUpperCase();
+  var localAmount = (LANG === 'bn')
+    ? (SELECTED_PLAN === 'entry' ? CONFIG.ENTRY_BDT : CONFIG.MONTHLY_BDT)
+    : '';
+  var msgText = buildOrderTelegramText({
+    orderId: orderId,
+    name: payload.name,
+    email: payload.email,
+    telegram: handle,
+    language: langLabel,
+    plan: payload.plan,
+    amount: payload.amount,
+    payment: SELECTED_PAY,
+    localAmount: localAmount
+  });
+  var telegramUrl = supportBaseUrl() + '?text=' + encodeURIComponent(msgText);
+  return { orderId: orderId, payload: payload, msgText: msgText, telegramUrl: telegramUrl };
+}
 
-  armSubmitButton(btn);
+function refreshSubmitHref(){
+  var btn = document.getElementById('submitBtn');
+  if(!btn || String(btn.tagName).toUpperCase() !== 'A') return;
+  var draft = collectOrderDraft(false);
+  btn.href = draft ? draft.telegramUrl : supportBaseUrl();
+}
 
-  /* ── Pixel / Analytics events — Lead + InitiateCheckout ── */
-  const ev = (typeof MMTracking !== 'undefined')
+/* ─── অর্ডার সাবমিট ───
+   Phone / in-app: the control is an <a href="https://t.me/MMHQ_Support?text=...">
+   updated as the fields change. This click does not cancel that navigation.
+   Desktop: window.open in this same click. Null or blocked → this tab goes
+   to the same t.me link. No success toast, no spinner, no auto-copy.
+   Sheet sendBeacon / keepalive runs before the browser leaves. */
+function submitOrder(e){
+  var draft = collectOrderDraft(true);
+  var btn = document.getElementById('submitBtn');
+  if(!draft){
+    if(e && e.preventDefault) e.preventDefault();
+    if(btn && String(btn.tagName).toUpperCase() === 'A') btn.href = supportBaseUrl();
+    return false;
+  }
+
+  var telegramUrl = draft.telegramUrl;
+  var payload = draft.payload;
+  var orderId = payload.orderId;
+  if(btn && String(btn.tagName).toUpperCase() === 'A') btn.href = telegramUrl;
+
+  postOrderToSheet(payload);
+
+  var ev = (typeof MMTracking !== 'undefined')
     ? MMTracking.checkoutEventValue(payload.plan)
     : {value: SELECTED_PLAN === 'entry' ? 30 : 15, contentName: payload.plan, currency:'USD'};
   if(typeof MMTracking !== 'undefined'){
-    const am = MMTracking.advancedMatching(payload.email, payload.telegram);
+    var am = MMTracking.advancedMatching(payload.email, payload.telegram);
     if(typeof fbq !== 'undefined' && CONFIG.META_PIXEL){
       fbq('init', CONFIG.META_PIXEL, am);
     }
@@ -691,51 +759,29 @@ function submitOrder(){
     });
   }
 
-  /* Sheet write is fire-and-forget. Do not wait for it and do not
-     require {ok:true} before Telegram — a slow Sheet used to miss
-     the click, then the popup blocker ate window.open. */
-  const sheetOpts = (typeof MMSheet !== 'undefined')
-    ? MMSheet.writeFetchOptions(payload)
-    : {
-        method:'POST',
-        mode:'no-cors',
-        keepalive:true,
-        credentials:'omit',
-        headers:{'Content-Type':'text/plain;charset=utf-8'},
-        body: JSON.stringify(payload)
-      };
-  try{
-    fetch(CONFIG.SHEET_URL, sheetOpts).catch(function(){});
-  }catch(e){}
+  try{ localStorage.setItem('mm_last_order', orderId); }catch(err){}
 
-  try{ localStorage.setItem('mm_last_order', orderId); }catch(e){}
+  if(prefersSameTabTelegram()){
+    if(btn && String(btn.tagName).toUpperCase() === 'A') return true;
+    window.location.href = telegramUrl;
+    return false;
+  }
 
-  const langLabel = (typeof MMSheet !== 'undefined')
-    ? MMSheet.sheetLanguageLabel(payload.language)
-    : String(payload.language || 'en').toUpperCase();
-  const localAmount = (LANG === 'bn')
-    ? (SELECTED_PLAN === 'entry' ? CONFIG.ENTRY_BDT : CONFIG.MONTHLY_BDT)
-    : '';
-  const msgText = buildOrderTelegramText({
-    orderId: orderId,
-    name: payload.name,
-    email: payload.email,
-    telegram: handle,
-    language: langLabel,
-    plan: payload.plan,
-    amount: payload.amount,
-    payment: SELECTED_PAY,
-    localAmount: localAmount
-  });
-  const supportBase = CONFIG.SUPPORT || 'https://t.me/MMHQ_Support';
-  const telegramUrl = supportBase + '?text=' + encodeURIComponent(msgText);
-
-  showOrderHandoff(msgText, telegramUrl);
-  toast(t('toastOk'));
-
-  /* Pixels already ran above. Open Telegram in this same click.
-     A blocked popup leaves #orderTgLink on the page. */
-  openTelegramSameGesture(telegramUrl);
+  if(e && e.preventDefault) e.preventDefault();
+  var popup = null;
+  try{ popup = window.open(telegramUrl, '_blank'); }catch(err){ popup = null; }
+  var blocked = !popup;
+  if(!blocked){
+    try{ blocked = popup.closed === true; }catch(err){ blocked = true; }
+  }
+  if(blocked){
+    window.location.href = telegramUrl;
+    return false;
+  }
+  showOrderHandoff(draft.msgText, telegramUrl);
+  DRAFT_ORDER_ID = '';
+  refreshSubmitHref();
+  return false;
 }
 
 /* ─── স্ক্রল রিভিল + প্রোগ্রেস ─── */
@@ -975,4 +1021,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
   initExitPopup();
   initOrderStatusPage();
   getUtmData();
+  ['iName','iEmail','iTelegram'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.addEventListener('input', refreshSubmitHref);
+  });
+  refreshSubmitHref();
 });

@@ -190,7 +190,7 @@ en: {
   ftRights: "All rights reserved.",
 
   /* Toast */
-  toastOk: "Order received! Redirecting to Telegram...",
+  toastOk: "Order received. Message @MMHQ_Support on Telegram.",
   toastSheetFail: "Could not save your order. Please try again or message @MMHQ_Support.",
   handoffTitle: "Send this order on Telegram",
   handoffNote: "If the Telegram chat is empty, tap Copy order, then Send order on Telegram, and paste the message.",
@@ -407,7 +407,7 @@ bn: {
   ftRefund: "রিফান্ড", ftPayment: "পেমেন্ট", ftOrder: "অর্ডার স্ট্যাটাস",
   ftRights: "সর্বস্বত্ব সংরক্ষিত।",
 
-  toastOk: "অর্ডার পেয়েছি! টেলিগ্রামে নিয়ে যাচ্ছি...",
+  toastOk: "অর্ডার পেয়েছি। Telegram-এ @MMHQ_Support-এ মেসেজ করুন।",
   toastSheetFail: "অর্ডার সেভ করা যায়নি। আবার চেষ্টা করুন অথবা @MMHQ_Support-এ মেসেজ করুন।",
   handoffTitle: "এই অর্ডারটা Telegram-এ পাঠান",
   handoffNote: "Telegram চ্যাট খালি থাকলে আগে অর্ডার কপি করুন চাপুন, তারপর Telegram-এ অর্ডার পাঠান চাপুন, তারপর মেসেজ পেস্ট করুন।",
@@ -623,7 +623,7 @@ hi: {
   ftRefund: "रिफंड", ftPayment: "पेमेंट", ftOrder: "ऑर्डर स्टेटस",
   ftRights: "सर्वाधिकार सुरक्षित।",
 
-  toastOk: "ऑर्डर मिल गया! टेलीग्राम पर ले जा रहे हैं...",
+  toastOk: "ऑर्डर मिल गया। Telegram पर @MMHQ_Support को मैसेज करें।",
   toastSheetFail: "ऑर्डर सेव नहीं हो सका। फिर कोशिश करें या @MMHQ_Support पर मैसेज करें।",
   handoffTitle: "यह ऑर्डर Telegram पर भेजें",
   handoffNote: "Telegram चैट खाली हो तो पहले ऑर्डर कॉपी करें दबाएँ, फिर Telegram पर ऑर्डर भेजें दबाएँ, और मैसेज पेस्ट करें।",

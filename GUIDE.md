@@ -516,7 +516,7 @@ const DIGEST_EMAIL = 'info@themethodmafia.com';  // digest email ঠিকান
 
 ### Web App / CORS (form + order-status)
 
-**Write (doPost):** ফর্ম `mode: 'no-cors'` + `keepalive: true` দিয়ে fire-and-forget POST করে (`Content-Type: text/plain`)। Success toast আর Telegram **Sheet JSON-এর জন্য অপেক্ষা করে না**। টার্গেট সবসময় `https://t.me/MMHQ_Support?text=` (Swa-র সাপোর্ট অ্যাকাউন্ট), অর্ডার বট না। Android / iPhone এবং Telegram বা Facebook-এর ভেতরের ব্রাউজারে একই ট্যাবে এই লিংক খোলে, কারণ ওখানে `window.open` চুপচাপ ফেল হয়। ডেস্কটপে `window.open` নতুন ট্যাব, আর পপআপ আটকালে পেজে Copy order + Send order on Telegram (`#orderTgLink`) থেকে যায়। Submit বাটন ~2 সেকেন্ড বন্ধ থাকে, তারপর আবার `data-t="btnSubmit"` সহ চালু হয়। `doPost` এখনও `{ok:true}` JSON দিতে পারে, কিন্তু ফর্ম সেটা পড়ে না। নতুন deployment-এ **Anyone** access লাগে।
+**Write (doPost):** ফর্ম `navigator.sendBeacon` (না হলে `mode: 'no-cors'` + `keepalive: true` fetch) দিয়ে fire-and-forget POST করে (`Content-Type: text/plain`)। Sheet JSON-এর জন্য অপেক্ষা করে না, success-এ "Redirecting..." টোস্ট দেখায় না, বাটন বন্ধ করে না, আর ক্লিকবোর্ডে নিজে থেকে কপি করে না। টার্গেট সবসময় `https://t.me/MMHQ_Support?text=` (Swa-র সাপোর্ট অ্যাকাউন্ট), অর্ডার বট না। Submit একটা আসল `<a href>` — ফিল্ড বদলালে লিংকটা সাথে সাথে আপডেট হয়। Android / iPhone এবং Telegram বা Facebook-এর ভেতরের ব্রাউজারে সেই ট্যাপই একই ট্যাবে `t.me` খোলে। ডেস্কটপে একই ক্লিকে `window.open` (কোনো await আগে না); পপআপ `null` বা ব্লক হলে একই ট্যাব সেই `t.me` লিংকে যায়। Copy order শুধু কাস্টমার বাটন চাপলে। `doPost` এখনও `{ok:true}` JSON দিতে পারে, কিন্তু ফর্ম সেটা পড়ে না। নতুন deployment-এ **Anyone** access লাগে।
 
 **Status GET stays CORS:** `order-status.html` readable JSON চায়। Opaque/HTML/CORS error = lookup error UI।
 
