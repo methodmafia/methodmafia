@@ -81,6 +81,9 @@ test('a click on the order Submit link does not fire the generic Contact', () =>
   px.click({ id: 'submitBtn', href: 'https://t.me/MMHQ_Support' });
   px.click({ id: 'submitBtn', href: 'https://t.me/MMHQ_Support?text=%F0%9F%A7%BE%20NEW%20ORDER' });
   px.click({ id: 'submitBtn', href: 'tg://resolve?domain=MMHQ_Support&text=hi' });
+  const webK = 'https://web.telegram.org/k/#?tgaddr=' + encodeURIComponent('tg://resolve?domain=MMHQ_Support&text=hello');
+  px.click({ id: 'orderTgLink', href: 'https://t.me/MMHQ_Support' });
+  px.click({ id: 'orderTgLink', href: webK });
   assert.deepEqual(contacts(px.calls), []);
   assert.deepEqual(supportClicks(px.calls), []);
 });
@@ -90,11 +93,9 @@ test('an @MMHQ_Support link gives Contact with no event id', () => {
   [
     { 'data-href': 'SUPPORT', href: 'https://t.me/MMHQ_Support' },
     { href: 'https://t.me/MMHQ_Support?text=hi' },
-    { id: 'orderTgLink', href: 'https://t.me/MMHQ_Support' },
     { className: 'float-tg', href: 'https://t.me/MMHQ_Support' },
     { href: 'tg://resolve?domain=MMHQ_Support&text=hello' },
-    { href: 'intent://resolve?domain=MMHQ_Support&text=hello#Intent;scheme=tg;end' },
-    { href: 'https://web.telegram.org/k/#?tgaddr=' + encodeURIComponent('tg://resolve?domain=MMHQ_Support&text=hello') }
+    { href: 'intent://resolve?domain=MMHQ_Support&text=hello#Intent;scheme=tg;end' }
   ].forEach(function(attrs) {
     px.calls.length = 0;
     px.click(attrs);
@@ -121,6 +122,21 @@ test('a channel link gives SupportClick and no Contact', () => {
   px.click({ href: CONFIG.FACEBOOK_PAGE });
   px.click({ 'data-href': 'FACEBOOK_PAGE', href: CONFIG.FACEBOOK_PAGE });
   assert.deepEqual(contacts(px.calls), []);
+  assert.deepEqual(supportClicks(px.calls), []);
+});
+
+test('a desktop order plus the backup box link gives exactly 1 Contact', () => {
+  const px = loadPixels();
+  px.calls.length = 0;
+  const webK = 'https://web.telegram.org/k/#?tgaddr=' + encodeURIComponent('tg://resolve?domain=MMHQ_Support&text=hello');
+  px.api.fireContact('MM-9-2_contact');
+  px.click({ id: 'orderTgLink', href: webK });
+  px.click({ id: 'orderTgLink', href: webK });
+  assert.deepEqual(contacts(px.calls), [
+    ['fbq', 'track', 'Contact', {}, { eventID: 'MM-9-2_contact' }],
+    ['ttq', 'Contact', {}, { event_id: 'MM-9-2_contact' }],
+    ['gtag', 'event', 'contact']
+  ]);
   assert.deepEqual(supportClicks(px.calls), []);
 });
 

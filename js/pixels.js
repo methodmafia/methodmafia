@@ -78,11 +78,11 @@
     if(typeof gtag !== 'undefined') gtag('event', 'support_click');
   }
 
-  /* The order Submit is a t.me/MMHQ_Support link, but a click there is not
-     a contact yet: it may fail validation, or be a second tap. submitOrder
-     fires Contact itself when the order is valid and sent. */
+  /* #submitBtn and the post-submit backup #orderTgLink are MMHQ_Support
+     links, but a click there is not an extra Contact. submitOrder fires
+     Contact once when the order is valid and sent. */
   function isOrderSubmitLink(a){
-    return !!a && a.id === 'submitBtn';
+    return !!a && (a.id === 'submitBtn' || a.id === 'orderTgLink');
   }
 
   function personalSupportUser(){
@@ -101,8 +101,9 @@
     return out.toLowerCase();
   }
 
-  /* t.me/MMHQ_Support, tg://resolve?domain=MMHQ_Support, intent://, and the
-     desktop web.telegram.org link that wraps that tg:// URL. */
+  /* t.me/MMHQ_Support, tg://resolve?domain=MMHQ_Support, intent://, and a
+     Web K tgaddr link. #orderTgLink is excluded above, so the desktop/iPad
+     backup box does not fire a second Contact. */
   function isPersonalSupportHref(href){
     if(!href) return false;
     var user = personalSupportUser();
@@ -150,7 +151,7 @@
       if(!a || isOrderSubmitLink(a)) return;
       var href = a.getAttribute('href') || '';
       var key = a.getAttribute('data-href') || '';
-      /* @MMHQ_Support is a real contact: no event id. #submitBtn is already excluded. */
+      /* @MMHQ_Support is a real contact: no event id. #submitBtn and #orderTgLink are excluded. */
       if(key === 'SUPPORT' || isPersonalSupportHref(href)){
         fireContact();
         return;
