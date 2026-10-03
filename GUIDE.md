@@ -391,6 +391,8 @@ business.facebook.com → Events Manager → তোমার Pixel
 
 TikTok Events Manager-এ একই ফ্লো: `ViewContent` → `InitiateCheckout` → `CompletePayment` ($30, Entry only)
 
+`Contact`: অর্ডার ফর্মের Submit-এ শুধু একবার, অর্ডার valid হয়ে Sheet-এ পাঠানোর মুহূর্তে (`Lead`-এর সাথেই, eventID `<orderId>_contact`)। ভুল ফর্মে বা দ্বিতীয় ট্যাপে Contact যায় না। সাইটের অন্য @MMHQ_Support / চ্যানেল লিংকে ক্লিক করলে আগের মতোই Contact। TikTok-এ একই নিয়ম।
+
 ## কোন Ad থেকে বিক্রি আসছে
 
 Ad-এর লিংকে এভাবে ট্যাগ লাগাও:

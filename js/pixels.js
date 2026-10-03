@@ -57,10 +57,25 @@
     }
   }
 
-  function fireContact(){
-    if(typeof fbq !== 'undefined') fbq('track', 'Contact');
-    if(typeof ttq !== 'undefined') ttq.track('Contact');
+  /* eventId is set only by the order Submit (main.js submitOrder), which
+     calls this once per sent order. Plain support links pass nothing. */
+  function fireContact(eventId){
+    if(typeof fbq !== 'undefined'){
+      if(eventId) fbq('track', 'Contact', {}, {eventID: eventId});
+      else fbq('track', 'Contact');
+    }
+    if(typeof ttq !== 'undefined'){
+      if(eventId) ttq.track('Contact', {}, {event_id: eventId});
+      else ttq.track('Contact');
+    }
     if(typeof gtag !== 'undefined') gtag('event', 'contact');
+  }
+
+  /* The order Submit is a t.me/MMHQ_Support link, but a click there is not
+     a contact yet: it may fail validation, or be a second tap. submitOrder
+     fires Contact itself when the order is valid and sent. */
+  function isOrderSubmitLink(a){
+    return !!a && a.id === 'submitBtn';
   }
 
   function watchViewContent(){
@@ -89,7 +104,7 @@
   function watchContactClicks(){
     document.addEventListener('click', function(e){
       var a = e.target && e.target.closest ? e.target.closest('a') : null;
-      if(!a) return;
+      if(!a || isOrderSubmitLink(a)) return;
       var href = a.getAttribute('href') || '';
       var key = a.getAttribute('data-href') || '';
       var isSupport = key === 'SUPPORT' || key === 'PUBLIC_CHANNEL';
