@@ -25,12 +25,6 @@
     <lastmod>2026-09-13</lastmod>
   </url>
   <url>
-    <loc>https://themethodmafia.com/order-status.html</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-    <lastmod>2026-09-13</lastmod>
-  </url>
-  <url>
     <loc>https://themethodmafia.com/terms.html</loc>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
@@ -50,6 +44,18 @@
   </url>
 
   <!-- Blog / teaser pages (E4) -->
+  <url>
+    <loc>https://themethodmafia.com/blog/index.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+    <lastmod>2026-10-03</lastmod>
+  </url>
+  <url>
+    <loc>https://themethodmafia.com/blog/canva-pro-method.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <lastmod>2026-10-03</lastmod>
+  </url>
   <url>
     <loc>https://themethodmafia.com/blog/vip-access.html</loc>
     <changefreq>monthly</changefreq>

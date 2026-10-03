@@ -63,12 +63,11 @@
     if(typeof gtag !== 'undefined') gtag('event', 'contact');
   }
 
+  /* Only the real pricing/order blocks. A header "Join" link
+     (href="../index.html#order") sits in view on every blog page and
+     was firing a $30 ViewContent. Do not observe those links. */
   function watchViewContent(){
     var targets = ['pricing', 'order'].map(function(id){ return document.getElementById(id); }).filter(Boolean);
-    if(!targets.length){
-      var join = document.querySelector('a[href="#order"], a[href$="#order"]');
-      if(join) targets = [join];
-    }
     if(!targets.length) return;
 
     function onIntersect(entries, ob){
@@ -98,6 +97,69 @@
     }, true);
   }
 
+  /* ?confirmed=1 calls initPurchaseConfirm() from main.js on every page
+     that loads it. That function stays untouched. On pages with no order
+     form and no order-status box, drop only Purchase / CompletePayment
+     so a shared link cannot book a $30 sale. */
+  function isOrderSurface(){
+    return !!(document.getElementById('order') || document.getElementById('statusResult'));
+  }
+
+  function blockStrayPurchase(){
+    if(isOrderSurface()) return;
+
+    /* Keep the real fbq function. Replacing window.fbq makes Meta log
+       "conflicting versions" and can drop PageView. Filter only Purchase. */
+    if(typeof window.fbq === 'function' && !window.fbq.__mmNoStrayPurchase){
+      var pixel = window.fbq;
+      function filterPurchase(fn){
+        return function(){
+          if(arguments[0] === 'track' && arguments[1] === 'Purchase') return;
+          return fn.apply(this, arguments);
+        };
+      }
+      if(pixel.queue && typeof pixel.queue.push === 'function'){
+        var origPush = pixel.queue.push.bind(pixel.queue);
+        pixel.queue.push = function(){
+          var item = arguments[0];
+          if(item && item[0] === 'track' && item[1] === 'Purchase') return pixel.queue.length;
+          return origPush.apply(pixel.queue, arguments);
+        };
+      }
+      var storedCall = typeof pixel.callMethod === 'function' ? filterPurchase(pixel.callMethod) : pixel.callMethod;
+      try{
+        Object.defineProperty(pixel, 'callMethod', {
+          configurable: true,
+          enumerable: true,
+          get: function(){ return storedCall; },
+          set: function(fn){ storedCall = typeof fn === 'function' ? filterPurchase(fn) : fn; }
+        });
+      }catch(err){
+        if(typeof pixel.callMethod === 'function') pixel.callMethod = filterPurchase(pixel.callMethod);
+      }
+      pixel.__mmNoStrayPurchase = true;
+    }
+
+    if(window.ttq && typeof window.ttq.track === 'function' && !window.ttq.__mmNoStrayPurchase){
+      var origTt = window.ttq.track.bind(window.ttq);
+      window.ttq.track = function(name){
+        if(name === 'CompletePayment' || name === 'Purchase') return;
+        return origTt.apply(this, arguments);
+      };
+      window.ttq.__mmNoStrayPurchase = true;
+    }
+
+    if(typeof window.gtag === 'function' && !window.gtag.__mmNoStrayPurchase){
+      var origGtag = window.gtag;
+      var wrappedGtag = function(){
+        if(arguments[0] === 'event' && arguments[1] === 'purchase') return;
+        return origGtag.apply(this, arguments);
+      };
+      wrappedGtag.__mmNoStrayPurchase = true;
+      window.gtag = wrappedGtag;
+    }
+  }
+
   window.MMPixels = {
     fireViewContent: fireViewContent,
     fireContact: fireContact
@@ -105,10 +167,12 @@
 
   if(document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', function(){
+      blockStrayPurchase();
       watchViewContent();
       watchContactClicks();
     });
   } else {
+    blockStrayPurchase();
     watchViewContent();
     watchContactClicks();
   }
