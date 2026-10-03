@@ -22,69 +22,127 @@ function sliceFn(src, name) {
   return src.slice(start);
 }
 
-function loadOpenHelpers(main) {
+const UAS = {
+  android: 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.6668.70 Mobile Safari/537.36',
+  facebook: 'Mozilla/5.0 (Linux; Android 14; Pixel 7 Build/AP2A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/129.0.6668.70 Mobile Safari/537.36 [FB_IAB/FB4A;FBAV/484.0.0.63.85;]',
+  telegram: 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/129.0.6668.70 Mobile Safari/537.36 Telegram-Android/11.1.3',
+  iphone: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+  desktop: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36'
+};
+
+function loadPrefers(main) {
   const start = main.indexOf('function prefersSameTabTelegram');
-  const end = main.indexOf('function showOrderHandoff');
-  assert.ok(start !== -1 && end > start, 'telegram open helpers must exist');
-  return new Function('window', 'navigator', main.slice(start, end) + '\nreturn { prefersSameTabTelegram: prefersSameTabTelegram, openTelegramSameGesture: openTelegramSameGesture };');
+  const end = main.indexOf('function supportBaseUrl');
+  assert.ok(start !== -1 && end > start);
+  return new Function('navigator', main.slice(start, end) + '\nreturn prefersSameTabTelegram;');
 }
 
-test('mobile and in-app browsers go to t.me/MMHQ_Support in this tab; desktop popups stay on the page', () => {
+function loadSubmitRuntime(opts) {
   const main = read('js/main.js');
+  const start = main.indexOf('function makeOrderId');
+  const end = main.indexOf('function initScroll');
+  assert.ok(start !== -1 && end > start, 'order runtime slice');
+  const beacons = [];
+  const opens = [];
+  const listeners = {};
+  const location = { href: 'http://127.0.0.1/index.html' };
+  function cls() {
+    return { add(){}, remove(){}, contains(){ return false; } };
+  }
+  const fields = {
+    iName: { value: 'Swa Test', classList: cls() },
+    iEmail: { value: 'swa@example.com', classList: cls() },
+    iTelegram: { value: '@swa_test', classList: cls() },
+    iLanguage: { value: 'en' },
+    submitBtn: { tagName: 'A', href: 'https://t.me/MMHQ_Support', disabled: false },
+    orderHandoff: { hidden: true, classList: cls() },
+    orderHandoffSummary: { textContent: '' },
+    orderTgLink: { href: '' }
+  };
+  const windowObj = {
+    location: location,
+    open: function(url, target) {
+      opens.push({ url: url, target: target });
+      if (opts && opts.blockPopup) return null;
+      return { closed: false };
+    },
+    addEventListener: function(type, fn) {
+      (listeners[type] = listeners[type] || []).push(fn);
+    }
+  };
+  const navigatorObj = {
+    userAgent: (opts && opts.ua) || UAS.desktop,
+    sendBeacon: function(_url, body) {
+      beacons.push(String(body));
+      return true;
+    }
+  };
+  const documentObj = {
+    getElementById: function(id) { return fields[id] || null; },
+    querySelectorAll: function() { return []; }
+  };
+  const src = [
+    'var LANG = "en";',
+    'var SELECTED_PAY = "Binance Pay";',
+    'var SELECTED_PLAN = "entry";',
+    'var SELECTED_PREF_LANG = "en";',
+    'var CONFIG = { SUPPORT: "https://t.me/MMHQ_Support", SHEET_URL: "https://script.google.com/macros/s/x/exec", ENTRY_USD: "$30", MONTHLY_USD: "$15", ENTRY_BDT: "৳1", MONTHLY_BDT: "৳2", META_PIXEL: "" };',
+    'var MMSheet = {',
+    '  normalizeOrderLanguage: function(v){ return v === "bn" || v === "hi" ? v : "en"; },',
+    '  sheetLanguageLabel: function(v){ return String(v || "en").toUpperCase(); },',
+    '  writeFetchOptions: function(payload){ return { method:"POST", mode:"no-cors", keepalive:true, body: JSON.stringify(payload) }; }',
+    '};',
+    'function getUtmData(){ return { utm_source:"direct", utm_medium:"", utm_campaign:"", fbclid:"", ttclid:"" }; }',
+    main.slice(start, end),
+    'function forgetSentLatch(){ ORDER_SENT_ID = ""; }',
+    'return { submitOrder: submitOrder, noteOrderFieldEdit: noteOrderFieldEdit, refreshSubmitHref: refreshSubmitHref, forgetSentLatch: forgetSentLatch, prefersSameTabTelegram: prefersSameTabTelegram };'
+  ].join('\n');
+  const run = new Function('window', 'document', 'navigator', src);
+  const api = run(windowObj, documentObj, navigatorObj);
+  api.beacons = beacons;
+  api.opens = opens;
+  api.location = location;
+  api.fields = fields;
+  api.pageShow = function(persisted) {
+    (listeners.pageshow || []).forEach(function(fn) { fn({ persisted: persisted }); });
+  };
+  api.click = function() {
+    return api.submitOrder({ preventDefault: function(){} });
+  };
+  return api;
+}
+
+test('phones use the same tab and desktop uses window.open; the old opener helper is gone', () => {
+  const main = read('js/main.js');
+  assert.equal(main.includes('function openTelegramSameGesture'), false);
   assert.equal(main.includes('TELEGRAM_NAV_FALLBACK_MS'), false);
   assert.equal(main.includes(', 900'), false);
   assert.equal(main.includes('MM_OrdersBot'), false);
-  assert.match(main, /https:\/\/t\.me\/MMHQ_Support/);
-
-  const UAS = {
-    android: 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.6668.70 Mobile Safari/537.36',
-    facebook: 'Mozilla/5.0 (Linux; Android 14; Pixel 7 Build/AP2A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/129.0.6668.70 Mobile Safari/537.36 [FB_IAB/FB4A;FBAV/484.0.0.63.85;]',
-    telegram: 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/129.0.6668.70 Mobile Safari/537.36 Telegram-Android/11.1.3',
-    desktop: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36'
-  };
-  const support = 'https://t.me/MMHQ_Support?text=' + encodeURIComponent('Order ID : MM-2026-6341\nName : simanto');
-
-  Object.keys(UAS).forEach(function(name) {
-    if (name === 'desktop') return;
-    const opened = [];
-    const location = { href: 'http://127.0.0.1/index.html' };
-    const api = loadOpenHelpers(main)(
-      { location: location, open: function(){ opened.push('open'); return { closed: false }; } },
-      { userAgent: UAS[name] }
-    );
-    assert.equal(api.prefersSameTabTelegram(), true, name);
-    assert.equal(api.openTelegramSameGesture(support), 'navigate', name);
-    assert.equal(location.href, support, name);
-    assert.equal(opened.length, 0, name + ' must not trust window.open');
-    assert.equal(location.href.indexOf('https://t.me/MMHQ_Support?text='), 0, name);
-    assert.equal(location.href.indexOf('MM_OrdersBot'), -1, name);
-    assert.match(decodeURIComponent(location.href.split('text=')[1]), /MM-2026-6341/);
-    assert.match(decodeURIComponent(location.href.split('text=')[1]), /simanto/);
+  const prefers = loadPrefers(main);
+  ['android', 'facebook', 'telegram', 'iphone'].forEach(function(name) {
+    assert.equal(prefers({ userAgent: UAS[name] })(), true, name);
   });
+  assert.equal(prefers({ userAgent: UAS.desktop })(), false);
 
-  const stayed = { href: 'http://127.0.0.1/index.html' };
-  const popped = [];
-  const desktopBlocked = loadOpenHelpers(main)(
-    { location: stayed, open: function(){ return null; } },
-    { userAgent: UAS.desktop }
-  );
-  assert.equal(desktopBlocked.prefersSameTabTelegram(), false);
-  assert.equal(desktopBlocked.openTelegramSameGesture(support), 'navigate');
-  assert.equal(stayed.href, support);
+  const phone = loadSubmitRuntime({ ua: UAS.android });
+  assert.equal(phone.click(), true);
+  assert.equal(phone.location.href, 'http://127.0.0.1/index.html');
+  assert.equal(phone.opens.length, 0);
+  assert.equal(phone.fields.submitBtn.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
+  assert.match(decodeURIComponent(phone.fields.submitBtn.href.split('text=')[1]), /Swa Test/);
+  assert.equal(phone.fields.submitBtn.disabled, false);
 
-  const desktopOpen = loadOpenHelpers(main)(
-    {
-      location: { href: 'stay' },
-      open: function(url, target){
-        popped.push({ url: url, target: target });
-        return { closed: false };
-      }
-    },
-    { userAgent: UAS.desktop }
-  );
-  assert.equal(desktopOpen.openTelegramSameGesture(support), 'popup');
-  assert.equal(popped[0].target, '_blank');
-  assert.equal(popped[0].url.indexOf('https://t.me/MMHQ_Support?text='), 0);
+  const desktop = loadSubmitRuntime({ ua: UAS.desktop });
+  assert.equal(desktop.click(), false);
+  assert.equal(desktop.location.href, 'http://127.0.0.1/index.html');
+  assert.equal(desktop.opens.length, 1);
+  assert.equal(desktop.opens[0].target, '_blank');
+  assert.equal(desktop.opens[0].url.indexOf('https://t.me/MMHQ_Support?text='), 0);
+
+  const blocked = loadSubmitRuntime({ ua: UAS.desktop, blockPopup: true });
+  assert.equal(blocked.click(), false);
+  assert.equal(blocked.location.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
+  assert.equal(blocked.beacons.length, 1);
 });
 
 test('submit stays a live t.me link: no disable, no Redirecting toast, no auto-copy', () => {
@@ -189,6 +247,60 @@ test('handoff box and EN/BN/HI copy exist, and validation still returns before t
   assert.ok(submit.indexOf('collectOrderDraft(true)') < submit.indexOf('postOrderToSheet(payload)'));
   assert.equal(submit.includes('navigator.clipboard'), false);
   assert.equal(main.slice(main.indexOf('function showOrderHandoff'), main.indexOf('function postOrderToSheet')).includes('writeText'), false);
+});
+
+test('two submitOrder calls in one turn send one Sheet beacon', () => {
+  const api = loadSubmitRuntime({ ua: UAS.android });
+  assert.equal(api.click(), true);
+  assert.equal(api.click(), true);
+  assert.equal(api.beacons.length, 1);
+  const id = JSON.parse(api.beacons[0]).orderId;
+  assert.match(api.fields.submitBtn.href, new RegExp(id));
+  assert.equal(api.fields.submitBtn.disabled, false);
+  assert.equal(api.opens.length, 0);
+});
+
+test('desktop popup success then a second tap does not mint a new id or a second beacon', () => {
+  const api = loadSubmitRuntime({ ua: UAS.desktop });
+  api.click();
+  api.click();
+  assert.equal(api.beacons.length, 1);
+  assert.equal(api.opens.length, 2);
+  assert.equal(api.opens[0].url, api.opens[1].url);
+  assert.equal(api.location.href, 'http://127.0.0.1/index.html');
+  assert.equal(api.fields.submitBtn.disabled, false);
+  const firstId = JSON.parse(api.beacons[0]).orderId;
+  assert.match(api.opens[1].url, new RegExp(firstId));
+
+  api.noteOrderFieldEdit();
+  api.click();
+  assert.equal(api.beacons.length, 2);
+  const secondId = JSON.parse(api.beacons[1]).orderId;
+  assert.notEqual(secondId, firstId);
+  assert.match(api.opens[2].url, new RegExp(secondId));
+});
+
+test('persisted pageshow then a tap does not beacon the same order again', () => {
+  const fresh = loadSubmitRuntime({ ua: UAS.android });
+  fresh.pageShow(false);
+  fresh.click();
+  assert.equal(fresh.beacons.length, 1, 'pageshow persisted:false must not block the first order');
+
+  const api = loadSubmitRuntime({ ua: UAS.iphone });
+  api.click();
+  assert.equal(api.beacons.length, 1);
+  const id = JSON.parse(api.beacons[0]).orderId;
+  api.forgetSentLatch();
+  api.pageShow(true);
+  assert.equal(api.click(), true);
+  assert.equal(api.beacons.length, 1);
+  assert.match(api.fields.submitBtn.href, new RegExp(id));
+  assert.equal(api.fields.submitBtn.disabled, false);
+
+  api.noteOrderFieldEdit();
+  api.click();
+  assert.equal(api.beacons.length, 2);
+  assert.notEqual(JSON.parse(api.beacons[1]).orderId, id);
 });
 
 test('browser pages do not fire Purchase; order-status lookup and confirmed UI stay', () => {

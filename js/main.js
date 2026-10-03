@@ -363,7 +363,7 @@ function selectPay(el){
   el.classList.add('sel');
   SELECTED_PAY = el.dataset.pay;
   SELECTED_PAY_INDEX = [...box.children].indexOf(el);
-  refreshSubmitHref();
+  noteOrderFieldEdit();
 }
 
 /* ─── FAQ ─── */
@@ -391,7 +391,7 @@ function selectPrefLang(el, code){
   SELECTED_PREF_LANG = lang;
   const hidden = document.getElementById('iLanguage');
   if(hidden) hidden.value = lang;
-  refreshSubmitHref();
+  noteOrderFieldEdit();
 }
 
 /* ─── প্ল্যান সিলেক্ট ─── */
@@ -401,7 +401,7 @@ function selectPlan(el, plan){
   el.classList.add('sel');
   SELECTED_PLAN = plan;
   updateOrderBox();
-  refreshSubmitHref();
+  noteOrderFieldEdit();
   if(window.MMPixels && typeof MMPixels.fireViewContent === 'function'){
     MMPixels.fireViewContent();
   }
@@ -502,6 +502,7 @@ function toast(msg, isErr){
    the Submit link itself (no spinner, no toast, no auto-copy).
    Never the orders bot. Never wait on the Sheet. */
 var DRAFT_ORDER_ID = '';
+var ORDER_SENT_ID = '';
 
 function buildOrderTelegramText(fields){
   var localLine = fields.localAmount
@@ -532,19 +533,6 @@ function prefersSameTabTelegram(){
 
 function supportBaseUrl(){
   return (typeof CONFIG !== 'undefined' && CONFIG.SUPPORT) ? CONFIG.SUPPORT : 'https://t.me/MMHQ_Support';
-}
-
-function openTelegramSameGesture(url){
-  var target = String(url || supportBaseUrl());
-  if(prefersSameTabTelegram()){
-    window.location.href = target;
-    return 'navigate';
-  }
-  var popup = null;
-  try{ popup = window.open(target, '_blank'); }catch(err){ popup = null; }
-  if(popup && popup.closed !== true) return 'popup';
-  window.location.href = target;
-  return 'navigate';
 }
 
 function showOrderHandoff(text, telegramUrl){
@@ -710,6 +698,15 @@ function refreshSubmitHref(){
   btn.href = draft ? draft.telegramUrl : supportBaseUrl();
 }
 
+/* A sent order keeps its id. The next beacon waits until a field edit. */
+function noteOrderFieldEdit(){
+  if(ORDER_SENT_ID){
+    ORDER_SENT_ID = '';
+    DRAFT_ORDER_ID = '';
+  }
+  refreshSubmitHref();
+}
+
 /* ─── অর্ডার সাবমিট ───
    Phone / in-app: the control is an <a href="https://t.me/MMHQ_Support?text=...">
    updated as the fields change. This click does not cancel that navigation.
@@ -730,37 +727,40 @@ function submitOrder(e){
   var orderId = payload.orderId;
   if(btn && String(btn.tagName).toUpperCase() === 'A') btn.href = telegramUrl;
 
-  postOrderToSheet(payload);
+  if(ORDER_SENT_ID !== orderId){
+    ORDER_SENT_ID = orderId;
+    postOrderToSheet(payload);
 
-  var ev = (typeof MMTracking !== 'undefined')
-    ? MMTracking.checkoutEventValue(payload.plan)
-    : {value: SELECTED_PLAN === 'entry' ? 30 : 15, contentName: payload.plan, currency:'USD'};
-  if(typeof MMTracking !== 'undefined'){
-    var am = MMTracking.advancedMatching(payload.email, payload.telegram);
-    if(typeof fbq !== 'undefined' && CONFIG.META_PIXEL){
-      fbq('init', CONFIG.META_PIXEL, am);
+    var ev = (typeof MMTracking !== 'undefined')
+      ? MMTracking.checkoutEventValue(payload.plan)
+      : {value: SELECTED_PLAN === 'entry' ? 30 : 15, contentName: payload.plan, currency:'USD'};
+    if(typeof MMTracking !== 'undefined'){
+      var am = MMTracking.advancedMatching(payload.email, payload.telegram);
+      if(typeof fbq !== 'undefined' && CONFIG.META_PIXEL){
+        fbq('init', CONFIG.META_PIXEL, am);
+      }
+      if(typeof ttq !== 'undefined' && typeof ttq.identify === 'function'){
+        ttq.identify({email: am.em, external_id: am.external_id});
+      }
     }
-    if(typeof ttq !== 'undefined' && typeof ttq.identify === 'function'){
-      ttq.identify({email: am.em, external_id: am.external_id});
+    if(typeof fbq !== 'undefined'){
+      fbq('track','Lead',{currency:ev.currency,value:ev.value,content_name:ev.contentName},{eventID:orderId+'_lead'});
+      fbq('track','InitiateCheckout',{currency:ev.currency,value:ev.value,content_name:ev.contentName},{eventID:orderId+'_ic'});
     }
-  }
-  if(typeof fbq !== 'undefined'){
-    fbq('track','Lead',{currency:ev.currency,value:ev.value,content_name:ev.contentName},{eventID:orderId+'_lead'});
-    fbq('track','InitiateCheckout',{currency:ev.currency,value:ev.value,content_name:ev.contentName},{eventID:orderId+'_ic'});
-  }
-  if(typeof ttq !== 'undefined'){
-    ttq.track('SubmitForm',{value:ev.value,currency:ev.currency,content_name:ev.contentName});
-    ttq.track('InitiateCheckout',{value:ev.value,currency:ev.currency,content_name:ev.contentName});
-  }
-  if(typeof gtag !== 'undefined'){
-    gtag('event','generate_lead',{currency:ev.currency,value:ev.value,plan:payload.plan});
-    gtag('event','begin_checkout',{
-      currency:ev.currency,value:ev.value,
-      items:[{item_id:SELECTED_PLAN,item_name:payload.plan,price:ev.value,quantity:1}]
-    });
-  }
+    if(typeof ttq !== 'undefined'){
+      ttq.track('SubmitForm',{value:ev.value,currency:ev.currency,content_name:ev.contentName});
+      ttq.track('InitiateCheckout',{value:ev.value,currency:ev.currency,content_name:ev.contentName});
+    }
+    if(typeof gtag !== 'undefined'){
+      gtag('event','generate_lead',{currency:ev.currency,value:ev.value,plan:payload.plan});
+      gtag('event','begin_checkout',{
+        currency:ev.currency,value:ev.value,
+        items:[{item_id:SELECTED_PLAN,item_name:payload.plan,price:ev.value,quantity:1}]
+      });
+    }
 
-  try{ localStorage.setItem('mm_last_order', orderId); }catch(err){}
+    try{ localStorage.setItem('mm_last_order', orderId); }catch(err){}
+  }
 
   if(prefersSameTabTelegram()){
     if(btn && String(btn.tagName).toUpperCase() === 'A') return true;
@@ -780,10 +780,14 @@ function submitOrder(e){
     return false;
   }
   showOrderHandoff(draft.msgText, telegramUrl);
-  DRAFT_ORDER_ID = '';
-  refreshSubmitHref();
   return false;
 }
+
+/* Back from Telegram restores this page with the same id. Do not beacon it again. */
+window.addEventListener('pageshow', function(e){
+  if(!e || e.persisted !== true) return;
+  if(DRAFT_ORDER_ID) ORDER_SENT_ID = DRAFT_ORDER_ID;
+});
 
 /* ─── স্ক্রল রিভিল + প্রোগ্রেস ─── */
 function initScroll(){
@@ -1024,7 +1028,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   getUtmData();
   ['iName','iEmail','iTelegram'].forEach(function(id){
     var el = document.getElementById(id);
-    if(el) el.addEventListener('input', refreshSubmitHref);
+    if(el) el.addEventListener('input', noteOrderFieldEdit);
   });
   refreshSubmitHref();
 });
