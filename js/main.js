@@ -494,9 +494,10 @@ function toast(msg, isErr){
   el._timer = setTimeout(()=>el.classList.remove('show'), 4200);
 }
 
-/* Same user gesture. Popup first; if the browser blocks it, leave
-   this tab after a short pixel flush. Never wait on the Sheet. */
-var TELEGRAM_NAV_FALLBACK_MS = 250;
+/* Same click opens Telegram in a new tab. If the browser blocks the
+   popup, the page stays put so Copy order and the Telegram link remain.
+   Never wait on the Sheet, and never unload this page. */
+var ORDER_SUBMIT_GUARD_MS = 2000;
 
 function buildOrderTelegramText(fields){
   var localLine = fields.localAmount
@@ -521,8 +522,19 @@ function openTelegramSameGesture(url){
   var popup = null;
   try{ popup = window.open(url, '_blank'); }catch(err){ popup = null; }
   if(popup && popup.closed !== true) return 'popup';
-  setTimeout(function(){ location.href = url; }, TELEGRAM_NAV_FALLBACK_MS);
-  return 'navigate';
+  return 'handoff';
+}
+
+function armSubmitButton(btn){
+  if(!btn) return;
+  btn.disabled = true;
+  btn.setAttribute('data-t', 'handoffSent');
+  btn.textContent = t('handoffSent');
+  setTimeout(function(){
+    btn.disabled = false;
+    btn.setAttribute('data-t', 'btnSubmit');
+    btn.textContent = t('btnSubmit');
+  }, ORDER_SUBMIT_GUARD_MS);
 }
 
 function showOrderHandoff(text, telegramUrl){
@@ -633,7 +645,7 @@ function submitOrder(){
     ttclid: track.ttclid
   };
 
-  btn.disabled = true;
+  armSubmitButton(btn);
 
   /* ── Pixel / Analytics events — Lead + InitiateCheckout ── */
   const ev = (typeof MMTracking !== 'undefined')
@@ -705,9 +717,9 @@ function submitOrder(){
 
   showOrderHandoff(msgText, telegramUrl);
   toast(t('toastOk'));
-  if(btn) btn.textContent = t('handoffSent');
 
-  /* Pixels already ran above. Open Telegram in this same click. */
+  /* Pixels already ran above. Open Telegram in this same click.
+     A blocked popup leaves #orderTgLink on the page. */
   openTelegramSameGesture(telegramUrl);
 }
 

@@ -516,7 +516,7 @@ const DIGEST_EMAIL = 'info@themethodmafia.com';  // digest email ঠিকান
 
 ### Web App / CORS (form + order-status)
 
-**Write (doPost):** ফর্ম `mode: 'no-cors'` + `keepalive: true` দিয়ে fire-and-forget POST করে (`Content-Type: text/plain`)। Success toast আর Telegram **Sheet JSON-এর জন্য অপেক্ষা করে না**। একই ক্লিকে `window.open` হয়; ব্রাউজার পপআপ আটকালে ~250ms-এর মধ্যে `location.href` দিয়ে `https://t.me/MMHQ_Support?text=` খোলে। পেজে অর্ডার সারাংশ, Copy order, আর Send order on Telegram বাটন থেকে যায়। `doPost` এখনও `{ok:true}` JSON দিতে পারে, কিন্তু ফর্ম সেটা পড়ে না। নতুন deployment-এ **Anyone** access লাগে।
+**Write (doPost):** ফর্ম `mode: 'no-cors'` + `keepalive: true` দিয়ে fire-and-forget POST করে (`Content-Type: text/plain`)। Success toast আর Telegram **Sheet JSON-এর জন্য অপেক্ষা করে না**। একই ক্লিকে `window.open` হয়। ব্রাউজার পপআপ আটকালে পেজ থেকে যায় না — অর্ডার সারাংশ, Copy order, আর Send order on Telegram (`#orderTgLink`, `https://t.me/MMHQ_Support?text=`) থেকে যায়। Submit বাটন ~2 সেকেন্ড বন্ধ থাকে, তারপর আবার `data-t="btnSubmit"` সহ চালু হয়। `doPost` এখনও `{ok:true}` JSON দিতে পারে, কিন্তু ফর্ম সেটা পড়ে না। নতুন deployment-এ **Anyone** access লাগে।
 
 **Status GET stays CORS:** `order-status.html` readable JSON চায়। Opaque/HTML/CORS error = lookup error UI।
 

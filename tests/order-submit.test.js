@@ -22,45 +22,89 @@ function sliceFn(src, name) {
   return src.slice(start);
 }
 
-test('Telegram opens in the same click, with location.href if the popup is blocked', () => {
+test('Telegram opens in the same click and a blocked popup does not unload the page', () => {
   const main = read('js/main.js');
   const fnSrc = sliceFn(main, 'openTelegramSameGesture').match(/function openTelegramSameGesture\(url\)\{[\s\S]*?\n\}/);
   assert.ok(fnSrc, 'openTelegramSameGesture source');
   assert.match(fnSrc[0], /window\.open\(url, '_blank'\)/);
-  assert.match(fnSrc[0], /location\.href = url/);
-  assert.match(main, /TELEGRAM_NAV_FALLBACK_MS = 250/);
-  assert.ok(250 <= 300);
+  assert.doesNotMatch(fnSrc[0], /location\.href/);
+  assert.doesNotMatch(fnSrc[0], /setTimeout/);
+  assert.equal(main.includes('TELEGRAM_NAV_FALLBACK_MS'), false);
   assert.equal(main.includes(', 900'), false);
-  assert.equal(fnSrc[0].includes('setTimeout'), true);
-  assert.ok(fnSrc[0].indexOf('window.open') < fnSrc[0].indexOf('setTimeout'));
 
-  const opened = [];
-  let scheduled = null;
-  const location = { href: '' };
-  const run = new Function('window', 'location', 'setTimeout', 'TELEGRAM_NAV_FALLBACK_MS', fnSrc[0] + '\nreturn openTelegramSameGesture;');
-
-  const blocked = run(
-    { open: function(){ return null; } },
-    location,
-    function(fn, ms){ scheduled = { fn: fn, ms: ms }; return 1; },
-    250
-  );
-  assert.equal(blocked('https://t.me/MMHQ_Support?text=hi'), 'navigate');
-  assert.equal(location.href, '');
-  assert.equal(scheduled.ms, 250);
-  scheduled.fn();
-  assert.equal(location.href, 'https://t.me/MMHQ_Support?text=hi');
+  const run = new Function('window', fnSrc[0] + '\nreturn openTelegramSameGesture;');
+  const location = { href: 'http://127.0.0.1/index.html' };
+  const blocked = run({ open: function(){ return null; } });
+  assert.equal(blocked('https://t.me/MMHQ_Support?text=hi'), 'handoff');
+  assert.equal(location.href, 'http://127.0.0.1/index.html');
 
   const popped = [];
-  const allow = run(
-    { open: function(url, target){ popped.push({ url: url, target: target }); return { closed: false }; } },
-    { href: 'stay' },
-    function(){ throw new Error('must not delay a successful popup'); },
-    250
-  );
+  const allow = run({
+    open: function(url, target){
+      popped.push({ url: url, target: target });
+      return { closed: false };
+    }
+  });
   assert.equal(allow('https://t.me/MMHQ_Support?text=order'), 'popup');
   assert.equal(popped[0].target, '_blank');
   assert.equal(popped[0].url, 'https://t.me/MMHQ_Support?text=order');
+});
+
+test('submit button is disabled only for a short guard, then restored with data-t', () => {
+  const main = read('js/main.js');
+  assert.match(main, /ORDER_SUBMIT_GUARD_MS = 2000/);
+  const fnSrc = sliceFn(main, 'armSubmitButton').match(/function armSubmitButton\(btn\)\{[\s\S]*?\n\}/);
+  assert.ok(fnSrc, 'armSubmitButton source');
+  assert.match(fnSrc[0], /setAttribute\('data-t', 'handoffSent'\)/);
+  assert.match(fnSrc[0], /setAttribute\('data-t', 'btnSubmit'\)/);
+  assert.match(fnSrc[0], /btn\.disabled = false/);
+  assert.ok(fnSrc[0].indexOf('handoffSent') < fnSrc[0].indexOf('btnSubmit'));
+
+  const submit = main.match(/function submitOrder\(\)\{[\s\S]*?\n\}/)[0];
+  const armAt = submit.indexOf('armSubmitButton(btn)');
+  const openAt = submit.indexOf('openTelegramSameGesture(telegramUrl)');
+  assert.ok(armAt !== -1 && armAt < openAt, 'guard starts before Telegram open');
+  assert.equal(submit.includes('btn.textContent = t(\'handoffSent\')'), false);
+  assert.doesNotMatch(submit, /location\.href/);
+
+  let queued = null;
+  const btn = {
+    disabled: false,
+    attrs: {},
+    textContent: '',
+    setAttribute: function(key, value){ this.attrs[key] = value; }
+  };
+  const arm = new Function('setTimeout', 't', 'ORDER_SUBMIT_GUARD_MS', fnSrc[0] + '\nreturn armSubmitButton;');
+  const run = arm(
+    function(fn, ms){ queued = { fn: fn, ms: ms }; return 1; },
+    function(key){ return 'label:' + key; },
+    2000
+  );
+  run(btn);
+  assert.equal(btn.disabled, true);
+  assert.equal(btn.attrs['data-t'], 'handoffSent');
+  assert.equal(btn.textContent, 'label:handoffSent');
+  assert.equal(queued.ms, 2000);
+
+  const labels = { en: 'Submit Order', bn: 'অর্ডার সাবমিট করুন', hi: 'ऑर्डर सबमिट करें' };
+  Object.keys(labels).forEach(function(lang){
+    btn.textContent = 'label:handoffSent';
+    const translated = new Function('setTimeout', 't', 'ORDER_SUBMIT_GUARD_MS', fnSrc[0] + '\nreturn armSubmitButton;')(
+      function(fn){ fn(); return 1; },
+      function(key){ return key === 'btnSubmit' ? labels[lang] : key; },
+      2000
+    );
+    const again = {
+      disabled: true,
+      attrs: { 'data-t': 'handoffSent' },
+      textContent: 'sent',
+      setAttribute: function(key, value){ this.attrs[key] = value; }
+    };
+    translated(again);
+    assert.equal(again.disabled, false, lang);
+    assert.equal(again.attrs['data-t'], 'btnSubmit', lang);
+    assert.equal(again.textContent, labels[lang], lang);
+  });
 });
 
 test('order message includes the fields Swa expects and the FINAL closing line', () => {
