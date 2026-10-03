@@ -59,23 +59,10 @@ test('sheet payload includes fbclid, ttclid, and existing UTM fields', () => {
   assert.equal(payload.campaign, 'entry');
 });
 
-test('Purchase backup is Entry-only at $30 and skips Monthly', () => {
-  const entry = lib.purchaseBackupEvent({ confirmed: '1', plan: 'Entry', orderId: 'MM-2026-1111' });
-  assert.deepEqual(entry, {
-    fire: true,
-    eventName: 'Purchase',
-    tiktokEvent: 'CompletePayment',
-    value: 30,
-    currency: 'USD',
-    contentName: 'Entry',
-    eventId: 'MM-2026-1111'
-  });
-
-  const monthly = lib.purchaseBackupEvent({ confirmed: '1', plan: 'Monthly', orderId: 'MM-2026-2222' });
-  assert.equal(monthly.fire, false);
-
-  const notConfirmed = lib.purchaseBackupEvent({ confirmed: '', plan: 'Entry', orderId: 'MM-2026-3333' });
-  assert.equal(notConfirmed.fire, false);
+test('browser Purchase backup never fires, even on ?confirmed=1 Entry', () => {
+  assert.deepEqual(lib.purchaseBackupEvent({ confirmed: '1', plan: 'Entry', orderId: 'MM-2026-1111' }), { fire: false });
+  assert.deepEqual(lib.purchaseBackupEvent({ confirmed: '1', plan: 'Monthly', orderId: 'MM-2026-2222' }), { fire: false });
+  assert.deepEqual(lib.purchaseBackupEvent(), { fire: false });
 });
 
 test('Lead / InitiateCheckout value is 30 for Entry and 15 for Monthly', () => {

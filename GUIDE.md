@@ -516,9 +516,9 @@ const DIGEST_EMAIL = 'info@themethodmafia.com';  // digest email ঠিকান
 
 ### Web App / CORS (form + order-status)
 
-সাইট **কখনো** `mode: 'no-cors'` ব্যবহার করে না। ফর্ম শুধু তখনই success দেখায় যখন Web App readable JSON `{ok:true}` ফেরত দেয়। Opaque/HTML/CORS error = error UI।
+**Write (doPost):** ফর্ম `navigator.sendBeacon` (না হলে `mode: 'no-cors'` + `keepalive: true` fetch) দিয়ে fire-and-forget POST করে (`Content-Type: text/plain`)। Sheet JSON-এর জন্য অপেক্ষা করে না, success-এ "Redirecting..." টোস্ট দেখায় না, বাটন বন্ধ করে না, আর ক্লিকবোর্ডে নিজে থেকে কপি করে না। টার্গেট সবসময় Swa-র সাপোর্ট অ্যাকাউন্ট `@MMHQ_Support`, অর্ডার বট না। Submit একটা আসল `<a href>`। Beacon-এর পর একই ট্যাব নেভিগেশন (কোনো popup না)। Telegram ইন-অ্যাপ, iPhone/iPad (iPadOS-এর Mac UA আর টাচ সহ) এবং সাধারণ Android WebView (TikTok, Line, `; wv)`, Facebook/Instagram ছাড়া) সরাসরি `https://t.me/MMHQ_Support?text=`। Android Chrome এবং Facebook/Instagram `intent://` (`package=` ছাড়া); অ্যাপ না খুললে `t.me` ফলব্যাক। ডেস্কটপ `tg://resolve` একবার, অটো টাইমার নেই; Copy order বক্সের টেলিগ্রাম বাটন `https://web.telegram.org/k/#?tgaddr=` দিয়ে ড্রাফট প্রিফিল করে। Submit লিংকের href সবসময় `https://t.me/MMHQ_Support?text=` থাকে। Copy order শুধু কাস্টমার বাটন চাপলে। `doPost` এখনও `{ok:true}` JSON দিতে পারে, কিন্তু ফর্ম সেটা পড়ে না। নতুন deployment-এ **Anyone** access লাগে।
 
-**Write (doPost):** `Content-Type: text/plain` (simple POST, preflight নেই)। `doPost` ইতিমধ্যে `{ok:true}` JSON দেয় — নতুন deployment-এ **Anyone** access লাগে।
+**Status GET stays CORS:** `order-status.html` readable JSON চায়। Opaque/HTML/CORS error = lookup error UI।
 
 **Status (doGet, public, no token):** `order-status.html` কল করে:
 `SHEET_URL?action=status&orderId=MM-2026-XXXX`
@@ -642,12 +642,11 @@ https://themethodmafia.com/order-status.html?orderId=MM-XXXX&confirmed=1&plan=En
 ```
 (Apps Script-এর Activate লিংক থেকেও এই URL পাওয়া যাবে)
 
-এই URL খুললে (optional backup, Entry only):
-- GA-তে `purchase` event fire হবে
-- FB Pixel-এ `Purchase` / TikTok-এ `CompletePayment` fire হবে (value $30, event_id = Order ID)
+এই URL খুললে পেজ আগের মতো কাজ করে, কিন্তু **ব্রাউজার Purchase আর fire করে না**:
+- `?confirmed=1` এ Meta `Purchase`, TikTok `CompletePayment`, বা GA `purchase` যাবে না
 - পেজ **Sheet থেকে** status দেখাবে (`action=status`). Endpoint না থাকলে মিথ্যা "Payment Confirmed"/"Submitted" দেখাবে না — next-steps + Telegram টেক্সট দেখাবে
 
-**মূল Purchase এখন Google Sheet Status → Active থেকে যায়।** কাস্টমার এই লিংক না খুললেও ads conversion count হবে (PART 9 সেটআপ করলে)। Monthly-এ Purchase যাবে না।
+**Purchase শুধু এক জায়গা থেকে যায়:** Google Sheet-এ Status `Pending` থেকে `Active` করলে `apps-script/CapiPurchase.gs` সার্ভার থেকে পাঠায়। কাস্টমার এই লিংক না খুললেও ads conversion count হবে (PART 9 সেটআপ করলে)। Monthly-এ Purchase যাবে না।
 
 ---
 
@@ -680,7 +679,7 @@ https://themethodmafia.com/?utm_source=telegram&utm_medium=organic
 
 Ads শুধু **Entry** টার্গেট করে। Purchase value **সবসময় $30**। Monthly ($15) এ Purchase যাবে না।
 
-**মূল পথ:** তুমি Google Sheet-এ `Status` = `Active` লিখলেই Purchase চলে যায়। কাস্টমারকে `order-status.html?confirmed=1` খুলতে হয় না (সেটা শুধু backup)।
+**মূল পথ — এটাই একমাত্র Purchase:** তুমি Google Sheet-এ `Status` `Pending` থেকে `Active` করলেই সার্ভার CAPI Purchase চলে যায়। ব্রাউজারের `?confirmed=1` আর Purchase fire করে না।
 
 ---
 

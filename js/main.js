@@ -344,6 +344,7 @@ function renderPayments(){
   const box = document.getElementById('payBadges');
   if(!box) return;
   const list = (typeof PAYMENTS !== 'undefined' && PAYMENTS[LANG]) ? PAYMENTS[LANG] : PAYMENTS.en;
+  const prev = SELECTED_PAY;
   box.classList.remove('error');
   box.innerHTML = list.map(([ic,name])=>
     `<button type="button" class="pay-opt" data-pay="${name}" onclick="selectPay(this)">
@@ -354,15 +355,19 @@ function renderPayments(){
     box.children[SELECTED_PAY_INDEX].classList.add('sel');
     SELECTED_PAY = box.children[SELECTED_PAY_INDEX].dataset.pay;
   }
+  if(ORDER_SENT_ID && SELECTED_PAY !== prev) noteOrderFieldEdit();
 }
 let SELECTED_PAY_INDEX = null;
 function selectPay(el){
   const box = document.getElementById('payBadges');
+  const next = el.dataset.pay;
+  const changed = next !== SELECTED_PAY;
   box.classList.remove('error');
   [...box.children].forEach(b=>b.classList.remove('sel'));
   el.classList.add('sel');
-  SELECTED_PAY = el.dataset.pay;
+  SELECTED_PAY = next;
   SELECTED_PAY_INDEX = [...box.children].indexOf(el);
+  if(changed) noteOrderFieldEdit();
 }
 
 /* ─── FAQ ─── */
@@ -379,6 +384,7 @@ function selectPrefLang(el, code){
   const lang = (typeof MMSheet !== 'undefined')
     ? MMSheet.normalizeOrderLanguage(code)
     : (code === 'bn' || code === 'hi' ? code : 'en');
+  const changed = lang !== SELECTED_PREF_LANG;
   document.querySelectorAll('.lang-pref-opt').forEach(b=>{
     b.classList.remove('sel');
     b.setAttribute('aria-pressed', 'false');
@@ -390,15 +396,18 @@ function selectPrefLang(el, code){
   SELECTED_PREF_LANG = lang;
   const hidden = document.getElementById('iLanguage');
   if(hidden) hidden.value = lang;
+  if(changed) noteOrderFieldEdit();
 }
 
 /* ─── প্ল্যান সিলেক্ট ─── */
 let SELECTED_PLAN = 'entry';
 function selectPlan(el, plan){
+  const changed = plan !== SELECTED_PLAN;
   document.querySelectorAll('.plan-opt').forEach(b=>b.classList.remove('sel'));
   el.classList.add('sel');
   SELECTED_PLAN = plan;
   updateOrderBox();
+  if(changed) noteOrderFieldEdit();
   if(window.MMPixels && typeof MMPixels.fireViewContent === 'function'){
     MMPixels.fireViewContent();
   }
@@ -494,46 +503,262 @@ function toast(msg, isErr){
   el._timer = setTimeout(()=>el.classList.remove('show'), 4200);
 }
 
-/* ─── অর্ডার সাবমিট ─── */
-function submitOrder(){
-  const name = document.getElementById('iName');
-  const email = document.getElementById('iEmail');
-  const tg = document.getElementById('iTelegram');
-  const btn = document.getElementById('submitBtn');
+/* Same tab, no popup. Phones open the Telegram app with tg:// or intent://.
+   Desktop does the same for Telegram Desktop. If the app does not take
+   focus, a short timer opens the https fallback. Never the orders bot.
+   Never wait on the Sheet. No spinner, no toast, no auto-copy. */
+var DRAFT_ORDER_ID = '';
+var ORDER_SENT_ID = '';
 
-  [name,email,tg].forEach(f=>f.classList.remove('error'));
+function buildOrderTelegramText(fields){
+  var localLine = fields.localAmount
+    ? '\nAmount (BDT): ' + fields.localAmount
+    : '';
+  return '🧾 NEW ORDER\n' +
+    '━━━━━━━━━━━━━━\n' +
+    'Order ID : ' + fields.orderId + '\n' +
+    'Name     : ' + fields.name + '\n' +
+    'Email    : ' + fields.email + '\n' +
+    'Telegram : ' + fields.telegram + '\n' +
+    'Language : ' + fields.language + '\n' +
+    '━━━━━━━━━━━━━━\n' +
+    'Plan     : ' + fields.plan + '\n' +
+    'Amount   : ' + fields.amount + localLine + '\n' +
+    'Payment  : ' + fields.payment + '\n' +
+    '━━━━━━━━━━━━━━\n\n' +
+    'I would like to complete my payment. Please send me the payment details.';
+}
+
+function prefersSameTabTelegram(){
+  var ua = '';
+  try{ ua = String(navigator.userAgent || ''); }catch(e){ ua = ''; }
+  if(/FBAN|FBAV|FB_IAB|Instagram|Telegram|TikTok|Musical\.ly|MicroMessenger|Line\/|Snapchat|BytedanceWebview|; wv\)/i.test(ua)) return true;
+  if(/Android|iPhone|iPad|iPod/i.test(ua)) return true;
+  return false;
+}
+
+function supportBaseUrl(){
+  return (typeof CONFIG !== 'undefined' && CONFIG.SUPPORT) ? CONFIG.SUPPORT : 'https://t.me/MMHQ_Support';
+}
+
+var TELEGRAM_APP_FALLBACK_MS = 1200;
+
+function supportUsername(){
+  var url = supportBaseUrl();
+  var match = String(url).match(/t\.me\/([^/?#]+)/i);
+  return match ? match[1] : 'MMHQ_Support';
+}
+
+function browserUa(){
+  try{ return String(navigator.userAgent || ''); }catch(e){ return ''; }
+}
+
+function orderTextUrl(text){
+  return supportBaseUrl() + '?text=' + encodeURIComponent(text || '');
+}
+
+function telegramAppUrl(text){
+  return 'tg://resolve?domain=' + supportUsername() + '&text=' + encodeURIComponent(text || '');
+}
+
+function telegramIntentUrl(text){
+  var web = orderTextUrl(text);
+  return 'intent://resolve?domain=' + supportUsername() + '&text=' + encodeURIComponent(text || '') +
+    '#Intent;scheme=tg;S.browser_fallback_url=' +
+    encodeURIComponent(web) + ';end';
+}
+
+function desktopWebDraftUrl(text){
+  return 'https://web.telegram.org/k/#?tgaddr=' + encodeURIComponent(telegramAppUrl(text));
+}
+
+function isAppleTouch(){
+  var ua = browserUa();
+  if(/iPhone|iPad|iPod/i.test(ua)) return true;
+  var points = 0;
+  try{ points = navigator.maxTouchPoints || 0; }catch(e){ points = 0; }
+  return /Macintosh/i.test(ua) && points > 1;
+}
+
+function isMetaInApp(ua){
+  return /FBAN|FBAV|FB_IAB|Instagram/i.test(ua);
+}
+
+function isPlainAndroidWebView(ua){
+  if(!/Android/i.test(ua) || isMetaInApp(ua)) return false;
+  return /TikTok|Musical\.ly|Line\/|; wv\)|BytedanceWebview|musical_ly|trill_|Snapchat|MicroMessenger/i.test(ua);
+}
+
+/* 1 Telegram in-app, 2 iPhone/iPad (a Mac UA with touch counts as iPad),
+   3 plain Android WebView: https t.me. 4 other Android, including Facebook
+   and Instagram: intent:// with no package. 5 desktop: tg://. */
+function instantTelegramUrl(text){
+  var ua = browserUa();
+  if(/Telegram/i.test(ua)) return orderTextUrl(text);
+  if(isAppleTouch()) return orderTextUrl(text);
+  if(isPlainAndroidWebView(ua)) return orderTextUrl(text);
+  if(/Android/i.test(ua)) return telegramIntentUrl(text);
+  return telegramAppUrl(text);
+}
+
+var telegramFallbackTimer = null;
+
+function clearTelegramFallback(){
+  if(!telegramFallbackTimer) return;
+  try{ clearTimeout(telegramFallbackTimer); }catch(e){}
+  telegramFallbackTimer = null;
+}
+
+function armTelegramFallback(fallbackUrl){
+  if(!fallbackUrl) return;
+  clearTelegramFallback();
+  var finished = false;
+  function finish(){
+    if(finished) return;
+    finished = true;
+    try{ window.removeEventListener('blur', onBlur); }catch(e){}
+    try{ document.removeEventListener('visibilitychange', onHide); }catch(e){}
+    clearTelegramFallback();
+  }
+  function onBlur(){ finish(); }
+  function onHide(){
+    if(document.visibilityState === 'hidden') finish();
+  }
+  window.addEventListener('blur', onBlur);
+  document.addEventListener('visibilitychange', onHide);
+  telegramFallbackTimer = setTimeout(function(){
+    if(finished) return;
+    var visible = true;
+    try{ visible = document.visibilityState !== 'hidden'; }catch(e){}
+    finish();
+    if(visible) window.location.href = fallbackUrl;
+  }, TELEGRAM_APP_FALLBACK_MS);
+}
+
+window.addEventListener('pagehide', clearTelegramFallback);
+window.addEventListener('pageshow', function(e){
+  if(e && e.persisted) clearTelegramFallback();
+});
+
+function showOrderHandoff(text, telegramUrl){
+  var box = document.getElementById('orderHandoff');
+  var summary = document.getElementById('orderHandoffSummary');
+  var link = document.getElementById('orderTgLink');
+  if(summary) summary.textContent = text;
+  if(link) link.href = telegramUrl || supportBaseUrl();
+  if(box){
+    box.hidden = false;
+    box.classList.add('show');
+  }
+}
+
+function postOrderToSheet(payload){
+  var body = JSON.stringify(payload || {});
+  var url = (typeof CONFIG !== 'undefined') ? CONFIG.SHEET_URL : '';
+  try{
+    if(url && navigator.sendBeacon){
+      /* A string is text/plain;charset=UTF-8. A Blob body is dropped by
+         iPhone Safari, so the Sheet row never arrives. */
+      if(navigator.sendBeacon(url, body)) return true;
+    }
+  }catch(e){}
+  var sheetOpts = (typeof MMSheet !== 'undefined')
+    ? MMSheet.writeFetchOptions(payload)
+    : {
+        method:'POST',
+        mode:'no-cors',
+        keepalive:true,
+        credentials:'omit',
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body: body
+      };
+  try{ fetch(url, sheetOpts).catch(function(){}); return true; }catch(e){}
+  return false;
+}
+
+function copyOrderHandoff(){
+  var summary = document.getElementById('orderHandoffSummary');
+  var text = summary ? summary.textContent : '';
+  function done(){ toast(t('handoffCopied')); }
+  function failed(){ toast(t('handoffCopyFail'), true); }
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done).catch(function(){
+        if(copyOrderTextFallback(text)) done(); else failed();
+      });
+      return;
+    }
+  }catch(e){}
+  if(copyOrderTextFallback(text)) done(); else failed();
+}
+
+function copyOrderTextFallback(text){
+  try{
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.left = '-9999px';
+    document.body.appendChild(area);
+    area.select();
+    var ok = document.execCommand('copy');
+    document.body.removeChild(area);
+    return !!ok;
+  }catch(e){ return false; }
+}
+
+function currentOrderId(){
+  if(!DRAFT_ORDER_ID) DRAFT_ORDER_ID = makeOrderId();
+  return DRAFT_ORDER_ID;
+}
+
+/* Silent while typing so the Submit link stays a real t.me URL.
+   showErrors is only the click, and it still returns before any Sheet post. */
+function collectOrderDraft(showErrors){
+  var name = document.getElementById('iName');
+  var email = document.getElementById('iEmail');
+  var tg = document.getElementById('iTelegram');
+  if(!name || !email || !tg) return null;
+
+  if(showErrors) [name, email, tg].forEach(function(f){ f.classList.remove('error'); });
 
   if(!name.value.trim() || !email.value.trim() || !tg.value.trim()){
-    [name,email,tg].forEach(f=>{ if(!f.value.trim()) f.classList.add('error'); });
-    return toast(t('errFill'), true);
+    if(showErrors){
+      [name, email, tg].forEach(function(f){ if(!f.value.trim()) f.classList.add('error'); });
+      toast(t('errFill'), true);
+    }
+    return null;
   }
-  const nameVal = name.value.trim();
+  var nameVal = name.value.trim();
   if(nameVal.length < 2 || !/[\p{L}]/u.test(nameVal)){
-    name.classList.add('error');
-    return toast(t('errName'), true);
+    if(showErrors){ name.classList.add('error'); toast(t('errName'), true); }
+    return null;
   }
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.value.trim())){
-    email.classList.add('error');
-    return toast(t('errEmail'), true);
+    if(showErrors){ email.classList.add('error'); toast(t('errEmail'), true); }
+    return null;
   }
-  let handle = tg.value.trim().replace(/^@+/, '').replace(/\s+/g,'');
+  var handle = tg.value.trim().replace(/^@+/, '').replace(/\s+/g, '');
   if(!/^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(handle)){
-    tg.classList.add('error');
-    return toast(t('errTgFormat'), true);
+    if(showErrors){ tg.classList.add('error'); toast(t('errTgFormat'), true); }
+    return null;
   }
   handle = '@' + handle;
   if(!SELECTED_PAY){
-    const pb = document.getElementById('payBadges');
-    if(pb){ pb.classList.add('error'); pb.scrollIntoView({behavior:'smooth',block:'center'}); }
-    return toast(t('errPay'), true);
+    if(showErrors){
+      var pb = document.getElementById('payBadges');
+      if(pb){ pb.classList.add('error'); pb.scrollIntoView({behavior:'smooth', block:'center'}); }
+      toast(t('errPay'), true);
+    }
+    return null;
   }
 
-  const orderId = makeOrderId();
-  const utmData = getUtmData();
-  const track = (typeof MMTracking !== 'undefined')
+  var orderId = currentOrderId();
+  var utmData = getUtmData();
+  var track = (typeof MMTracking !== 'undefined')
     ? MMTracking.buildSheetTrackingFields(utmData)
     : {source:utmData.utm_source, medium:utmData.utm_medium, campaign:utmData.utm_campaign, fbclid:utmData.fbclid||'', ttclid:utmData.ttclid||''};
-  const prefLangInput = document.getElementById('iLanguage');
+  var prefLangInput = document.getElementById('iLanguage');
   const payload = {
     orderId: orderId,
     name: name.value.trim(),
@@ -551,100 +776,104 @@ function submitOrder(){
     fbclid: track.fbclid,
     ttclid: track.ttclid
   };
+  var langLabel = (typeof MMSheet !== 'undefined')
+    ? MMSheet.sheetLanguageLabel(payload.language)
+    : String(payload.language || 'en').toUpperCase();
+  var localAmount = (LANG === 'bn')
+    ? (SELECTED_PLAN === 'entry' ? CONFIG.ENTRY_BDT : CONFIG.MONTHLY_BDT)
+    : '';
+  var msgText = buildOrderTelegramText({
+    orderId: orderId,
+    name: payload.name,
+    email: payload.email,
+    telegram: handle,
+    language: langLabel,
+    plan: payload.plan,
+    amount: payload.amount,
+    payment: SELECTED_PAY,
+    localAmount: localAmount
+  });
+  var telegramUrl = supportBaseUrl() + '?text=' + encodeURIComponent(msgText);
+  return { orderId: orderId, payload: payload, msgText: msgText, telegramUrl: telegramUrl };
+}
 
-  btn.disabled = true;
+function refreshSubmitHref(){
+  var btn = document.getElementById('submitBtn');
+  if(!btn || String(btn.tagName).toUpperCase() !== 'A') return;
+  var draft = collectOrderDraft(false);
+  btn.href = draft ? draft.telegramUrl : supportBaseUrl();
+}
 
-  /* ── Pixel / Analytics events — Lead + InitiateCheckout ── */
-  const ev = (typeof MMTracking !== 'undefined')
-    ? MMTracking.checkoutEventValue(payload.plan)
-    : {value: SELECTED_PLAN === 'entry' ? 30 : 15, contentName: payload.plan, currency:'USD'};
-  if(typeof MMTracking !== 'undefined'){
-    const am = MMTracking.advancedMatching(payload.email, payload.telegram);
-    if(typeof fbq !== 'undefined' && CONFIG.META_PIXEL){
-      fbq('init', CONFIG.META_PIXEL, am);
+/* A sent order keeps its id. The next beacon waits until a field edit. */
+function noteOrderFieldEdit(){
+  if(ORDER_SENT_ID){
+    ORDER_SENT_ID = '';
+    DRAFT_ORDER_ID = '';
+  }
+  refreshSubmitHref();
+}
+
+/* ─── অর্ডার সাবমিট ───
+   Beacon first, then this same tab goes to the Telegram app. No popup.
+   The link href stays the https t.me text URL. Only intent:// arms a
+   fallback timer. Auxclick keeps the browser's own new tab.
+   No success toast, no spinner, no auto-copy. */
+function submitOrder(e){
+  var draft = collectOrderDraft(true);
+  var btn = document.getElementById('submitBtn');
+  if(!draft){
+    if(e && e.type !== 'auxclick' && e.preventDefault) e.preventDefault();
+    if(btn && String(btn.tagName).toUpperCase() === 'A') btn.href = supportBaseUrl();
+    return false;
+  }
+
+  var telegramUrl = draft.telegramUrl;
+  var payload = draft.payload;
+  var orderId = payload.orderId;
+  var instantUrl = instantTelegramUrl(draft.msgText);
+  if(btn && String(btn.tagName).toUpperCase() === 'A') btn.href = telegramUrl;
+
+  if(ORDER_SENT_ID !== orderId && postOrderToSheet(payload)){
+    ORDER_SENT_ID = orderId;
+
+    var ev = (typeof MMTracking !== 'undefined')
+      ? MMTracking.checkoutEventValue(payload.plan)
+      : {value: SELECTED_PLAN === 'entry' ? 30 : 15, contentName: payload.plan, currency:'USD'};
+    if(typeof MMTracking !== 'undefined'){
+      var am = MMTracking.advancedMatching(payload.email, payload.telegram);
+      if(typeof fbq !== 'undefined' && CONFIG.META_PIXEL){
+        fbq('init', CONFIG.META_PIXEL, am);
+      }
+      if(typeof ttq !== 'undefined' && typeof ttq.identify === 'function'){
+        ttq.identify({email: am.em, external_id: am.external_id});
+      }
     }
-    if(typeof ttq !== 'undefined' && typeof ttq.identify === 'function'){
-      ttq.identify({email: am.em, external_id: am.external_id});
+    if(typeof fbq !== 'undefined'){
+      fbq('track','Lead',{currency:ev.currency,value:ev.value,content_name:ev.contentName},{eventID:orderId+'_lead'});
+      fbq('track','InitiateCheckout',{currency:ev.currency,value:ev.value,content_name:ev.contentName},{eventID:orderId+'_ic'});
     }
-  }
-  if(typeof fbq !== 'undefined'){
-    fbq('track','Lead',{currency:ev.currency,value:ev.value,content_name:ev.contentName},{eventID:orderId+'_lead'});
-    fbq('track','InitiateCheckout',{currency:ev.currency,value:ev.value,content_name:ev.contentName},{eventID:orderId+'_ic'});
-  }
-  if(typeof ttq !== 'undefined'){
-    ttq.track('SubmitForm',{value:ev.value,currency:ev.currency,content_name:ev.contentName});
-    ttq.track('InitiateCheckout',{value:ev.value,currency:ev.currency,content_name:ev.contentName});
-  }
-  if(typeof gtag !== 'undefined'){
-    gtag('event','generate_lead',{currency:ev.currency,value:ev.value,plan:payload.plan});
-    gtag('event','begin_checkout',{
-      currency:ev.currency,value:ev.value,
-      items:[{item_id:SELECTED_PLAN,item_name:payload.plan,price:ev.value,quantity:1}]
-    });
+    if(typeof ttq !== 'undefined'){
+      ttq.track('SubmitForm',{value:ev.value,currency:ev.currency,content_name:ev.contentName});
+      ttq.track('InitiateCheckout',{value:ev.value,currency:ev.currency,content_name:ev.contentName});
+    }
+    if(typeof gtag !== 'undefined'){
+      gtag('event','generate_lead',{currency:ev.currency,value:ev.value,plan:payload.plan});
+      gtag('event','begin_checkout',{
+        currency:ev.currency,value:ev.value,
+        items:[{item_id:SELECTED_PLAN,item_name:payload.plan,price:ev.value,quantity:1}]
+      });
+    }
+
+    try{ localStorage.setItem('mm_last_order', orderId); }catch(err){}
   }
 
-  /* Sheet write: CORS + readable JSON only. Opaque no-cors used to
-     look like success even when Apps Script / Sheet write failed. */
-  const sheetOpts = (typeof MMSheet !== 'undefined')
-    ? MMSheet.writeFetchOptions(payload)
-    : {
-        method:'POST',
-        mode:'cors',
-        redirect:'follow',
-        credentials:'omit',
-        headers:{'Content-Type':'text/plain;charset=utf-8'},
-        body: JSON.stringify(payload)
-      };
-
-  fetch(CONFIG.SHEET_URL, sheetOpts)
-    .then(function(res){
-      return (typeof MMSheet !== 'undefined')
-        ? MMSheet.readResponse(res)
-        : res.text().then(function(text){
-            var json = null;
-            try{ json = JSON.parse(text); }catch(e){}
-            return { type: res.type, ok: !!res.ok, status: res.status, json: json, text: text };
-          });
-    })
-    .then(function(parsed){
-      const ok = (typeof MMSheet !== 'undefined')
-        ? MMSheet.isWriteSuccess(parsed)
-        : !!(parsed && parsed.ok && parsed.json && parsed.json.ok === true);
-      if(!ok) throw new Error('sheet_write_failed');
-
-      try{ localStorage.setItem('mm_last_order', orderId); }catch(e){}
-      toast(t('toastOk'));
-
-      const localLine = (LANG === 'bn')
-        ? '\nAmount (BDT): ' + (SELECTED_PLAN === 'entry' ? CONFIG.ENTRY_BDT : CONFIG.MONTHLY_BDT)
-        : '';
-
-      const msg = encodeURIComponent(
-        '🧾 NEW ORDER\n' +
-        '━━━━━━━━━━━━━━\n' +
-        'Order ID : ' + orderId + '\n' +
-        'Name     : ' + payload.name + '\n' +
-        'Email    : ' + payload.email + '\n' +
-        'Telegram : ' + handle + '\n' +
-        'Language : ' + ((typeof MMSheet !== 'undefined')
-          ? MMSheet.sheetLanguageLabel(payload.language)
-          : String(payload.language || 'en').toUpperCase()) + '\n' +
-        '━━━━━━━━━━━━━━\n' +
-        'Plan     : ' + payload.plan + '\n' +
-        'Amount   : ' + payload.amount + localLine + '\n' +
-        'Payment  : ' + SELECTED_PAY + '\n' +
-        '━━━━━━━━━━━━━━\n\n' +
-        'I have placed my order. Please send me the payment details.'
-      );
-      setTimeout(()=>{
-        window.open(CONFIG.SUPPORT + '?text=' + msg, '_blank');
-        btn.disabled = false;
-      }, 900);
-    })
-    .catch(function(){
-      toast(t('toastSheetFail'), true);
-      btn.disabled = false;
-    });
+  if(e && e.type === 'auxclick') return true;
+  if(!prefersSameTabTelegram()) showOrderHandoff(draft.msgText, desktopWebDraftUrl(draft.msgText));
+  if(instantUrl === telegramUrl) return true; // native <a> tap; href already telegramUrl (:834)
+  if(e && e.preventDefault) e.preventDefault();
+  if(instantUrl.indexOf('intent:') === 0) armTelegramFallback(orderTextUrl(draft.msgText));
+  window.location.href = instantUrl;
+  return false;
 }
 
 /* ─── স্ক্রল রিভিল + প্রোগ্রেস ─── */
@@ -864,37 +1093,9 @@ function initOrderStatusPage(){
   }catch(e){}
 }
 
-/* ─── Purchase backup on confirmed=1 — Entry only, value $30.
-   Primary Purchase is Apps Script CAPI when Status → Active. ─── */
-function initPurchaseConfirm(){
-  try{
-    const p = new URLSearchParams(location.search);
-    const decision = (typeof MMTracking !== 'undefined')
-      ? MMTracking.purchaseBackupEvent({
-          confirmed: p.get('confirmed'),
-          plan: p.get('plan') || 'Entry',
-          orderId: p.get('orderId') || ''
-        })
-      : {fire: p.get('confirmed')==='1' && (p.get('plan')||'Entry') !== 'Monthly',
-         eventName:'Purchase', tiktokEvent:'CompletePayment',
-         value:30, currency:'USD', contentName:'Entry', eventId: p.get('orderId')||''};
-    if(!decision.fire) return;
-    const extra = {currency:decision.currency, value:decision.value, content_name:decision.contentName};
-    if(typeof fbq !== 'undefined'){
-      fbq('track', decision.eventName, extra, decision.eventId ? {eventID: decision.eventId} : undefined);
-    }
-    if(typeof ttq !== 'undefined'){
-      var ttExtra = {currency:decision.currency, value:decision.value, content_name:decision.contentName};
-      if(decision.eventId) ttExtra.event_id = decision.eventId;
-      ttq.track(decision.tiktokEvent, ttExtra);
-    }
-    if(typeof gtag !== 'undefined') gtag('event','purchase',{
-      transaction_id: decision.eventId,
-      currency:decision.currency, value:decision.value,
-      items:[{item_id:'entry',item_name:'Method Mafia Entry',price:decision.value,quantity:1}]
-    });
-  }catch(e){}
-}
+/* Purchase is not fired in the browser. Swa sets Sheet Status
+   Pending → Active, and apps-script/CapiPurchase.gs sends it.
+   ?confirmed=1 still loads order-status; it does not track Purchase. */
 
 /* ─── স্ক্রল টু টপ ─── */
 function scrollToTop(){ scrollTo({top:0,behavior:'smooth'}); }
@@ -910,7 +1111,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
   initScroll();
   initLiveActivity();
   initExitPopup();
-  initPurchaseConfirm();
   initOrderStatusPage();
   getUtmData();
+  ['iName','iEmail','iTelegram'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.addEventListener('input', noteOrderFieldEdit);
+  });
+  var submitLink = document.getElementById('submitBtn');
+  if(submitLink) submitLink.addEventListener('auxclick', submitOrder);
+  refreshSubmitHref();
 });

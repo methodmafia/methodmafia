@@ -1,7 +1,9 @@
 /* ═══════════════════════════════════════════════════════════
    THE METHOD MAFIA — Sheet web-app client (browser + Node)
-   Write success is only JSON {ok:true}. Status lookup is
-   public (action=status) and never sends an admin token.
+   Order writes are fire-and-forget (no-cors + keepalive).
+   The page does not read {ok:true} before opening Telegram.
+   Status lookup GET stays CORS and public (action=status)
+   and never sends an admin token.
    ═══════════════════════════════════════════════════════════ */
 (function(root, factory){
   if(typeof module === 'object' && module.exports){
@@ -119,11 +121,12 @@
     });
   }
 
+  /* Opaque on purpose. Caller must not await this before Telegram. */
   function writeFetchOptions(payload){
     return {
       method: 'POST',
-      mode: 'cors',
-      redirect: 'follow',
+      mode: 'no-cors',
+      keepalive: true,
       credentials: 'omit',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload || {})

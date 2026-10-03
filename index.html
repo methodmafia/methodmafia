@@ -379,8 +379,17 @@
       <div class="pay-select-row" id="payBadges"></div>
     </div>
 
-    <button class="submit-btn" id="submitBtn" onclick="submitOrder()" data-t="btnSubmit">Submit Order</button>
+    <a class="submit-btn" id="submitBtn" href="https://t.me/MMHQ_Support" onclick="return submitOrder(event)" data-t="btnSubmit">Submit Order</a>
     <p class="form-footer" data-t="formFooter"></p>
+
+    <!-- Persistent fallback if t.me ignores ?text= on a username -->
+    <div class="order-handoff" id="orderHandoff" hidden>
+      <div class="order-handoff-title" data-t="handoffTitle">Send this order on Telegram</div>
+      <p class="order-handoff-note" data-t="handoffNote"></p>
+      <pre class="order-handoff-summary" id="orderHandoffSummary"></pre>
+      <button type="button" class="order-copy-btn" id="orderCopyBtn" onclick="copyOrderHandoff()" data-t="handoffCopy">Copy order</button>
+      <a class="order-tg-btn" id="orderTgLink" href="https://t.me/MMHQ_Support" target="_blank" rel="noopener"><span data-t="handoffTg">Send order on Telegram</span></a>
+    </div>
 
     <!-- A1/A5: Next steps after ordering -->
     <div class="next-steps-box" style="margin-top:18px">
