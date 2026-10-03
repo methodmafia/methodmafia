@@ -344,6 +344,7 @@ function renderPayments(){
   const box = document.getElementById('payBadges');
   if(!box) return;
   const list = (typeof PAYMENTS !== 'undefined' && PAYMENTS[LANG]) ? PAYMENTS[LANG] : PAYMENTS.en;
+  const prev = SELECTED_PAY;
   box.classList.remove('error');
   box.innerHTML = list.map(([ic,name])=>
     `<button type="button" class="pay-opt" data-pay="${name}" onclick="selectPay(this)">
@@ -354,6 +355,7 @@ function renderPayments(){
     box.children[SELECTED_PAY_INDEX].classList.add('sel');
     SELECTED_PAY = box.children[SELECTED_PAY_INDEX].dataset.pay;
   }
+  if(ORDER_SENT_ID && SELECTED_PAY !== prev) noteOrderFieldEdit();
 }
 let SELECTED_PAY_INDEX = null;
 function selectPay(el){
@@ -558,7 +560,7 @@ function postOrderToSheet(payload){
     if(url && navigator.sendBeacon){
       /* A string is text/plain;charset=UTF-8. A Blob body is dropped by
          iPhone Safari, so the Sheet row never arrives. */
-      if(navigator.sendBeacon(url, body)) return;
+      if(navigator.sendBeacon(url, body)) return true;
     }
   }catch(e){}
   var sheetOpts = (typeof MMSheet !== 'undefined')
@@ -571,7 +573,8 @@ function postOrderToSheet(payload){
         headers:{'Content-Type':'text/plain;charset=utf-8'},
         body: body
       };
-  try{ fetch(url, sheetOpts).catch(function(){}); }catch(e){}
+  try{ fetch(url, sheetOpts).catch(function(){}); return true; }catch(e){}
+  return false;
 }
 
 function copyOrderHandoff(){
@@ -721,7 +724,7 @@ function submitOrder(e){
   var draft = collectOrderDraft(true);
   var btn = document.getElementById('submitBtn');
   if(!draft){
-    if(e && e.preventDefault) e.preventDefault();
+    if(e && e.type !== 'auxclick' && e.preventDefault) e.preventDefault();
     if(btn && String(btn.tagName).toUpperCase() === 'A') btn.href = supportBaseUrl();
     return false;
   }
@@ -731,9 +734,8 @@ function submitOrder(e){
   var orderId = payload.orderId;
   if(btn && String(btn.tagName).toUpperCase() === 'A') btn.href = telegramUrl;
 
-  if(ORDER_SENT_ID !== orderId){
+  if(ORDER_SENT_ID !== orderId && postOrderToSheet(payload)){
     ORDER_SENT_ID = orderId;
-    postOrderToSheet(payload);
 
     var ev = (typeof MMTracking !== 'undefined')
       ? MMTracking.checkoutEventValue(payload.plan)
@@ -765,6 +767,8 @@ function submitOrder(e){
 
     try{ localStorage.setItem('mm_last_order', orderId); }catch(err){}
   }
+
+  if(e && e.type === 'auxclick') return true;
 
   if(prefersSameTabTelegram()){
     if(btn && String(btn.tagName).toUpperCase() === 'A') return true;
@@ -1028,5 +1032,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     var el = document.getElementById(id);
     if(el) el.addEventListener('input', noteOrderFieldEdit);
   });
+  var submitLink = document.getElementById('submitBtn');
+  if(submitLink) submitLink.addEventListener('auxclick', submitOrder);
   refreshSubmitHref();
 });

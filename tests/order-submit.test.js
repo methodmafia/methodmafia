@@ -43,11 +43,16 @@ function loadSubmitRuntime(opts) {
   const end = main.indexOf('function initScroll');
   assert.ok(start !== -1 && end > start, 'order runtime slice');
   const beacons = [];
+  const fetches = [];
   const opens = [];
   const listeners = {};
+  const net = {
+    beaconOk: !(opts && opts.beaconOk === false),
+    fetchThrows: !!(opts && opts.fetchThrows)
+  };
   const location = { href: 'http://127.0.0.1/index.html' };
   function cls() {
-    return { add(){}, remove(){}, contains(){ return false; } };
+    return { add(){}, remove(){}, contains(){ return false; }, toggle(){} };
   }
   const fields = {
     iName: { value: 'Swa Test', classList: cls() },
@@ -55,6 +60,7 @@ function loadSubmitRuntime(opts) {
     iTelegram: { value: '@swa_test', classList: cls() },
     iLanguage: { value: 'en' },
     submitBtn: { tagName: 'A', href: 'https://t.me/MMHQ_Support', disabled: false },
+    toast: { textContent: '', classList: cls() },
     orderHandoff: { hidden: true, classList: cls() },
     orderHandoffSummary: { textContent: '' },
     orderTgLink: { href: '' }
@@ -73,6 +79,7 @@ function loadSubmitRuntime(opts) {
   const navigatorObj = {
     userAgent: (opts && opts.ua) || UAS.desktop,
     sendBeacon: function(_url, body) {
+      if (!net.beaconOk) return false;
       beacons.push(String(body));
       return true;
     }
@@ -93,13 +100,22 @@ function loadSubmitRuntime(opts) {
     '  writeFetchOptions: function(payload){ return { method:"POST", mode:"no-cors", keepalive:true, body: JSON.stringify(payload) }; }',
     '};',
     'function getUtmData(){ return { utm_source:"direct", utm_medium:"", utm_campaign:"", fbclid:"", ttclid:"" }; }',
+    'function t(key){ return key; }',
     main.slice(start, end),
+    'function fetch(){',
+    '  if(net.fetchThrows) throw new Error("fetch failed");',
+    '  fetches.push(1);',
+    '  return { catch: function(){ return this; } };',
+    '}',
     'function forgetSentLatch(){ ORDER_SENT_ID = ""; }',
-    'return { submitOrder: submitOrder, noteOrderFieldEdit: noteOrderFieldEdit, refreshSubmitHref: refreshSubmitHref, forgetSentLatch: forgetSentLatch, prefersSameTabTelegram: prefersSameTabTelegram };'
+    'function sentLatch(){ return ORDER_SENT_ID; }',
+    'return { submitOrder: submitOrder, noteOrderFieldEdit: noteOrderFieldEdit, refreshSubmitHref: refreshSubmitHref, forgetSentLatch: forgetSentLatch, prefersSameTabTelegram: prefersSameTabTelegram, sentLatch: sentLatch };'
   ].join('\n');
-  const run = new Function('window', 'document', 'navigator', src);
-  const api = run(windowObj, documentObj, navigatorObj);
+  const run = new Function('window', 'document', 'navigator', 'net', 'fetches', src);
+  const api = run(windowObj, documentObj, navigatorObj, net, fetches);
   api.beacons = beacons;
+  api.fetches = fetches;
+  api.net = net;
   api.opens = opens;
   api.location = location;
   api.fields = fields;
@@ -152,6 +168,20 @@ function loadFormControls() {
   payBinance.dataset.pay = 'Binance Pay';
   payOther.dataset.pay = 'Other';
   const payBadges = withClassList({ className: 'pay-select-row', children: [payBinance, payOther] }, 'pay-select-row');
+  Object.defineProperty(payBadges, 'innerHTML', {
+    configurable: true,
+    set: function(value) {
+      const names = [];
+      const re = /data-pay="([^"]*)"/g;
+      let match;
+      while ((match = re.exec(String(value)))) names.push(match[1]);
+      this.children = names.map(function(name) {
+        const el = button('pay-opt');
+        el.dataset.pay = name;
+        return el;
+      });
+    }
+  });
   const fields = {
     iName: { value: 'Swa Test', classList: { add(){}, remove(){} } },
     iEmail: { value: 'swa@example.com', classList: { add(){}, remove(){} } },
@@ -186,6 +216,7 @@ function loadFormControls() {
   };
   const src = [
     'var LANG = "en";',
+    'var PAYMENTS = { en: [["a","Binance Pay"],["b","Other"]], bn: [["a","বিকাশ"],["b","অন্যান্য"]], hi: [["a","Binance Pay"],["b","Other"]] };',
     'var CONFIG = { SUPPORT: "https://t.me/MMHQ_Support", SHEET_URL: "https://script.google.com/macros/s/x/exec", ENTRY_USD: "$30", MONTHLY_USD: "$15", ENTRY_BDT: "৳1", MONTHLY_BDT: "৳2", ENTRY_REGULAR_USD: "$100", ENTRY_REGULAR_BDT: "৳9", META_PIXEL: "" };',
     'var MMSheet = {',
     '  normalizeOrderLanguage: function(v){ return v === "bn" || v === "hi" ? v : "en"; },',
@@ -202,7 +233,10 @@ function loadFormControls() {
     'langHi.onclick = function(){ selectPrefLang(this, "hi"); };',
     'payBinance.onclick = function(){ selectPay(this); };',
     'payOther.onclick = function(){ selectPay(this); };',
-    'return { submitOrder: submitOrder, refreshSubmitHref: refreshSubmitHref };'
+    'function sentLatch(){ return ORDER_SENT_ID; }',
+    'function payName(){ return SELECTED_PAY; }',
+    'function setLang(v){ LANG = v; }',
+    'return { submitOrder: submitOrder, refreshSubmitHref: refreshSubmitHref, renderPayments: renderPayments, sentLatch: sentLatch, payName: payName, setLang: setLang };'
   ].join('\n');
   const run = new Function(
     'window', 'document', 'navigator',
@@ -397,7 +431,8 @@ test('a valid draft stays unsent across persisted pageshow, then submit beacons 
   const submit = main.match(/function submitOrder\(e\)\{[\s\S]*?\n\}/)[0];
   const sendAt = submit.indexOf('ORDER_SENT_ID = orderId');
   const postAt = submit.indexOf('postOrderToSheet(payload)');
-  assert.ok(sendAt !== -1 && sendAt < postAt);
+  assert.ok(postAt !== -1 && sendAt > postAt);
+  assert.match(submit, /if\(ORDER_SENT_ID !== orderId && postOrderToSheet\(payload\)\)/);
 
   const api = loadSubmitRuntime({ ua: UAS.android });
   api.refreshSubmitHref();
@@ -472,6 +507,92 @@ test('re-tapping the selected plan, payment, or language does not create another
   api.submit();
   assert.equal(api.beacons.length, 4);
   assert.equal(api.orderId(), otherId);
+});
+
+test('a failed Sheet send does not latch, so the retry beacons', () => {
+  const failed = loadSubmitRuntime({ ua: UAS.android, beaconOk: false, fetchThrows: true });
+  assert.equal(failed.click(), true);
+  assert.equal(failed.beacons.length, 0);
+  assert.equal(failed.fetches.length, 0);
+  assert.equal(failed.sentLatch(), '');
+  failed.net.beaconOk = true;
+  assert.equal(failed.click(), true);
+  assert.equal(failed.beacons.length, 1);
+  assert.equal(failed.click(), true);
+  assert.equal(failed.beacons.length, 1);
+
+  const viaFetch = loadSubmitRuntime({ ua: UAS.android, beaconOk: false });
+  assert.equal(viaFetch.click(), true);
+  assert.equal(viaFetch.beacons.length, 0);
+  assert.equal(viaFetch.fetches.length, 1);
+  assert.match(viaFetch.sentLatch(), /^MM-/);
+  viaFetch.click();
+  assert.equal(viaFetch.fetches.length, 1);
+  assert.equal(viaFetch.beacons.length, 0);
+});
+
+test('auxclick beacons and latches without preventDefault or contextmenu', () => {
+  const main = read('js/main.js');
+  assert.match(main, /addEventListener\('auxclick', submitOrder\)/);
+  assert.equal(main.includes('contextmenu'), false);
+  const api = loadSubmitRuntime({ ua: UAS.desktop });
+  let prevented = false;
+  const ev = { type: 'auxclick', preventDefault: function() { prevented = true; } };
+  assert.equal(api.submitOrder(ev), true);
+  assert.equal(prevented, false);
+  assert.equal(api.opens.length, 0);
+  assert.equal(api.location.href, 'http://127.0.0.1/index.html');
+  assert.equal(api.beacons.length, 1);
+  api.submitOrder(ev);
+  assert.equal(api.beacons.length, 1);
+  assert.equal(prevented, false);
+
+  api.fields.iName.value = '';
+  api.submitOrder(ev);
+  assert.equal(prevented, false);
+  assert.equal(api.beacons.length, 1);
+});
+
+test('a page-language switch that changes the payment label starts one new Sheet row', () => {
+  const api = loadFormControls();
+  api.pay.binance.click();
+  const draftId = api.orderId();
+  api.setLang('bn');
+  api.renderPayments();
+  assert.equal(api.payName(), 'বিকাশ');
+  assert.equal(api.orderId(), draftId);
+  assert.equal(api.beacons.length, 0);
+
+  api.setLang('en');
+  api.renderPayments();
+  api.submit();
+  assert.equal(api.beacons.length, 1);
+  const first = JSON.parse(api.beacons[0]);
+  assert.equal(first.payment, 'Binance Pay');
+  assert.equal(api.sentLatch(), first.orderId);
+
+  api.setLang('hi');
+  api.renderPayments();
+  assert.equal(api.payName(), 'Binance Pay');
+  assert.equal(api.sentLatch(), first.orderId);
+  api.submit();
+  assert.equal(api.beacons.length, 1);
+
+  api.setLang('bn');
+  api.renderPayments();
+  assert.equal(api.payName(), 'বিকাশ');
+  assert.equal(api.sentLatch(), '');
+  assert.notEqual(api.orderId(), first.orderId);
+  api.submit();
+  assert.equal(api.beacons.length, 2);
+  const second = JSON.parse(api.beacons[1]);
+  assert.equal(second.payment, 'বিকাশ');
+  assert.equal(second.orderId, api.orderId());
+
+  api.renderPayments();
+  api.submit();
+  assert.equal(api.beacons.length, 2);
+  assert.equal(api.sentLatch(), second.orderId);
 });
 
 test('browser pages do not fire Purchase; order-status lookup and confirmed UI stay', () => {
