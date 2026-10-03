@@ -564,8 +564,9 @@ function postOrderToSheet(payload){
   var url = (typeof CONFIG !== 'undefined') ? CONFIG.SHEET_URL : '';
   try{
     if(url && navigator.sendBeacon){
-      var blob = new Blob([body], { type: 'text/plain;charset=UTF-8' });
-      if(navigator.sendBeacon(url, blob)) return;
+      /* A string is text/plain;charset=UTF-8. A Blob body is dropped by
+         iPhone Safari, so the Sheet row never arrives. */
+      if(navigator.sendBeacon(url, body)) return;
     }
   }catch(e){}
   var sheetOpts = (typeof MMSheet !== 'undefined')
