@@ -302,19 +302,20 @@ test('submit opens the Telegram app in this tab and never calls window.open', ()
   assert.equal(phone.fields.submitBtn.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
 
   const ios = loadSubmitRuntime({ ua: UAS.iphone });
-  assert.equal(ios.click(), false);
+  assert.equal(ios.click(), true);
   assert.equal(ios.opens.length, 0);
-  assert.equal(ios.location.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
-  assert.equal(ios.location.href.includes('tg:'), false);
-  assert.match(decodeURIComponent(ios.location.href.split('text=')[1]), /Swa Test/);
+  assert.equal(ios.location.href, 'http://127.0.0.1/index.html');
+  assert.equal(ios.beacons.length, 1);
   assert.equal(ios.fields.submitBtn.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
+  assert.match(decodeURIComponent(ios.fields.submitBtn.href.split('text=')[1]), /Swa Test/);
 
   const iosFb = loadSubmitRuntime({
     ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 [FBAN/FBIOS;FBAV/484.0.0.0.0;]'
   });
-  assert.equal(iosFb.click(), false);
+  assert.equal(iosFb.click(), true);
   assert.equal(iosFb.opens.length, 0);
-  assert.equal(iosFb.location.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
+  assert.equal(iosFb.location.href, 'http://127.0.0.1/index.html');
+  assert.equal(iosFb.fields.submitBtn.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
 
   const fbAndroid = loadSubmitRuntime({ ua: UAS.facebook });
   fbAndroid.click();
@@ -369,12 +370,12 @@ test('the app fallback runs only while the page is still visible', async () => {
 
   const ios = loadSubmitRuntime({ ua: UAS.iphone });
   ios.setFallbackMs(20);
-  ios.click();
-  const iosUrl = ios.location.href;
-  assert.equal(iosUrl.indexOf('https://t.me/MMHQ_Support?text='), 0);
+  assert.equal(ios.click(), true);
+  assert.equal(ios.location.href, 'http://127.0.0.1/index.html');
+  assert.equal(ios.fields.submitBtn.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
   ios.hidePage();
   await new Promise(function(resolve) { setTimeout(resolve, 50); });
-  assert.equal(ios.location.href, iosUrl);
+  assert.equal(ios.location.href, 'http://127.0.0.1/index.html');
 
   const android = loadSubmitRuntime({ ua: UAS.android });
   android.setFallbackMs(20);
@@ -416,30 +417,41 @@ test('pagehide and a persisted pageshow cancel the intent fallback', async () =>
 });
 
 test('Telegram in-app, plain Android WebView, and iPad use the https t.me link', () => {
+  const page = 'http://127.0.0.1/index.html';
   const tg = loadSubmitRuntime({ ua: UAS.telegram });
-  assert.equal(tg.click(), false);
+  assert.equal(tg.click(), true);
   assert.equal(tg.opens.length, 0);
-  assert.equal(tg.location.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
-  assert.equal(tg.location.href.includes('intent:'), false);
-  assert.match(decodeURIComponent(tg.location.href.split('text=')[1]), /Swa Test/);
+  assert.equal(tg.location.href, page);
+  assert.equal(tg.beacons.length, 1);
+  assert.equal(tg.fields.submitBtn.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
+  assert.match(decodeURIComponent(tg.fields.submitBtn.href.split('text=')[1]), /Swa Test/);
 
+  const tiktokNoWv = UAS.android + ' TikTok';
+  assert.equal(tiktokNoWv.includes('; wv)'), false);
   ['Mozilla/5.0 (Linux; Android 14; Pixel 7 Build/AP2A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/129.0.6668.70 Mobile Safari/537.36',
-    UAS.android + ' TikTok',
-    UAS.android + ' Line/14.11.0'
+    tiktokNoWv,
+    UAS.android + ' Line/14.11.0',
+    UAS.android + ' BytedanceWebview',
+    UAS.android + ' musical_ly_2022805060',
+    UAS.android + ' trill_2022805060',
+    UAS.android + ' Snapchat',
+    UAS.android + ' MicroMessenger'
   ].forEach(function(ua) {
     const view = loadSubmitRuntime({ ua: ua });
-    view.click();
+    assert.equal(view.click(), true, ua);
     assert.equal(view.opens.length, 0, ua);
-    assert.equal(view.location.href.indexOf('https://t.me/MMHQ_Support?text='), 0, ua);
-    assert.equal(view.location.href.includes('intent:'), false, ua);
+    assert.equal(view.location.href, page, ua);
+    assert.equal(view.beacons.length, 1, ua);
+    assert.equal(view.fields.submitBtn.href.indexOf('https://t.me/MMHQ_Support?text='), 0, ua);
   });
 
   const macUa = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15';
   const ipad = loadSubmitRuntime({ ua: macUa, maxTouchPoints: 5 });
-  ipad.click();
+  assert.equal(ipad.click(), true);
   assert.equal(ipad.opens.length, 0);
-  assert.equal(ipad.location.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
-  assert.equal(ipad.location.href.includes('tg:'), false);
+  assert.equal(ipad.location.href, page);
+  assert.equal(ipad.beacons.length, 1);
+  assert.equal(ipad.fields.submitBtn.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
 
   const mac = loadSubmitRuntime({ ua: macUa, maxTouchPoints: 0 });
   mac.click();

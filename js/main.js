@@ -586,7 +586,7 @@ function isMetaInApp(ua){
 
 function isPlainAndroidWebView(ua){
   if(!/Android/i.test(ua) || isMetaInApp(ua)) return false;
-  return /TikTok|Musical\.ly|Line\/|; wv\)/i.test(ua);
+  return /TikTok|Musical\.ly|Line\/|; wv\)|BytedanceWebview|musical_ly|trill_|Snapchat|MicroMessenger/i.test(ua);
 }
 
 /* 1 Telegram in-app, 2 iPhone/iPad (a Mac UA with touch counts as iPad),
@@ -868,9 +868,9 @@ function submitOrder(e){
   }
 
   if(e && e.type === 'auxclick') return true;
-
-  if(e && e.preventDefault) e.preventDefault();
   if(!prefersSameTabTelegram()) showOrderHandoff(draft.msgText, desktopWebDraftUrl(draft.msgText));
+  if(instantUrl === telegramUrl) return true; // native <a> tap; href already telegramUrl (:834)
+  if(e && e.preventDefault) e.preventDefault();
   if(instantUrl.indexOf('intent:') === 0) armTelegramFallback(orderTextUrl(draft.msgText));
   window.location.href = instantUrl;
   return false;
