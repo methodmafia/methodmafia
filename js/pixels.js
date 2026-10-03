@@ -57,10 +57,69 @@
     }
   }
 
-  function fireContact(){
-    if(typeof fbq !== 'undefined') fbq('track', 'Contact');
-    if(typeof ttq !== 'undefined') ttq.track('Contact');
+  /* eventId is set only by the order Submit (main.js submitOrder), which
+     calls this once per sent order. @MMHQ_Support links pass nothing. */
+  function fireContact(eventId){
+    if(typeof fbq !== 'undefined'){
+      if(eventId) fbq('track', 'Contact', {}, {eventID: eventId});
+      else fbq('track', 'Contact');
+    }
+    if(typeof ttq !== 'undefined'){
+      if(eventId) ttq.track('Contact', {}, {event_id: eventId});
+      else ttq.track('Contact');
+    }
     if(typeof gtag !== 'undefined') gtag('event', 'contact');
+  }
+
+  /* Channel / group and any other t.me link that is not @MMHQ_Support. */
+  function fireSupportClick(){
+    if(typeof fbq !== 'undefined') fbq('trackCustom', 'SupportClick');
+    if(typeof ttq !== 'undefined') ttq.track('SupportClick');
+    if(typeof gtag !== 'undefined') gtag('event', 'support_click');
+  }
+
+  /* #submitBtn and the post-submit backup #orderTgLink are MMHQ_Support
+     links, but a click there is not an extra Contact. submitOrder fires
+     Contact once when the order is valid and sent. */
+  function isOrderSubmitLink(a){
+    return !!a && (a.id === 'submitBtn' || a.id === 'orderTgLink');
+  }
+
+  function personalSupportUser(){
+    var support = (typeof CONFIG !== 'undefined' && CONFIG.SUPPORT) ? CONFIG.SUPPORT : 'https://t.me/MMHQ_Support';
+    var match = String(support).match(/t\.me\/([^/?#]+)/i);
+    return (match ? match[1] : 'MMHQ_Support').toLowerCase();
+  }
+
+  function decodedHref(href){
+    var raw = String(href || '');
+    var out = raw;
+    try{ out = decodeURIComponent(raw); }catch(e){}
+    if(out !== raw){
+      try{ out = decodeURIComponent(out); }catch(e2){}
+    }
+    return out.toLowerCase();
+  }
+
+  /* t.me/MMHQ_Support, tg://resolve?domain=MMHQ_Support, intent://, and a
+     Web K tgaddr link. #orderTgLink is excluded above, so the desktop/iPad
+     backup box does not fire a second Contact. */
+  function isPersonalSupportHref(href){
+    if(!href) return false;
+    var user = personalSupportUser();
+    var text = decodedHref(href);
+    var path = text.match(/(?:https?:\/\/)?(?:www\.)?(?:t\.me|telegram\.me)\/([^/?#]+)/);
+    if(path && path[1] === user) return true;
+    if(/(?:tg|intent):\/\/resolve\?/.test(text) && text.indexOf('domain=' + user) !== -1) return true;
+    return false;
+  }
+
+  function isOtherTelegramHref(href){
+    if(!href || isPersonalSupportHref(href)) return false;
+    var text = decodedHref(href);
+    if(/(?:^|\/\/)(?:www\.)?(?:t\.me|telegram\.me)\//.test(text)) return true;
+    if(/(?:tg|intent):\/\/resolve\?/.test(text)) return true;
+    return false;
   }
 
   function watchViewContent(){
@@ -89,12 +148,18 @@
   function watchContactClicks(){
     document.addEventListener('click', function(e){
       var a = e.target && e.target.closest ? e.target.closest('a') : null;
-      if(!a) return;
+      if(!a || isOrderSubmitLink(a)) return;
       var href = a.getAttribute('href') || '';
       var key = a.getAttribute('data-href') || '';
-      var isSupport = key === 'SUPPORT' || key === 'PUBLIC_CHANNEL';
-      if(!isSupport && T && T.isContactHref(href, CONFIG)) isSupport = true;
-      if(isSupport) fireContact();
+      /* @MMHQ_Support is a real contact: no event id. #submitBtn and #orderTgLink are excluded. */
+      if(key === 'SUPPORT' || isPersonalSupportHref(href)){
+        fireContact();
+        return;
+      }
+      /* Channel, group, and every other t.me link. */
+      if(key === 'PUBLIC_CHANNEL' || key === 'FULL_LIST_POST' || isOtherTelegramHref(href)){
+        fireSupportClick();
+      }
     }, true);
   }
 

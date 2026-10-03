@@ -391,6 +391,8 @@ business.facebook.com → Events Manager → তোমার Pixel
 
 TikTok Events Manager-এ একই ফ্লো: `ViewContent` → `InitiateCheckout` → `CompletePayment` ($30, Entry only)
 
+`Contact` মানে শুধু সত্যিকারের যোগাযোগ। (১) অর্ডার ফর্মের Submit-এ শুধু একবার, অর্ডার valid হয়ে Sheet-এ পাঠানোর মুহূর্তে (sent latch, `Lead`-এর সাথেই, eventID `<orderId>_contact`)। ভুল ফর্মে বা দ্বিতীয় ট্যাপে Contact যায় না। `#submitBtn` ক্লিক-ট্র্যাকিং থেকে বাদ। (২) @MMHQ_Support-এর যেকোনো লিংক — সাপোর্ট লিংক, floating বাটন, about / order-status / blog, `t.me/MMHQ_Support`, `tg://resolve?domain=MMHQ_Support` — eventID ছাড়া Contact, আগের মতো। চ্যানেল/গ্রুপ (`t.me/TheMethodMafia`, `t.me/TheMethodmafia1`, Join Free Channel) এবং অন্য যেকোনো non-@MMHQ_Support t.me লিংকে Contact যায় না: Meta `SupportClick` (`trackCustom`), GA `support_click`, TikTok custom `SupportClick`।
+
 ## কোন Ad থেকে বিক্রি আসছে
 
 Ad-এর লিংকে এভাবে ট্যাগ লাগাও:

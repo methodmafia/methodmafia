@@ -119,8 +119,9 @@ function loadSubmitRuntime(opts) {
     'function setFallbackMs(ms){ TELEGRAM_APP_FALLBACK_MS = ms; }',
     'return { submitOrder: submitOrder, noteOrderFieldEdit: noteOrderFieldEdit, refreshSubmitHref: refreshSubmitHref, forgetSentLatch: forgetSentLatch, prefersSameTabTelegram: prefersSameTabTelegram, sentLatch: sentLatch, setFallbackMs: setFallbackMs };'
   ].join('\n');
-  const run = new Function('window', 'document', 'navigator', 'net', 'fetches', src);
-  const api = run(windowObj, documentObj, navigatorObj, net, fetches);
+  const px = (opts && opts.pixels) || {};
+  const run = new Function('window', 'document', 'navigator', 'net', 'fetches', 'fbq', 'ttq', 'gtag', 'MMPixels', src);
+  const api = run(windowObj, documentObj, navigatorObj, net, fetches, px.fbq, px.ttq, px.gtag, px.MMPixels);
   api.beacons = beacons;
   api.fetches = fetches;
   api.net = net;
@@ -797,4 +798,88 @@ test('browser pages do not fire Purchase; order-status lookup and confirmed UI s
   assert.match(guide, /Pending/);
   assert.match(guide, /CapiPurchase/);
   assert.doesNotMatch(guide, /FB Pixel-এ `Purchase`/);
+});
+
+function pixelSpy() {
+  const calls = [];
+  return {
+    calls: calls,
+    fbq: function() { calls.push(['fbq'].concat([].slice.call(arguments))); },
+    ttq: {
+      track: function() { calls.push(['ttq'].concat([].slice.call(arguments))); },
+      identify: function() {}
+    },
+    gtag: function() { calls.push(['gtag'].concat([].slice.call(arguments))); },
+    MMPixels: {
+      fireContact: function(eventId) { calls.push(['contact', eventId]); }
+    }
+  };
+}
+
+test('order Submit fires Contact once, inside the sent latch, with the order eventID', () => {
+  [UAS.android, UAS.iphone, UAS.desktop, UAS.facebook, UAS.telegram].forEach(function(ua) {
+    const px = pixelSpy();
+    const api = loadSubmitRuntime({ ua: ua, pixels: px });
+    api.click();
+    api.click();
+    assert.equal(api.beacons.length, 1, ua);
+    const id = JSON.parse(api.beacons[0]).orderId;
+    const contacts = px.calls.filter(function(c) { return c[0] === 'contact'; });
+    assert.deepEqual(contacts, [['contact', id + '_contact']], ua);
+    const leads = px.calls.filter(function(c) { return c[0] === 'fbq' && c[2] === 'Lead'; });
+    const ics = px.calls.filter(function(c) { return c[0] === 'fbq' && c[2] === 'InitiateCheckout'; });
+    assert.equal(leads.length, 1, ua);
+    assert.equal(ics.length, 1, ua);
+    assert.deepEqual(leads[0][4], { eventID: id + '_lead' });
+    assert.deepEqual(ics[0][4], { eventID: id + '_ic' });
+    assert.equal(px.calls.some(function(c) { return c[2] === 'Purchase' || c[2] === 'CompletePayment'; }), false);
+  });
+});
+
+test('order Submit fires no Contact when validation fails or the beacon fails', () => {
+  const px = pixelSpy();
+  const api = loadSubmitRuntime({ ua: UAS.android, pixels: px });
+  api.fields.iEmail.value = 'not-an-email';
+  assert.equal(api.click(), false);
+  api.fields.iEmail.value = '';
+  assert.equal(api.click(), false);
+  assert.equal(api.beacons.length, 0);
+  assert.deepEqual(px.calls, []);
+
+  const failPx = pixelSpy();
+  const failed = loadSubmitRuntime({ ua: UAS.android, pixels: failPx, beaconOk: false, fetchThrows: true });
+  failed.click();
+  assert.equal(failPx.calls.some(function(c) { return c[0] === 'contact'; }), false);
+});
+
+test('an edited order is a new order: one more Contact with the new id', () => {
+  const px = pixelSpy();
+  const api = loadSubmitRuntime({ ua: UAS.desktop, pixels: px });
+  api.click();
+  api.noteOrderFieldEdit();
+  api.click();
+  api.click();
+  assert.equal(api.beacons.length, 2);
+  const ids = api.beacons.map(function(b) { return JSON.parse(b).orderId + '_contact'; });
+  const contacts = px.calls.filter(function(c) { return c[0] === 'contact'; }).map(function(c) { return c[1]; });
+  assert.deepEqual(contacts, ids);
+});
+
+test('auxclick on a valid order sends one beacon and one Contact', () => {
+  const px = pixelSpy();
+  const api = loadSubmitRuntime({ ua: UAS.desktop, pixels: px });
+  assert.equal(api.submitOrder({ type: 'auxclick', preventDefault: function(){} }), true);
+  assert.equal(api.click(), false);
+  assert.equal(api.beacons.length, 1);
+  assert.equal(px.calls.filter(function(c) { return c[0] === 'contact'; }).length, 1);
+});
+
+test('a throwing Contact pixel does not stop the Telegram handoff', () => {
+  const px = pixelSpy();
+  px.MMPixels.fireContact = function() { throw new Error('pixel down'); };
+  const api = loadSubmitRuntime({ ua: UAS.desktop, pixels: px });
+  assert.equal(api.click(), false);
+  assert.equal(api.beacons.length, 1);
+  assert.equal(api.location.href.indexOf('tg://resolve?domain=MMHQ_Support&text='), 0);
+  assert.equal(api.fields.orderHandoff.hidden, false);
 });

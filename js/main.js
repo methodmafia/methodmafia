@@ -863,6 +863,14 @@ function submitOrder(e){
         items:[{item_id:SELECTED_PLAN,item_name:payload.plan,price:ev.value,quantity:1}]
       });
     }
+    /* Contact once per sent order, inside the latch. pixels.js skips its
+       generic support-link Contact for #submitBtn. A pixel error must not
+       stop the Telegram handoff below. */
+    try{
+      if(typeof MMPixels !== 'undefined' && MMPixels && typeof MMPixels.fireContact === 'function'){
+        MMPixels.fireContact(orderId + '_contact');
+      }
+    }catch(err){}
 
     try{ localStorage.setItem('mm_last_order', orderId); }catch(err){}
   }
