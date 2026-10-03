@@ -503,10 +503,10 @@ function toast(msg, isErr){
   el._timer = setTimeout(()=>el.classList.remove('show'), 4200);
 }
 
-/* Desktop: window.open in this click. If the browser blocks it, this tab
-   goes to https://t.me/MMHQ_Support. Phones and in-app browsers follow
-   the Submit link itself (no spinner, no toast, no auto-copy).
-   Never the orders bot. Never wait on the Sheet. */
+/* Same tab, no popup. Phones open the Telegram app with tg:// or intent://.
+   Desktop does the same for Telegram Desktop. If the app does not take
+   focus, a short timer opens the https fallback. Never the orders bot.
+   Never wait on the Sheet. No spinner, no toast, no auto-copy. */
 var DRAFT_ORDER_ID = '';
 var ORDER_SENT_ID = '';
 
@@ -539,6 +539,77 @@ function prefersSameTabTelegram(){
 
 function supportBaseUrl(){
   return (typeof CONFIG !== 'undefined' && CONFIG.SUPPORT) ? CONFIG.SUPPORT : 'https://t.me/MMHQ_Support';
+}
+
+var TELEGRAM_APP_FALLBACK_MS = 1200;
+
+function supportUsername(){
+  var url = supportBaseUrl();
+  var match = String(url).match(/t\.me\/([^/?#]+)/i);
+  return match ? match[1] : 'MMHQ_Support';
+}
+
+function browserUa(){
+  try{ return String(navigator.userAgent || ''); }catch(e){ return ''; }
+}
+
+function orderTextUrl(text){
+  return supportBaseUrl() + '?text=' + encodeURIComponent(text || '');
+}
+
+function telegramAppUrl(text){
+  return 'tg://resolve?domain=' + supportUsername() + '&text=' + encodeURIComponent(text || '');
+}
+
+function telegramIntentUrl(text){
+  var web = orderTextUrl(text);
+  return 'intent://resolve?domain=' + supportUsername() + '&text=' + encodeURIComponent(text || '') +
+    '#Intent;scheme=tg;package=org.telegram.messenger;S.browser_fallback_url=' +
+    encodeURIComponent(web) + ';end';
+}
+
+function desktopWebFallbackUrl(){
+  return 'https://web.telegram.org/k/#@' + supportUsername();
+}
+
+/* Android, including Facebook and Instagram, uses intent:// so Chrome's own
+   fallback is the t.me link. iOS Facebook and Instagram block tg://, so they
+   go straight to t.me. iOS Safari, Telegram in-app, and desktop use tg://. */
+function instantTelegramUrl(text){
+  var ua = browserUa();
+  if(/Android/i.test(ua)) return telegramIntentUrl(text);
+  if(/iPhone|iPad|iPod/i.test(ua) && /FBAN|FBAV|FB_IAB|Instagram/i.test(ua)) return orderTextUrl(text);
+  return telegramAppUrl(text);
+}
+
+function telegramFallbackUrl(text){
+  if(!prefersSameTabTelegram()) return desktopWebFallbackUrl();
+  return orderTextUrl(text);
+}
+
+function armTelegramFallback(fallbackUrl){
+  if(!fallbackUrl) return;
+  var finished = false;
+  function finish(){
+    if(finished) return;
+    finished = true;
+    try{ window.removeEventListener('blur', onBlur); }catch(e){}
+    try{ document.removeEventListener('visibilitychange', onHide); }catch(e){}
+    try{ clearTimeout(timer); }catch(e){}
+  }
+  function onBlur(){ finish(); }
+  function onHide(){
+    if(document.visibilityState === 'hidden') finish();
+  }
+  window.addEventListener('blur', onBlur);
+  document.addEventListener('visibilitychange', onHide);
+  var timer = setTimeout(function(){
+    if(finished) return;
+    var visible = true;
+    try{ visible = document.visibilityState !== 'hidden'; }catch(e){}
+    finish();
+    if(visible) window.location.href = fallbackUrl;
+  }, TELEGRAM_APP_FALLBACK_MS);
 }
 
 function showOrderHandoff(text, telegramUrl){
@@ -702,7 +773,7 @@ function refreshSubmitHref(){
   var btn = document.getElementById('submitBtn');
   if(!btn || String(btn.tagName).toUpperCase() !== 'A') return;
   var draft = collectOrderDraft(false);
-  btn.href = draft ? draft.telegramUrl : supportBaseUrl();
+  btn.href = draft ? instantTelegramUrl(draft.msgText) : supportBaseUrl();
 }
 
 /* A sent order keeps its id. The next beacon waits until a field edit. */
@@ -715,11 +786,9 @@ function noteOrderFieldEdit(){
 }
 
 /* ─── অর্ডার সাবমিট ───
-   Phone / in-app: the control is an <a href="https://t.me/MMHQ_Support?text=...">
-   updated as the fields change. This click does not cancel that navigation.
-   Desktop: window.open in this same click. Null or blocked → this tab goes
-   to the same t.me link. No success toast, no spinner, no auto-copy.
-   Sheet sendBeacon / keepalive runs before the browser leaves. */
+   Beacon first, then this same tab goes to tg:// or intent://. No popup.
+   If the app does not blur the page, the https fallback runs. Auxclick keeps
+   the browser's own new tab. No success toast, no spinner, no auto-copy. */
 function submitOrder(e){
   var draft = collectOrderDraft(true);
   var btn = document.getElementById('submitBtn');
@@ -732,7 +801,8 @@ function submitOrder(e){
   var telegramUrl = draft.telegramUrl;
   var payload = draft.payload;
   var orderId = payload.orderId;
-  if(btn && String(btn.tagName).toUpperCase() === 'A') btn.href = telegramUrl;
+  var instantUrl = instantTelegramUrl(draft.msgText);
+  if(btn && String(btn.tagName).toUpperCase() === 'A') btn.href = instantUrl;
 
   if(ORDER_SENT_ID !== orderId && postOrderToSheet(payload)){
     ORDER_SENT_ID = orderId;
@@ -770,24 +840,12 @@ function submitOrder(e){
 
   if(e && e.type === 'auxclick') return true;
 
-  if(prefersSameTabTelegram()){
-    if(btn && String(btn.tagName).toUpperCase() === 'A') return true;
-    window.location.href = telegramUrl;
-    return false;
-  }
-
   if(e && e.preventDefault) e.preventDefault();
-  var popup = null;
-  try{ popup = window.open(telegramUrl, '_blank'); }catch(err){ popup = null; }
-  var blocked = !popup;
-  if(!blocked){
-    try{ blocked = popup.closed === true; }catch(err){ blocked = true; }
+  if(!prefersSameTabTelegram()) showOrderHandoff(draft.msgText, telegramUrl);
+  if(instantUrl.indexOf('tg:') === 0 || instantUrl.indexOf('intent:') === 0){
+    armTelegramFallback(telegramFallbackUrl(draft.msgText));
   }
-  if(blocked){
-    window.location.href = telegramUrl;
-    return false;
-  }
-  showOrderHandoff(draft.msgText, telegramUrl);
+  window.location.href = instantUrl;
   return false;
 }
 

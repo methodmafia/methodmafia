@@ -30,7 +30,9 @@ test('order form posts the Sheet as fire-and-forget and does not wait for {ok:tr
   assert.equal(body.includes('toastOk'), false);
   assert.equal(body.includes(', 900'), false);
   assert.equal(body.includes('clipboard'), false);
-  const openAt = body.indexOf("window.open(telegramUrl, '_blank')");
+  assert.equal(body.includes('window.open'), false);
+  const openAt = body.indexOf('window.location.href = instantUrl');
+  assert.ok(openAt !== -1);
   assert.ok(body.indexOf('postOrderToSheet(payload)') < openAt);
   assert.ok(body.indexOf("fbq('track','Lead'") < openAt);
   assert.ok(body.indexOf("ttq.track('SubmitForm'") < openAt);

@@ -74,7 +74,8 @@ function loadSubmitRuntime(opts) {
     },
     addEventListener: function(type, fn) {
       (listeners[type] = listeners[type] || []).push(fn);
-    }
+    },
+    removeEventListener: function() {}
   };
   const navigatorObj = {
     userAgent: (opts && opts.ua) || UAS.desktop,
@@ -86,7 +87,12 @@ function loadSubmitRuntime(opts) {
   };
   const documentObj = {
     getElementById: function(id) { return fields[id] || null; },
-    querySelectorAll: function() { return []; }
+    querySelectorAll: function() { return []; },
+    visibilityState: 'visible',
+    addEventListener: function(type, fn) {
+      (listeners['doc:' + type] = listeners['doc:' + type] || []).push(fn);
+    },
+    removeEventListener: function() {}
   };
   const src = [
     'var LANG = "en";',
@@ -109,7 +115,8 @@ function loadSubmitRuntime(opts) {
     '}',
     'function forgetSentLatch(){ ORDER_SENT_ID = ""; }',
     'function sentLatch(){ return ORDER_SENT_ID; }',
-    'return { submitOrder: submitOrder, noteOrderFieldEdit: noteOrderFieldEdit, refreshSubmitHref: refreshSubmitHref, forgetSentLatch: forgetSentLatch, prefersSameTabTelegram: prefersSameTabTelegram, sentLatch: sentLatch };'
+    'function setFallbackMs(ms){ TELEGRAM_APP_FALLBACK_MS = ms; }',
+    'return { submitOrder: submitOrder, noteOrderFieldEdit: noteOrderFieldEdit, refreshSubmitHref: refreshSubmitHref, forgetSentLatch: forgetSentLatch, prefersSameTabTelegram: prefersSameTabTelegram, sentLatch: sentLatch, setFallbackMs: setFallbackMs };'
   ].join('\n');
   const run = new Function('window', 'document', 'navigator', 'net', 'fetches', src);
   const api = run(windowObj, documentObj, navigatorObj, net, fetches);
@@ -124,6 +131,13 @@ function loadSubmitRuntime(opts) {
   };
   api.click = function() {
     return api.submitOrder({ preventDefault: function(){} });
+  };
+  api.dispatch = function(type) {
+    (listeners[type] || []).forEach(function(fn) { fn(); });
+  };
+  api.hidePage = function() {
+    documentObj.visibilityState = 'hidden';
+    (listeners['doc:visibilitychange'] || []).forEach(function(fn) { fn(); });
   };
   return api;
 }
@@ -200,12 +214,16 @@ function loadFormControls() {
   };
   const documentObj = {
     getElementById: function(id) { return fields[id] || null; },
-    querySelectorAll: function(sel) { return lists[sel] || []; }
+    querySelectorAll: function(sel) { return lists[sel] || []; },
+    visibilityState: 'visible',
+    addEventListener: function() {},
+    removeEventListener: function() {}
   };
   const windowObj = {
     location: { href: 'http://127.0.0.1/index.html' },
     open: function() { return { closed: false }; },
-    addEventListener: function() {}
+    addEventListener: function() {},
+    removeEventListener: function() {}
   };
   const navigatorObj = {
     userAgent: UAS.desktop,
@@ -256,9 +274,10 @@ function loadFormControls() {
   return api;
 }
 
-test('phones use the same tab and desktop uses window.open; the old opener helper is gone', () => {
+test('submit opens the Telegram app in this tab and never calls window.open', () => {
   const main = read('js/main.js');
   assert.equal(main.includes('function openTelegramSameGesture'), false);
+  assert.equal(main.includes('window.open'), false);
   assert.equal(main.includes('TELEGRAM_NAV_FALLBACK_MS'), false);
   assert.equal(main.includes(', 900'), false);
   assert.equal(main.includes('MM_OrdersBot'), false);
@@ -269,24 +288,76 @@ test('phones use the same tab and desktop uses window.open; the old opener helpe
   assert.equal(prefers({ userAgent: UAS.desktop })(), false);
 
   const phone = loadSubmitRuntime({ ua: UAS.android });
-  assert.equal(phone.click(), true);
-  assert.equal(phone.location.href, 'http://127.0.0.1/index.html');
+  assert.equal(phone.click(), false);
   assert.equal(phone.opens.length, 0);
-  assert.equal(phone.fields.submitBtn.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
-  assert.match(decodeURIComponent(phone.fields.submitBtn.href.split('text=')[1]), /Swa Test/);
+  assert.equal(phone.location.href.indexOf('intent://resolve?domain=MMHQ_Support&text='), 0);
+  assert.match(phone.location.href, /scheme=tg/);
+  assert.match(phone.location.href, /package=org\.telegram\.messenger/);
+  const phoneFallback = decodeURIComponent(phone.location.href.split('browser_fallback_url=')[1].replace(/;end$/, ''));
+  assert.equal(phoneFallback.indexOf('https://t.me/MMHQ_Support?text='), 0);
+  assert.match(decodeURIComponent(phoneFallback.split('text=')[1]), /Swa Test/);
+  assert.equal(phone.fields.orderHandoff.hidden, true);
   assert.equal(phone.fields.submitBtn.disabled, false);
+
+  const ios = loadSubmitRuntime({ ua: UAS.iphone });
+  assert.equal(ios.click(), false);
+  assert.equal(ios.opens.length, 0);
+  assert.equal(ios.location.href.indexOf('tg://resolve?domain=MMHQ_Support&text='), 0);
+  assert.match(decodeURIComponent(ios.location.href.split('text=')[1]), /Swa Test/);
+
+  const iosFb = loadSubmitRuntime({
+    ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 [FBAN/FBIOS;FBAV/484.0.0.0.0;]'
+  });
+  assert.equal(iosFb.click(), false);
+  assert.equal(iosFb.opens.length, 0);
+  assert.equal(iosFb.location.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
+
+  const fbAndroid = loadSubmitRuntime({ ua: UAS.facebook });
+  fbAndroid.click();
+  assert.equal(fbAndroid.opens.length, 0);
+  assert.equal(fbAndroid.location.href.indexOf('intent://resolve?domain=MMHQ_Support&text='), 0);
 
   const desktop = loadSubmitRuntime({ ua: UAS.desktop });
   assert.equal(desktop.click(), false);
-  assert.equal(desktop.location.href, 'http://127.0.0.1/index.html');
-  assert.equal(desktop.opens.length, 1);
-  assert.equal(desktop.opens[0].target, '_blank');
-  assert.equal(desktop.opens[0].url.indexOf('https://t.me/MMHQ_Support?text='), 0);
+  assert.equal(desktop.opens.length, 0);
+  assert.equal(desktop.location.href.indexOf('tg://resolve?domain=MMHQ_Support&text='), 0);
+  assert.equal(desktop.fields.orderHandoff.hidden, false);
+  assert.equal(desktop.fields.orderTgLink.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
+});
 
-  const blocked = loadSubmitRuntime({ ua: UAS.desktop, blockPopup: true });
-  assert.equal(blocked.click(), false);
-  assert.equal(blocked.location.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
-  assert.equal(blocked.beacons.length, 1);
+test('the app fallback runs only while the page is still visible', async () => {
+  const desktop = loadSubmitRuntime({ ua: UAS.desktop });
+  desktop.setFallbackMs(20);
+  desktop.click();
+  assert.equal(desktop.location.href.indexOf('tg://resolve?domain=MMHQ_Support&text='), 0);
+  await new Promise(function(resolve) { setTimeout(resolve, 50); });
+  assert.equal(desktop.location.href, 'https://web.telegram.org/k/#@MMHQ_Support');
+  assert.equal(desktop.opens.length, 0);
+  assert.equal(desktop.fields.orderHandoff.hidden, false);
+
+  const blurred = loadSubmitRuntime({ ua: UAS.desktop });
+  blurred.setFallbackMs(20);
+  blurred.click();
+  const appUrl = blurred.location.href;
+  blurred.dispatch('blur');
+  await new Promise(function(resolve) { setTimeout(resolve, 50); });
+  assert.equal(blurred.location.href, appUrl);
+
+  const hidden = loadSubmitRuntime({ ua: UAS.iphone });
+  hidden.setFallbackMs(20);
+  hidden.click();
+  const iosUrl = hidden.location.href;
+  hidden.hidePage();
+  await new Promise(function(resolve) { setTimeout(resolve, 50); });
+  assert.equal(hidden.location.href, iosUrl);
+
+  const android = loadSubmitRuntime({ ua: UAS.android });
+  android.setFallbackMs(20);
+  android.click();
+  await new Promise(function(resolve) { setTimeout(resolve, 50); });
+  assert.equal(android.location.href.indexOf('https://t.me/MMHQ_Support?text='), 0);
+  assert.match(decodeURIComponent(android.location.href.split('text=')[1]), /Swa Test/);
+  assert.equal(android.opens.length, 0);
 });
 
 test('submit stays a live t.me link: no disable, no Redirecting toast, no auto-copy', () => {
@@ -302,9 +373,9 @@ test('submit stays a live t.me link: no disable, no Redirecting toast, no auto-c
   assert.equal(submit.includes('clipboard'), false);
   assert.equal(submit.includes('execCommand'), false);
   assert.equal(submit.includes('await '), false);
-  assert.ok(submit.indexOf('postOrderToSheet(payload)') < submit.indexOf("window.open(telegramUrl, '_blank')"));
-  assert.match(submit, /popup\.closed === true/);
-  assert.match(submit, /window\.location\.href = telegramUrl/);
+  assert.equal(submit.includes('window.open'), false);
+  assert.ok(submit.indexOf('postOrderToSheet(payload)') < submit.indexOf('window.location.href = instantUrl'));
+  assert.match(submit, /armTelegramFallback\(telegramFallbackUrl\(draft\.msgText\)\)/);
   assert.match(submit, /return true/);
 
   const tr = loadTranslations();
@@ -395,8 +466,8 @@ test('handoff box and EN/BN/HI copy exist, and validation still returns before t
 
 test('two submitOrder calls in one turn send one Sheet beacon', () => {
   const api = loadSubmitRuntime({ ua: UAS.android });
-  assert.equal(api.click(), true);
-  assert.equal(api.click(), true);
+  assert.equal(api.click(), false);
+  assert.equal(api.click(), false);
   assert.equal(api.beacons.length, 1);
   const id = JSON.parse(api.beacons[0]).orderId;
   assert.match(api.fields.submitBtn.href, new RegExp(id));
@@ -404,24 +475,25 @@ test('two submitOrder calls in one turn send one Sheet beacon', () => {
   assert.equal(api.opens.length, 0);
 });
 
-test('desktop popup success then a second tap does not mint a new id or a second beacon', () => {
+test('desktop second tap reopens the same tg:// link and does not beacon again', () => {
   const api = loadSubmitRuntime({ ua: UAS.desktop });
   api.click();
+  const firstUrl = api.location.href;
   api.click();
   assert.equal(api.beacons.length, 1);
-  assert.equal(api.opens.length, 2);
-  assert.equal(api.opens[0].url, api.opens[1].url);
-  assert.equal(api.location.href, 'http://127.0.0.1/index.html');
+  assert.equal(api.opens.length, 0);
+  assert.equal(api.location.href, firstUrl);
+  assert.equal(api.location.href.indexOf('tg://resolve?domain=MMHQ_Support&text='), 0);
   assert.equal(api.fields.submitBtn.disabled, false);
   const firstId = JSON.parse(api.beacons[0]).orderId;
-  assert.match(api.opens[1].url, new RegExp(firstId));
+  assert.match(decodeURIComponent(api.location.href), new RegExp(firstId));
 
   api.noteOrderFieldEdit();
   api.click();
   assert.equal(api.beacons.length, 2);
   const secondId = JSON.parse(api.beacons[1]).orderId;
   assert.notEqual(secondId, firstId);
-  assert.match(api.opens[2].url, new RegExp(secondId));
+  assert.match(decodeURIComponent(api.location.href), new RegExp(secondId));
 });
 
 test('a valid draft stays unsent across persisted pageshow, then submit beacons once', () => {
@@ -440,7 +512,7 @@ test('a valid draft stays unsent across persisted pageshow, then submit beacons 
   const id = orderIdFromHref(api.fields.submitBtn.href);
   assert.match(id, /^MM-\d+-\d+$/);
   api.pageShow(true);
-  assert.equal(api.click(), true);
+  assert.equal(api.click(), false);
   assert.equal(api.beacons.length, 1);
   assert.equal(JSON.parse(api.beacons[0]).orderId, id);
   assert.equal(api.fields.submitBtn.disabled, false);
@@ -511,18 +583,18 @@ test('re-tapping the selected plan, payment, or language does not create another
 
 test('a failed Sheet send does not latch, so the retry beacons', () => {
   const failed = loadSubmitRuntime({ ua: UAS.android, beaconOk: false, fetchThrows: true });
-  assert.equal(failed.click(), true);
+  assert.equal(failed.click(), false);
   assert.equal(failed.beacons.length, 0);
   assert.equal(failed.fetches.length, 0);
   assert.equal(failed.sentLatch(), '');
   failed.net.beaconOk = true;
-  assert.equal(failed.click(), true);
+  assert.equal(failed.click(), false);
   assert.equal(failed.beacons.length, 1);
-  assert.equal(failed.click(), true);
+  assert.equal(failed.click(), false);
   assert.equal(failed.beacons.length, 1);
 
   const viaFetch = loadSubmitRuntime({ ua: UAS.android, beaconOk: false });
-  assert.equal(viaFetch.click(), true);
+  assert.equal(viaFetch.click(), false);
   assert.equal(viaFetch.beacons.length, 0);
   assert.equal(viaFetch.fetches.length, 1);
   assert.match(viaFetch.sentLatch(), /^MM-/);
