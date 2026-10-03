@@ -902,8 +902,38 @@ footer{
   color:var(--gold-dim);margin-bottom:8px;
 }
 
+.blog-figure{margin:0 0 22px}
+.blog-figure img{width:100%;height:auto;border-radius:var(--radius);border:1px solid var(--line)}
+.blog-list{display:flex;flex-direction:column;gap:14px}
+.blog-card{
+  display:block;background:var(--card);
+  border:1px solid var(--line);border-radius:var(--radius);
+  padding:18px 18px 16px;transition:.2s;
+}
+.blog-card:hover{border-color:var(--line-2);background:var(--card-hover)}
+.blog-card h2{
+  font-family:var(--font-display);font-size:16px;color:var(--gold);
+  letter-spacing:.6px;margin:8px 0 6px;line-height:1.35;
+}
+.blog-card p{font-size:13px;color:var(--text-dim);line-height:1.65;margin:0}
+.blog-table{width:100%;border-collapse:collapse;margin:0 0 16px;font-size:13px}
+.blog-table th,.blog-table td{
+  border:1px solid var(--line);padding:10px 12px;
+  text-align:left;vertical-align:top;line-height:1.55;
+}
+.blog-table th{color:var(--gold);font-weight:700;background:rgba(255,215,0,.04)}
+.blog-faq details{
+  border:1px solid var(--line);border-radius:var(--radius);
+  padding:12px 14px;margin-bottom:10px;background:var(--card);
+}
+.blog-faq summary{cursor:pointer;color:var(--text);font-weight:700}
+.blog-faq details p{margin:10px 0 0}
+.blog-sources{font-size:12.5px}
+
 @media(max-width:700px){
   .blog-wrap{padding:36px 16px 56px}
+  .blog-table{font-size:12.5px}
+  .blog-table th,.blog-table td{padding:8px}
   .next-steps-box{padding:16px 15px}
   .upsell-box{padding:15px 16px}
 }
