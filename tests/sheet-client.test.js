@@ -160,13 +160,15 @@ test('status lookup fails closed on opaque, HTML, or unauthorized payloads', () 
   assert.equal(sheet.interpretStatusResult(null).kind, 'lookup_failed');
 });
 
-test('write fetch is CORS + text/plain so the JSON body can be read', () => {
+test('write fetch is no-cors keepalive text/plain and does not wait to be read', () => {
   const opts = sheet.writeFetchOptions({ orderId: 'MM-2026-3007', fbclid: 'abc' });
   assert.equal(opts.method, 'POST');
-  assert.equal(opts.mode, 'cors');
+  assert.equal(opts.mode, 'no-cors');
+  assert.equal(opts.keepalive, true);
   assert.equal(opts.credentials, 'omit');
   assert.match(opts.headers['Content-Type'], /text\/plain/);
   assert.equal(JSON.parse(opts.body).fbclid, 'abc');
+  assert.equal(JSON.parse(opts.body).orderId, 'MM-2026-3007');
 });
 
 test('normalizeStatus maps reject aliases and known Sheet values', () => {

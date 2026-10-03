@@ -124,22 +124,11 @@
     };
   }
 
-  function purchaseBackupEvent(opts){
-    opts = opts || {};
-    var confirmed = String(opts.confirmed || '') === '1';
-    var plan = opts.plan || 'Entry';
-    if(!confirmed || !isEntryPlan(plan)){
-      return { fire: false };
-    }
-    return {
-      fire: true,
-      eventName: 'Purchase',
-      tiktokEvent: 'CompletePayment',
-      value: ENTRY_VALUE,
-      currency: 'USD',
-      contentName: 'Entry',
-      eventId: opts.orderId || ''
-    };
+  /* Browser Purchase is retired. Sheet Status Pending → Active
+     fires Purchase from Apps Script CAPI only. This stub stays so
+     an old caller cannot turn the pixel back on. */
+  function purchaseBackupEvent(){
+    return { fire: false };
   }
 
   function checkoutEventValue(plan){

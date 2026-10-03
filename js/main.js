@@ -494,6 +494,87 @@ function toast(msg, isErr){
   el._timer = setTimeout(()=>el.classList.remove('show'), 4200);
 }
 
+/* Same user gesture. Popup first; if the browser blocks it, leave
+   this tab after a short pixel flush. Never wait on the Sheet. */
+var TELEGRAM_NAV_FALLBACK_MS = 250;
+
+function buildOrderTelegramText(fields){
+  var localLine = fields.localAmount
+    ? '\nAmount (BDT): ' + fields.localAmount
+    : '';
+  return '🧾 NEW ORDER\n' +
+    '━━━━━━━━━━━━━━\n' +
+    'Order ID : ' + fields.orderId + '\n' +
+    'Name     : ' + fields.name + '\n' +
+    'Email    : ' + fields.email + '\n' +
+    'Telegram : ' + fields.telegram + '\n' +
+    'Language : ' + fields.language + '\n' +
+    '━━━━━━━━━━━━━━\n' +
+    'Plan     : ' + fields.plan + '\n' +
+    'Amount   : ' + fields.amount + localLine + '\n' +
+    'Payment  : ' + fields.payment + '\n' +
+    '━━━━━━━━━━━━━━\n\n' +
+    'I would like to complete my payment. Please send me the payment details.';
+}
+
+function openTelegramSameGesture(url){
+  var popup = null;
+  try{ popup = window.open(url, '_blank'); }catch(err){ popup = null; }
+  if(popup && popup.closed !== true) return 'popup';
+  setTimeout(function(){ location.href = url; }, TELEGRAM_NAV_FALLBACK_MS);
+  return 'navigate';
+}
+
+function showOrderHandoff(text, telegramUrl){
+  var box = document.getElementById('orderHandoff');
+  var summary = document.getElementById('orderHandoffSummary');
+  var link = document.getElementById('orderTgLink');
+  if(summary) summary.textContent = text;
+  if(link){
+    link.href = telegramUrl || (CONFIG.SUPPORT || 'https://t.me/MMHQ_Support');
+  }
+  if(box){
+    box.hidden = false;
+    box.classList.add('show');
+  }
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).catch(function(){});
+    }
+  }catch(e){}
+}
+
+function copyOrderHandoff(){
+  var summary = document.getElementById('orderHandoffSummary');
+  var text = summary ? summary.textContent : '';
+  function done(){ toast(t('handoffCopied')); }
+  function failed(){ toast(t('handoffCopyFail'), true); }
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done).catch(function(){
+        if(copyOrderTextFallback(text)) done(); else failed();
+      });
+      return;
+    }
+  }catch(e){}
+  if(copyOrderTextFallback(text)) done(); else failed();
+}
+
+function copyOrderTextFallback(text){
+  try{
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.left = '-9999px';
+    document.body.appendChild(area);
+    area.select();
+    var ok = document.execCommand('copy');
+    document.body.removeChild(area);
+    return !!ok;
+  }catch(e){ return false; }
+}
+
 /* ─── অর্ডার সাবমিট ─── */
 function submitOrder(){
   const name = document.getElementById('iName');
@@ -583,68 +664,51 @@ function submitOrder(){
     });
   }
 
-  /* Sheet write: CORS + readable JSON only. Opaque no-cors used to
-     look like success even when Apps Script / Sheet write failed. */
+  /* Sheet write is fire-and-forget. Do not wait for it and do not
+     require {ok:true} before Telegram — a slow Sheet used to miss
+     the click, then the popup blocker ate window.open. */
   const sheetOpts = (typeof MMSheet !== 'undefined')
     ? MMSheet.writeFetchOptions(payload)
     : {
         method:'POST',
-        mode:'cors',
-        redirect:'follow',
+        mode:'no-cors',
+        keepalive:true,
         credentials:'omit',
         headers:{'Content-Type':'text/plain;charset=utf-8'},
         body: JSON.stringify(payload)
       };
+  try{
+    fetch(CONFIG.SHEET_URL, sheetOpts).catch(function(){});
+  }catch(e){}
 
-  fetch(CONFIG.SHEET_URL, sheetOpts)
-    .then(function(res){
-      return (typeof MMSheet !== 'undefined')
-        ? MMSheet.readResponse(res)
-        : res.text().then(function(text){
-            var json = null;
-            try{ json = JSON.parse(text); }catch(e){}
-            return { type: res.type, ok: !!res.ok, status: res.status, json: json, text: text };
-          });
-    })
-    .then(function(parsed){
-      const ok = (typeof MMSheet !== 'undefined')
-        ? MMSheet.isWriteSuccess(parsed)
-        : !!(parsed && parsed.ok && parsed.json && parsed.json.ok === true);
-      if(!ok) throw new Error('sheet_write_failed');
+  try{ localStorage.setItem('mm_last_order', orderId); }catch(e){}
 
-      try{ localStorage.setItem('mm_last_order', orderId); }catch(e){}
-      toast(t('toastOk'));
+  const langLabel = (typeof MMSheet !== 'undefined')
+    ? MMSheet.sheetLanguageLabel(payload.language)
+    : String(payload.language || 'en').toUpperCase();
+  const localAmount = (LANG === 'bn')
+    ? (SELECTED_PLAN === 'entry' ? CONFIG.ENTRY_BDT : CONFIG.MONTHLY_BDT)
+    : '';
+  const msgText = buildOrderTelegramText({
+    orderId: orderId,
+    name: payload.name,
+    email: payload.email,
+    telegram: handle,
+    language: langLabel,
+    plan: payload.plan,
+    amount: payload.amount,
+    payment: SELECTED_PAY,
+    localAmount: localAmount
+  });
+  const supportBase = CONFIG.SUPPORT || 'https://t.me/MMHQ_Support';
+  const telegramUrl = supportBase + '?text=' + encodeURIComponent(msgText);
 
-      const localLine = (LANG === 'bn')
-        ? '\nAmount (BDT): ' + (SELECTED_PLAN === 'entry' ? CONFIG.ENTRY_BDT : CONFIG.MONTHLY_BDT)
-        : '';
+  showOrderHandoff(msgText, telegramUrl);
+  toast(t('toastOk'));
+  if(btn) btn.textContent = t('handoffSent');
 
-      const msg = encodeURIComponent(
-        '🧾 NEW ORDER\n' +
-        '━━━━━━━━━━━━━━\n' +
-        'Order ID : ' + orderId + '\n' +
-        'Name     : ' + payload.name + '\n' +
-        'Email    : ' + payload.email + '\n' +
-        'Telegram : ' + handle + '\n' +
-        'Language : ' + ((typeof MMSheet !== 'undefined')
-          ? MMSheet.sheetLanguageLabel(payload.language)
-          : String(payload.language || 'en').toUpperCase()) + '\n' +
-        '━━━━━━━━━━━━━━\n' +
-        'Plan     : ' + payload.plan + '\n' +
-        'Amount   : ' + payload.amount + localLine + '\n' +
-        'Payment  : ' + SELECTED_PAY + '\n' +
-        '━━━━━━━━━━━━━━\n\n' +
-        'I have placed my order. Please send me the payment details.'
-      );
-      setTimeout(()=>{
-        window.open(CONFIG.SUPPORT + '?text=' + msg, '_blank');
-        btn.disabled = false;
-      }, 900);
-    })
-    .catch(function(){
-      toast(t('toastSheetFail'), true);
-      btn.disabled = false;
-    });
+  /* Pixels already ran above. Open Telegram in this same click. */
+  openTelegramSameGesture(telegramUrl);
 }
 
 /* ─── স্ক্রল রিভিল + প্রোগ্রেস ─── */
@@ -864,37 +928,9 @@ function initOrderStatusPage(){
   }catch(e){}
 }
 
-/* ─── Purchase backup on confirmed=1 — Entry only, value $30.
-   Primary Purchase is Apps Script CAPI when Status → Active. ─── */
-function initPurchaseConfirm(){
-  try{
-    const p = new URLSearchParams(location.search);
-    const decision = (typeof MMTracking !== 'undefined')
-      ? MMTracking.purchaseBackupEvent({
-          confirmed: p.get('confirmed'),
-          plan: p.get('plan') || 'Entry',
-          orderId: p.get('orderId') || ''
-        })
-      : {fire: p.get('confirmed')==='1' && (p.get('plan')||'Entry') !== 'Monthly',
-         eventName:'Purchase', tiktokEvent:'CompletePayment',
-         value:30, currency:'USD', contentName:'Entry', eventId: p.get('orderId')||''};
-    if(!decision.fire) return;
-    const extra = {currency:decision.currency, value:decision.value, content_name:decision.contentName};
-    if(typeof fbq !== 'undefined'){
-      fbq('track', decision.eventName, extra, decision.eventId ? {eventID: decision.eventId} : undefined);
-    }
-    if(typeof ttq !== 'undefined'){
-      var ttExtra = {currency:decision.currency, value:decision.value, content_name:decision.contentName};
-      if(decision.eventId) ttExtra.event_id = decision.eventId;
-      ttq.track(decision.tiktokEvent, ttExtra);
-    }
-    if(typeof gtag !== 'undefined') gtag('event','purchase',{
-      transaction_id: decision.eventId,
-      currency:decision.currency, value:decision.value,
-      items:[{item_id:'entry',item_name:'Method Mafia Entry',price:decision.value,quantity:1}]
-    });
-  }catch(e){}
-}
+/* Purchase is not fired in the browser. Swa sets Sheet Status
+   Pending → Active, and apps-script/CapiPurchase.gs sends it.
+   ?confirmed=1 still loads order-status; it does not track Purchase. */
 
 /* ─── স্ক্রল টু টপ ─── */
 function scrollToTop(){ scrollTo({top:0,behavior:'smooth'}); }
@@ -910,7 +946,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
   initScroll();
   initLiveActivity();
   initExitPopup();
-  initPurchaseConfirm();
   initOrderStatusPage();
   getUtmData();
 });

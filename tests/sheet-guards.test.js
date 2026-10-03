@@ -11,13 +11,20 @@ function read(rel) {
   return fs.readFileSync(path.join(ROOT, rel), 'utf8');
 }
 
-test('order form no longer treats opaque no-cors fetch as success', () => {
+test('order form posts the Sheet as fire-and-forget and does not wait for {ok:true}', () => {
   const main = read('js/main.js');
-  assert.equal(main.includes("mode:'no-cors'"), false);
-  assert.equal(main.includes('mode: "no-cors"'), false);
-  assert.equal(main.includes("mode: 'no-cors'"), false);
-  assert.match(main, /isWriteSuccess|interpretWriteResult/);
-  assert.match(main, /toastSheetFail/);
+  const submit = main.match(/function submitOrder\(\)\{[\s\S]*?\n\}/);
+  assert.ok(submit, 'submitOrder must exist');
+  const body = submit[0];
+  assert.match(body, /writeFetchOptions\(payload\)/);
+  assert.match(body, /fetch\(CONFIG\.SHEET_URL, sheetOpts\)\.catch\(function\(\)\{\}\)/);
+  assert.equal(body.includes('.then('), false);
+  assert.equal(body.includes('isWriteSuccess'), false);
+  assert.equal(body.includes('await '), false);
+  assert.equal(body.includes('toastSheetFail'), false);
+  assert.equal(body.includes(', 900'), false);
+  assert.ok(body.indexOf("fbq('track','Lead'") < body.indexOf('openTelegramSameGesture'));
+  assert.ok(body.indexOf("ttq.track('SubmitForm'") < body.indexOf('openTelegramSameGesture'));
 });
 
 test('order-status looks up the Sheet instead of localStorage fake status', () => {
