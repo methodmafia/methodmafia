@@ -58,7 +58,7 @@
   }
 
   /* eventId is set only by the order Submit (main.js submitOrder), which
-     calls this once per sent order. Plain support links pass nothing. */
+     calls this once per sent order. @MMHQ_Support links pass nothing. */
   function fireContact(eventId){
     if(typeof fbq !== 'undefined'){
       if(eventId) fbq('track', 'Contact', {}, {eventID: eventId});
@@ -71,11 +71,54 @@
     if(typeof gtag !== 'undefined') gtag('event', 'contact');
   }
 
+  /* Channel / group and any other t.me link that is not @MMHQ_Support. */
+  function fireSupportClick(){
+    if(typeof fbq !== 'undefined') fbq('trackCustom', 'SupportClick');
+    if(typeof ttq !== 'undefined') ttq.track('SupportClick');
+    if(typeof gtag !== 'undefined') gtag('event', 'support_click');
+  }
+
   /* The order Submit is a t.me/MMHQ_Support link, but a click there is not
      a contact yet: it may fail validation, or be a second tap. submitOrder
      fires Contact itself when the order is valid and sent. */
   function isOrderSubmitLink(a){
     return !!a && a.id === 'submitBtn';
+  }
+
+  function personalSupportUser(){
+    var support = (typeof CONFIG !== 'undefined' && CONFIG.SUPPORT) ? CONFIG.SUPPORT : 'https://t.me/MMHQ_Support';
+    var match = String(support).match(/t\.me\/([^/?#]+)/i);
+    return (match ? match[1] : 'MMHQ_Support').toLowerCase();
+  }
+
+  function decodedHref(href){
+    var raw = String(href || '');
+    var out = raw;
+    try{ out = decodeURIComponent(raw); }catch(e){}
+    if(out !== raw){
+      try{ out = decodeURIComponent(out); }catch(e2){}
+    }
+    return out.toLowerCase();
+  }
+
+  /* t.me/MMHQ_Support, tg://resolve?domain=MMHQ_Support, intent://, and the
+     desktop web.telegram.org link that wraps that tg:// URL. */
+  function isPersonalSupportHref(href){
+    if(!href) return false;
+    var user = personalSupportUser();
+    var text = decodedHref(href);
+    var path = text.match(/(?:https?:\/\/)?(?:www\.)?(?:t\.me|telegram\.me)\/([^/?#]+)/);
+    if(path && path[1] === user) return true;
+    if(/(?:tg|intent):\/\/resolve\?/.test(text) && text.indexOf('domain=' + user) !== -1) return true;
+    return false;
+  }
+
+  function isOtherTelegramHref(href){
+    if(!href || isPersonalSupportHref(href)) return false;
+    var text = decodedHref(href);
+    if(/(?:^|\/\/)(?:www\.)?(?:t\.me|telegram\.me)\//.test(text)) return true;
+    if(/(?:tg|intent):\/\/resolve\?/.test(text)) return true;
+    return false;
   }
 
   function watchViewContent(){
@@ -107,9 +150,15 @@
       if(!a || isOrderSubmitLink(a)) return;
       var href = a.getAttribute('href') || '';
       var key = a.getAttribute('data-href') || '';
-      var isSupport = key === 'SUPPORT' || key === 'PUBLIC_CHANNEL';
-      if(!isSupport && T && T.isContactHref(href, CONFIG)) isSupport = true;
-      if(isSupport) fireContact();
+      /* @MMHQ_Support is a real contact: no event id. #submitBtn is already excluded. */
+      if(key === 'SUPPORT' || isPersonalSupportHref(href)){
+        fireContact();
+        return;
+      }
+      /* Channel, group, and every other t.me link. */
+      if(key === 'PUBLIC_CHANNEL' || key === 'FULL_LIST_POST' || isOtherTelegramHref(href)){
+        fireSupportClick();
+      }
     }, true);
   }
 
