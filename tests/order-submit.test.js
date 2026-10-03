@@ -112,6 +112,116 @@ function loadSubmitRuntime(opts) {
   return api;
 }
 
+function orderIdFromHref(href) {
+  const text = decodeURIComponent(String(href || '').split('text=')[1] || '');
+  const match = text.match(/Order ID : (MM-\d+-\d+)/);
+  return match ? match[1] : '';
+}
+
+function loadFormControls() {
+  const main = read('js/main.js');
+  const start = main.indexOf("let SELECTED_PAY = ''");
+  const end = main.indexOf('function initScroll');
+  assert.ok(start !== -1 && end > start, 'form control slice');
+  const beacons = [];
+  function withClassList(el, initial) {
+    const classes = new Set(String(initial || '').split(/\s+/).filter(Boolean));
+    el.classList = {
+      add: function(name) { classes.add(name); },
+      remove: function(name) { classes.delete(name); },
+      contains: function(name) { return classes.has(name); }
+    };
+    el.attrs = {};
+    el.setAttribute = function(key, value) { this.attrs[key] = value; };
+    el.getAttribute = function(key) { return this.attrs[key]; };
+    el.click = function() {
+      if (typeof this.onclick === 'function') this.onclick.call(this);
+    };
+    return el;
+  }
+  function button(className) {
+    return withClassList({ className: className, dataset: {}, parentElement: null }, className);
+  }
+  const planEntry = button('plan-opt sel');
+  const planMonthly = button('plan-opt');
+  const langBn = button('lang-pref-opt');
+  const langEn = button('lang-pref-opt sel');
+  const langHi = button('lang-pref-opt');
+  const payBinance = button('pay-opt');
+  const payOther = button('pay-opt');
+  payBinance.dataset.pay = 'Binance Pay';
+  payOther.dataset.pay = 'Other';
+  const payBadges = withClassList({ className: 'pay-select-row', children: [payBinance, payOther] }, 'pay-select-row');
+  const fields = {
+    iName: { value: 'Swa Test', classList: { add(){}, remove(){} } },
+    iEmail: { value: 'swa@example.com', classList: { add(){}, remove(){} } },
+    iTelegram: { value: '@swa_test', classList: { add(){}, remove(){} } },
+    iLanguage: { value: 'en' },
+    submitBtn: { tagName: 'A', href: 'https://t.me/MMHQ_Support', disabled: false },
+    payBadges: payBadges,
+    orderHandoff: { hidden: true, classList: { add(){} } },
+    orderHandoffSummary: { textContent: '' },
+    orderTgLink: { href: '' }
+  };
+  const lists = {
+    '.plan-opt': [planEntry, planMonthly],
+    '.lang-pref-opt': [langBn, langEn, langHi],
+    '.faq-item': []
+  };
+  const documentObj = {
+    getElementById: function(id) { return fields[id] || null; },
+    querySelectorAll: function(sel) { return lists[sel] || []; }
+  };
+  const windowObj = {
+    location: { href: 'http://127.0.0.1/index.html' },
+    open: function() { return { closed: false }; },
+    addEventListener: function() {}
+  };
+  const navigatorObj = {
+    userAgent: UAS.desktop,
+    sendBeacon: function(_url, body) {
+      beacons.push(String(body));
+      return true;
+    }
+  };
+  const src = [
+    'var LANG = "en";',
+    'var CONFIG = { SUPPORT: "https://t.me/MMHQ_Support", SHEET_URL: "https://script.google.com/macros/s/x/exec", ENTRY_USD: "$30", MONTHLY_USD: "$15", ENTRY_BDT: "৳1", MONTHLY_BDT: "৳2", ENTRY_REGULAR_USD: "$100", ENTRY_REGULAR_BDT: "৳9", META_PIXEL: "" };',
+    'var MMSheet = {',
+    '  normalizeOrderLanguage: function(v){ return v === "bn" || v === "hi" ? v : "en"; },',
+    '  sheetLanguageLabel: function(v){ return String(v || "en").toUpperCase(); },',
+    '  writeFetchOptions: function(payload){ return { method:"POST", mode:"no-cors", keepalive:true, body: JSON.stringify(payload) }; }',
+    '};',
+    'function getUtmData(){ return { utm_source:"direct", utm_medium:"", utm_campaign:"", fbclid:"", ttclid:"" }; }',
+    'function t(key){ return key; }',
+    main.slice(start, end),
+    'planEntry.onclick = function(){ selectPlan(this, "entry"); };',
+    'planMonthly.onclick = function(){ selectPlan(this, "monthly"); };',
+    'langBn.onclick = function(){ selectPrefLang(this, "bn"); };',
+    'langEn.onclick = function(){ selectPrefLang(this, "en"); };',
+    'langHi.onclick = function(){ selectPrefLang(this, "hi"); };',
+    'payBinance.onclick = function(){ selectPay(this); };',
+    'payOther.onclick = function(){ selectPay(this); };',
+    'return { submitOrder: submitOrder, refreshSubmitHref: refreshSubmitHref };'
+  ].join('\n');
+  const run = new Function(
+    'window', 'document', 'navigator',
+    'planEntry', 'planMonthly', 'langBn', 'langEn', 'langHi', 'payBinance', 'payOther',
+    src
+  );
+  const api = run(windowObj, documentObj, navigatorObj, planEntry, planMonthly, langBn, langEn, langHi, payBinance, payOther);
+  api.beacons = beacons;
+  api.fields = fields;
+  api.plan = { entry: planEntry, monthly: planMonthly };
+  api.lang = { bn: langBn, en: langEn, hi: langHi };
+  api.pay = { binance: payBinance, other: payOther };
+  api.submit = function() {
+    return api.submitOrder({ preventDefault: function(){} });
+  };
+  api.orderId = function() { return orderIdFromHref(fields.submitBtn.href); };
+  return api;
+}
+
 test('phones use the same tab and desktop uses window.open; the old opener helper is gone', () => {
   const main = read('js/main.js');
   assert.equal(main.includes('function openTelegramSameGesture'), false);
@@ -280,27 +390,88 @@ test('desktop popup success then a second tap does not mint a new id or a second
   assert.match(api.opens[2].url, new RegExp(secondId));
 });
 
-test('persisted pageshow then a tap does not beacon the same order again', () => {
-  const fresh = loadSubmitRuntime({ ua: UAS.android });
-  fresh.pageShow(false);
-  fresh.click();
-  assert.equal(fresh.beacons.length, 1, 'pageshow persisted:false must not block the first order');
+test('a valid draft stays unsent across persisted pageshow, then submit beacons once', () => {
+  const main = read('js/main.js');
+  assert.equal(main.includes('ORDER_SENT_ID = DRAFT_ORDER_ID'), false);
+  assert.equal(main.includes("addEventListener('pageshow'"), false);
+  const submit = main.match(/function submitOrder\(e\)\{[\s\S]*?\n\}/)[0];
+  const sendAt = submit.indexOf('ORDER_SENT_ID = orderId');
+  const postAt = submit.indexOf('postOrderToSheet(payload)');
+  assert.ok(sendAt !== -1 && sendAt < postAt);
 
-  const api = loadSubmitRuntime({ ua: UAS.iphone });
-  api.click();
-  assert.equal(api.beacons.length, 1);
-  const id = JSON.parse(api.beacons[0]).orderId;
-  api.forgetSentLatch();
+  const api = loadSubmitRuntime({ ua: UAS.android });
+  api.refreshSubmitHref();
+  assert.equal(api.beacons.length, 0);
+  const id = orderIdFromHref(api.fields.submitBtn.href);
+  assert.match(id, /^MM-\d+-\d+$/);
   api.pageShow(true);
   assert.equal(api.click(), true);
   assert.equal(api.beacons.length, 1);
-  assert.match(api.fields.submitBtn.href, new RegExp(id));
+  assert.equal(JSON.parse(api.beacons[0]).orderId, id);
   assert.equal(api.fields.submitBtn.disabled, false);
 
-  api.noteOrderFieldEdit();
+  api.pageShow(true);
   api.click();
+  assert.equal(api.beacons.length, 1);
+  assert.match(api.fields.submitBtn.href, new RegExp(id));
+});
+
+test('re-tapping the selected plan, payment, or language does not create another Sheet row', () => {
+  const api = loadFormControls();
+  api.pay.binance.click();
+  const id = api.orderId();
+  assert.match(id, /^MM-\d+-\d+$/);
+  api.pay.binance.click();
+  api.plan.entry.click();
+  api.lang.en.click();
+  assert.equal(api.orderId(), id);
+  api.submit();
+  assert.equal(api.beacons.length, 1);
+  assert.equal(JSON.parse(api.beacons[0]).orderId, id);
+  assert.equal(JSON.parse(api.beacons[0]).payment, 'Binance Pay');
+  assert.equal(JSON.parse(api.beacons[0]).plan, 'Entry');
+
+  api.pay.binance.click();
+  api.plan.entry.click();
+  api.lang.en.click();
+  api.submit();
+  assert.equal(api.beacons.length, 1);
+  assert.equal(api.orderId(), id);
+  assert.equal(api.fields.submitBtn.disabled, false);
+
+  api.plan.monthly.click();
+  assert.notEqual(api.orderId(), id);
+  api.submit();
   assert.equal(api.beacons.length, 2);
-  assert.notEqual(JSON.parse(api.beacons[1]).orderId, id);
+  const monthlyId = JSON.parse(api.beacons[1]).orderId;
+  assert.equal(JSON.parse(api.beacons[1]).plan, 'Monthly');
+  assert.equal(api.orderId(), monthlyId);
+  api.plan.monthly.click();
+  api.submit();
+  assert.equal(api.beacons.length, 2);
+  assert.equal(api.orderId(), monthlyId);
+
+  api.lang.bn.click();
+  assert.notEqual(api.orderId(), monthlyId);
+  api.submit();
+  assert.equal(api.beacons.length, 3);
+  const bnId = JSON.parse(api.beacons[2]).orderId;
+  assert.equal(JSON.parse(api.beacons[2]).language, 'bn');
+  api.lang.bn.click();
+  api.submit();
+  assert.equal(api.beacons.length, 3);
+  assert.equal(api.orderId(), bnId);
+
+  api.pay.other.click();
+  assert.notEqual(api.orderId(), bnId);
+  api.submit();
+  assert.equal(api.beacons.length, 4);
+  const otherId = JSON.parse(api.beacons[3]).orderId;
+  assert.equal(JSON.parse(api.beacons[3]).payment, 'Other');
+  api.pay.other.click();
+  api.submit();
+  assert.equal(api.beacons.length, 4);
+  assert.equal(api.orderId(), otherId);
 });
 
 test('browser pages do not fire Purchase; order-status lookup and confirmed UI stay', () => {

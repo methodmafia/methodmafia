@@ -358,12 +358,14 @@ function renderPayments(){
 let SELECTED_PAY_INDEX = null;
 function selectPay(el){
   const box = document.getElementById('payBadges');
+  const next = el.dataset.pay;
+  const changed = next !== SELECTED_PAY;
   box.classList.remove('error');
   [...box.children].forEach(b=>b.classList.remove('sel'));
   el.classList.add('sel');
-  SELECTED_PAY = el.dataset.pay;
+  SELECTED_PAY = next;
   SELECTED_PAY_INDEX = [...box.children].indexOf(el);
-  noteOrderFieldEdit();
+  if(changed) noteOrderFieldEdit();
 }
 
 /* ─── FAQ ─── */
@@ -380,6 +382,7 @@ function selectPrefLang(el, code){
   const lang = (typeof MMSheet !== 'undefined')
     ? MMSheet.normalizeOrderLanguage(code)
     : (code === 'bn' || code === 'hi' ? code : 'en');
+  const changed = lang !== SELECTED_PREF_LANG;
   document.querySelectorAll('.lang-pref-opt').forEach(b=>{
     b.classList.remove('sel');
     b.setAttribute('aria-pressed', 'false');
@@ -391,17 +394,18 @@ function selectPrefLang(el, code){
   SELECTED_PREF_LANG = lang;
   const hidden = document.getElementById('iLanguage');
   if(hidden) hidden.value = lang;
-  noteOrderFieldEdit();
+  if(changed) noteOrderFieldEdit();
 }
 
 /* ─── প্ল্যান সিলেক্ট ─── */
 let SELECTED_PLAN = 'entry';
 function selectPlan(el, plan){
+  const changed = plan !== SELECTED_PLAN;
   document.querySelectorAll('.plan-opt').forEach(b=>b.classList.remove('sel'));
   el.classList.add('sel');
   SELECTED_PLAN = plan;
   updateOrderBox();
-  noteOrderFieldEdit();
+  if(changed) noteOrderFieldEdit();
   if(window.MMPixels && typeof MMPixels.fireViewContent === 'function'){
     MMPixels.fireViewContent();
   }
@@ -782,12 +786,6 @@ function submitOrder(e){
   showOrderHandoff(draft.msgText, telegramUrl);
   return false;
 }
-
-/* Back from Telegram restores this page with the same id. Do not beacon it again. */
-window.addEventListener('pageshow', function(e){
-  if(!e || e.persisted !== true) return;
-  if(DRAFT_ORDER_ID) ORDER_SENT_ID = DRAFT_ORDER_ID;
-});
 
 /* ─── স্ক্রল রিভিল + প্রোগ্রেস ─── */
 function initScroll(){
