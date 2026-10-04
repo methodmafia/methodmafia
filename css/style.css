@@ -540,6 +540,7 @@ html[lang="bn"] h2.sec-title,html[lang="hi"] h2.sec-title{letter-spacing:.8px}
 }
 .submit-btn:hover{transform:translateY(-3px);box-shadow:0 0 44px rgba(255,165,0,.5)}
 .submit-btn:disabled{opacity:.55;cursor:not-allowed;transform:none}
+.submit-btn.is-sending{opacity:.7;transform:none}
 .form-footer{text-align:center;margin-top:13px;font-size:10.5px;color:rgba(128,104,32,.55);line-height:1.6}
 
 .order-handoff{

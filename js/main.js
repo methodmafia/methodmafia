@@ -665,7 +665,15 @@ function showOrderHandoff(text, telegramUrl){
   }
 }
 
+/* One transport per Order ID: a beacon OR a fetch, never both, never twice.
+   The id is claimed before sending, so a re-entrant call cannot double it.
+   A send that fails on every transport releases the id so a retry can go. */
+var POSTED_ORDER_IDS = {};
+
 function postOrderToSheet(payload){
+  var postedId = String((payload && payload.orderId) || '');
+  if(postedId && POSTED_ORDER_IDS[postedId]) return true;
+  if(postedId) POSTED_ORDER_IDS[postedId] = 1;
   var body = JSON.stringify(payload || {});
   var url = (typeof CONFIG !== 'undefined') ? CONFIG.SHEET_URL : '';
   try{
@@ -686,6 +694,7 @@ function postOrderToSheet(payload){
         body: body
       };
   try{ fetch(url, sheetOpts).catch(function(){}); return true; }catch(e){}
+  if(postedId) delete POSTED_ORDER_IDS[postedId];
   return false;
 }
 
@@ -817,6 +826,29 @@ function refreshSubmitHref(){
   btn.href = draft ? draft.telegramUrl : supportBaseUrl();
 }
 
+/* Repeat-tap guard, per Order ID. For a short window after an order is
+   sent, another tap on the SAME order is ignored (no second Telegram
+   navigation, no re-entry). The link stays live: no disabled state, only a
+   busy class. A changed order has a new id and is never held back. */
+var SUBMIT_REPEAT_MS = 2000;
+var SUBMIT_TAP_ID = '';
+var SUBMIT_TAP_AT = 0;
+
+function submitNow(){ return Date.now(); }
+
+function markSubmitBusy(btn){
+  try{
+    if(btn && btn.classList) btn.classList.add('is-sending');
+    if(btn && btn.setAttribute) btn.setAttribute('aria-busy', 'true');
+    setTimeout(function(){
+      try{
+        if(btn && btn.classList) btn.classList.remove('is-sending');
+        if(btn && btn.removeAttribute) btn.removeAttribute('aria-busy');
+      }catch(err){}
+    }, SUBMIT_REPEAT_MS);
+  }catch(e){}
+}
+
 /* A sent order keeps its id. The next beacon waits until a field edit. */
 function noteOrderFieldEdit(){
   if(ORDER_SENT_ID){
@@ -843,11 +875,19 @@ function submitOrder(e){
   var telegramUrl = draft.telegramUrl;
   var payload = draft.payload;
   var orderId = payload.orderId;
+  if(SUBMIT_TAP_ID === orderId && submitNow() - SUBMIT_TAP_AT < SUBMIT_REPEAT_MS){
+    if(e && e.type === 'auxclick') return true;
+    if(e && e.preventDefault) e.preventDefault();
+    return false;
+  }
   var instantUrl = instantTelegramUrl(draft.msgText);
   if(btn && String(btn.tagName).toUpperCase() === 'A') btn.href = telegramUrl;
 
   if(ORDER_SENT_ID !== orderId && postOrderToSheet(payload)){
     ORDER_SENT_ID = orderId;
+    SUBMIT_TAP_ID = orderId;
+    SUBMIT_TAP_AT = submitNow();
+    markSubmitBusy(btn);
 
     var ev = (typeof MMTracking !== 'undefined')
       ? MMTracking.checkoutEventValue(payload.plan)
