@@ -18,6 +18,17 @@
   var UTM_MEDIUM = 'mm_utm_medium';
   var UTM_CAMPAIGN = 'mm_utm_campaign';
   var VIEWCONTENT_KEY = 'mm_viewcontent';
+  var REFERRER_KEY = 'mm_referrer';
+  /* Order Source values written to the Sheet (Source column). */
+  var KNOWN_SOURCES = ['facebook', 'tiktok', 'telegram', 'direct', 'other'];
+  /* utm_source spellings that mean a known source (case-insensitive). */
+  var SOURCE_ALIASES = {
+    facebook: 'facebook', fb: 'facebook', meta: 'facebook', instagram: 'facebook', ig: 'facebook',
+    tiktok: 'tiktok', tt: 'tiktok',
+    telegram: 'telegram', tg: 'telegram',
+    direct: 'direct'
+  };
+  var TELEGRAM_HOST_RE = /(^|\.)(t\.me|telegram\.me|telegram\.org|telegram\.dog)$/i;
   var ENTRY_VALUE = 30;
   var MONTHLY_VALUE = 15;
 
@@ -92,6 +103,57 @@
     };
   }
 
+  function hostOf(url){
+    var m = /^[a-z][a-z0-9+.-]*:\/\/([^\/?#:]+)/i.exec(String(url || '').trim());
+    return m ? m[1].toLowerCase() : '';
+  }
+
+  function isTelegramReferrer(ref){
+    var h = hostOf(ref);
+    return !!h && TELEGRAM_HOST_RE.test(h);
+  }
+
+  /* Keep the first EXTERNAL referrer of the session (the order page's own
+     document.referrer is usually our own landing page). */
+  function captureReferrer(referrer, ownHost, store){
+    var h = hostOf(referrer);
+    var own = String(ownHost || '').toLowerCase().replace(/^www\./, '');
+    var external = !!h && h.replace(/^www\./, '') !== own;
+    if(external && !safeGet(store, REFERRER_KEY)) safeSet(store, REFERRER_KEY, referrer);
+    return { fresh: external ? String(referrer) : '', stored: safeGet(store, REFERRER_KEY) };
+  }
+
+  /**
+   * Order Source from signals. Priority:
+   *   1. utm_source if it is a known value (facebook/tiktok/telegram/direct, aliases ok)
+   *   2. fbclid → facebook
+   *   3. ttclid → tiktok
+   *   4. Telegram referrer (t.me, telegram.me/.org/.dog, web.telegram.org) or utm containing telegram/tg → telegram
+   *   5. any other non-empty utm_source (e.g. "google") → other
+   *   6. no signal at all → direct
+   * signals.manualTelegram (orders typed in from Telegram) → telegram.
+   */
+  function deriveSource(sig){
+    sig = sig || {};
+    if(sig.manualTelegram) return 'telegram';
+    var utm = String(sig.utm_source == null ? '' : sig.utm_source).trim().toLowerCase();
+    if(SOURCE_ALIASES[utm]) return SOURCE_ALIASES[utm];
+    if(String(sig.fbclid || '').trim()) return 'facebook';
+    if(String(sig.ttclid || '').trim()) return 'tiktok';
+    if(isTelegramReferrer(sig.referrer)) return 'telegram';
+    if(/(^|[^a-z])(telegram|tg)([^a-z]|$)/.test(utm)) return 'telegram';
+    return utm ? 'other' : 'direct';
+  }
+
+  /* Fresh signals on THIS page view win over remembered ones, so an old
+     session/stored value never overrides a new ad click. */
+  function resolveSource(fresh, persisted){
+    var a = deriveSource(fresh);
+    if(a !== 'direct') return a;
+    if(String((fresh || {}).utm_source || '').trim().toLowerCase() === 'direct') return 'direct';
+    return deriveSource(persisted);
+  }
+
   function readPersistedIds(store){
     return {
       fbclid: safeGet(store, FBCLID_KEY),
@@ -100,23 +162,33 @@
     };
   }
 
-  function getAttribution(search, store, secondary){
+  function getAttribution(search, store, secondary, referrer, ownHost){
+    var params;
+    try{ params = new URLSearchParams(search || ''); }
+    catch(e){ params = { get: function(){ return null; } }; }
     var ids = captureClickIds(search, store, secondary);
     var utm = captureUtm(search, store, secondary);
+    var ref = captureReferrer(referrer, ownHost, store);
+    var source = resolveSource(
+      { utm_source: params.get('utm_source') || '', fbclid: params.get('fbclid') || '',
+        ttclid: params.get('ttclid') || '', referrer: ref.fresh },
+      { utm_source: safeGet(store, UTM_SOURCE), fbclid: ids.fbclid, ttclid: ids.ttclid, referrer: ref.stored }
+    );
     return {
       fbclid: ids.fbclid,
       ttclid: ids.ttclid,
       fbc: ids.fbc,
       utm_source: utm.utm_source,
       utm_medium: utm.utm_medium,
-      utm_campaign: utm.utm_campaign
+      utm_campaign: utm.utm_campaign,
+      source: source
     };
   }
 
   function buildSheetTrackingFields(attr){
     attr = attr || {};
     return {
-      source: attr.utm_source || attr.source || 'direct',
+      source: attr.source || deriveSource(attr),
       medium: attr.utm_medium || attr.medium || '',
       campaign: attr.utm_campaign || attr.campaign || '',
       fbclid: attr.fbclid || '',
@@ -170,6 +242,11 @@
     MONTHLY_VALUE: MONTHLY_VALUE,
     captureClickIds: captureClickIds,
     captureUtm: captureUtm,
+    captureReferrer: captureReferrer,
+    deriveSource: deriveSource,
+    resolveSource: resolveSource,
+    isTelegramReferrer: isTelegramReferrer,
+    KNOWN_SOURCES: KNOWN_SOURCES,
     readPersistedIds: readPersistedIds,
     getAttribution: getAttribution,
     buildSheetTrackingFields: buildSheetTrackingFields,
