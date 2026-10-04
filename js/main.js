@@ -457,8 +457,10 @@ function makeOrderId(){
 function getUtmData(){
   try{
     if(typeof MMTracking !== 'undefined'){
-      const attr = MMTracking.getAttribution(location.search, sessionStorage, localStorage);
+      const attr = MMTracking.getAttribution(location.search, sessionStorage, localStorage,
+        document.referrer || '', location.hostname);
       return {
+        source: attr.source,
         utm_source: attr.utm_source,
         utm_medium: attr.utm_medium,
         utm_campaign: attr.utm_campaign,
@@ -477,19 +479,30 @@ function getUtmData(){
     if(cam) sessionStorage.setItem('mm_utm_campaign', cam);
     if(fbclid){ sessionStorage.setItem('mm_fbclid', fbclid); localStorage.setItem('mm_fbclid', fbclid); }
     if(ttclid){ sessionStorage.setItem('mm_ttclid', ttclid); localStorage.setItem('mm_ttclid', ttclid); }
+    const known = {facebook:1, tiktok:1, telegram:1, direct:1};
+    const u = String(src || sessionStorage.getItem('mm_utm_source') || '').trim().toLowerCase();
+    const fb = sessionStorage.getItem('mm_fbclid') || localStorage.getItem('mm_fbclid') || '';
+    const tt = sessionStorage.getItem('mm_ttclid') || localStorage.getItem('mm_ttclid') || '';
+    let refHost = '';
+    try{ refHost = document.referrer ? new URL(document.referrer).hostname.toLowerCase() : ''; }catch(e){}
+    const source = known[u] ? u : fb ? 'facebook' : tt ? 'tiktok'
+      : (/(^|\.)(t\.me|telegram\.me|telegram\.org|telegram\.dog)$/.test(refHost) || /(^|[^a-z])(telegram|tg)([^a-z]|$)/.test(u)) ? 'telegram'
+      : u ? 'other' : 'direct';
     return {
+      source: source,
       utm_source: sessionStorage.getItem('mm_utm_source') || 'direct',
       utm_medium: sessionStorage.getItem('mm_utm_medium') || '',
       utm_campaign: sessionStorage.getItem('mm_utm_campaign') || '',
       fbclid: sessionStorage.getItem('mm_fbclid') || localStorage.getItem('mm_fbclid') || '',
       ttclid: sessionStorage.getItem('mm_ttclid') || localStorage.getItem('mm_ttclid') || ''
     };
-  }catch(e){ return {utm_source:'direct', utm_medium:'', utm_campaign:'', fbclid:'', ttclid:''}; }
+  }catch(e){ return {source:'direct', utm_source:'direct', utm_medium:'', utm_campaign:'', fbclid:'', ttclid:''}; }
 }
 
 /* legacy wrapper */
 function getSource(){
-  return getUtmData().utm_source;
+  const d = getUtmData();
+  return d.source || d.utm_source;
 }
 
 /* ─── টোস্ট ─── */
@@ -757,7 +770,7 @@ function collectOrderDraft(showErrors){
   var utmData = getUtmData();
   var track = (typeof MMTracking !== 'undefined')
     ? MMTracking.buildSheetTrackingFields(utmData)
-    : {source:utmData.utm_source, medium:utmData.utm_medium, campaign:utmData.utm_campaign, fbclid:utmData.fbclid||'', ttclid:utmData.ttclid||''};
+    : {source:utmData.source||'direct', medium:utmData.utm_medium, campaign:utmData.utm_campaign, fbclid:utmData.fbclid||'', ttclid:utmData.ttclid||''};
   var prefLangInput = document.getElementById('iLanguage');
   const payload = {
     orderId: orderId,
