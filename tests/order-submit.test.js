@@ -117,7 +117,8 @@ function loadSubmitRuntime(opts) {
     'function forgetSentLatch(){ ORDER_SENT_ID = ""; }',
     'function sentLatch(){ return ORDER_SENT_ID; }',
     'function setFallbackMs(ms){ TELEGRAM_APP_FALLBACK_MS = ms; }',
-    'return { submitOrder: submitOrder, noteOrderFieldEdit: noteOrderFieldEdit, refreshSubmitHref: refreshSubmitHref, forgetSentLatch: forgetSentLatch, prefersSameTabTelegram: prefersSameTabTelegram, sentLatch: sentLatch, setFallbackMs: setFallbackMs };'
+    'function setNow(f){ submitNow = f; }',
+    'return { submitOrder: submitOrder, noteOrderFieldEdit: noteOrderFieldEdit, refreshSubmitHref: refreshSubmitHref, forgetSentLatch: forgetSentLatch, prefersSameTabTelegram: prefersSameTabTelegram, sentLatch: sentLatch, setFallbackMs: setFallbackMs, postOrderToSheet: postOrderToSheet, setNow: setNow };'
   ].join('\n');
   const px = (opts && opts.pixels) || {};
   const run = new Function('window', 'document', 'navigator', 'net', 'fetches', 'fbq', 'ttq', 'gtag', 'MMPixels', src);
@@ -882,4 +883,101 @@ test('a throwing Contact pixel does not stop the Telegram handoff', () => {
   assert.equal(api.beacons.length, 1);
   assert.equal(api.location.href.indexOf('tg://resolve?domain=MMHQ_Support&text='), 0);
   assert.equal(api.fields.orderHandoff.hidden, false);
+});
+
+/* ── single submit per order (MM-2026-9882 twin rows, 2026-10-05) ── */
+
+test('one Order ID goes out on exactly one transport, once (never beacon AND fetch)', () => {
+  const api = loadSubmitRuntime({ ua: UAS.android });
+  const payload = { orderId: 'MM-2026-9882', name: 'x' };
+  assert.equal(api.postOrderToSheet(payload), true);
+  assert.equal(api.postOrderToSheet(Object.assign({}, payload)), true);
+  assert.equal(api.beacons.length, 1);
+  assert.equal(api.fetches.length, 0);
+
+  const viaFetch = loadSubmitRuntime({ ua: UAS.android, beaconOk: false });
+  viaFetch.postOrderToSheet(payload);
+  viaFetch.net.beaconOk = true;               // beacon "recovers": still no second send for this id
+  viaFetch.postOrderToSheet(payload);
+  assert.equal(viaFetch.fetches.length, 1);
+  assert.equal(viaFetch.beacons.length, 0);
+
+  api.forgetSentLatch();                       // even if the submit latch were lost, the transport guard holds
+  api.click();
+  const id = JSON.parse(api.beacons[api.beacons.length - 1]).orderId;
+  api.forgetSentLatch();
+  api.setNow(function(){ return Date.now() + 60000; });
+  api.click();
+  assert.equal(api.beacons.filter(function(b){ return JSON.parse(b).orderId === id; }).length, 1);
+});
+
+test('a failed send on every transport releases the id, so the retry still sends once', () => {
+  const api = loadSubmitRuntime({ ua: UAS.android, beaconOk: false, fetchThrows: true });
+  const payload = { orderId: 'MM-2026-1111' };
+  assert.equal(api.postOrderToSheet(payload), false);
+  api.net.beaconOk = true;
+  assert.equal(api.postOrderToSheet(payload), true);
+  assert.equal(api.postOrderToSheet(payload), true);
+  assert.equal(api.beacons.length, 1);
+});
+
+test('a repeat tap on the same order inside the guard window is ignored: no 2nd navigation, no 2nd post', () => {
+  const api = loadSubmitRuntime({ ua: UAS.android });
+  let t = 1000000;
+  api.setNow(function(){ return t; });
+  assert.equal(api.click(), false);
+  assert.equal(api.beacons.length, 1);
+  assert.equal(api.location.href.indexOf('intent://'), 0);
+  api.location.href = 'about:blank#after-first';
+  let prevented = false;
+  t += 500;
+  assert.equal(api.submitOrder({ preventDefault: function(){ prevented = true; } }), false);
+  assert.equal(prevented, true);
+  assert.equal(api.location.href, 'about:blank#after-first');
+  assert.equal(api.beacons.length, 1);
+
+  const ios = loadSubmitRuntime({ ua: UAS.iphone });
+  ios.setNow(function(){ return t; });
+  assert.equal(ios.click(), true);             // native <a> navigation on the first tap
+  let p2 = false;
+  assert.equal(ios.submitOrder({ preventDefault: function(){ p2 = true; } }), false);
+  assert.equal(p2, true);
+  assert.equal(ios.beacons.length, 1);
+});
+
+test('after the guard window the same order reopens Telegram but never posts again', () => {
+  const api = loadSubmitRuntime({ ua: UAS.desktop });
+  let t = 5000000;
+  api.setNow(function(){ return t; });
+  api.click();
+  const first = api.location.href;
+  api.location.href = 'about:blank';
+  t += 2500;
+  api.click();
+  assert.equal(api.location.href, first);
+  assert.equal(api.beacons.length, 1);
+});
+
+test('a changed order (new Order ID) is never held back by the repeat guard', () => {
+  const api = loadSubmitRuntime({ ua: UAS.android });
+  api.setNow(function(){ return 42; });
+  api.click();
+  api.noteOrderFieldEdit();
+  api.click();
+  assert.equal(api.beacons.length, 2);
+  assert.notEqual(JSON.parse(api.beacons[0]).orderId, JSON.parse(api.beacons[1]).orderId);
+});
+
+test('Submit shows a busy class while the order is sending and is never disabled', () => {
+  const api = loadSubmitRuntime({ ua: UAS.android });
+  const classes = new Set(); const attrs = {};
+  api.fields.submitBtn.classList = { add(c){ classes.add(c); }, remove(c){ classes.delete(c); }, contains(c){ return classes.has(c); }, toggle(){} };
+  api.fields.submitBtn.setAttribute = function(k, v){ attrs[k] = v; };
+  api.fields.submitBtn.removeAttribute = function(k){ delete attrs[k]; };
+  api.click();
+  assert.equal(classes.has('is-sending'), true);
+  assert.equal(attrs['aria-busy'], 'true');
+  assert.equal(api.fields.submitBtn.disabled, false);
+  const css = read('css/style.css');
+  assert.match(css, /\.submit-btn\.is-sending\{/);
 });
