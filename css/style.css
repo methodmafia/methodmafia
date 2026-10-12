@@ -218,6 +218,8 @@ h1.hero-title{
 }
 .cta-lg:hover{transform:translateY(-4px) scale(1.02);box-shadow:0 0 58px rgba(255,165,0,.62)}
 .cta-note{font-size:10.5px;color:rgba(200,168,70,.88);letter-spacing:.4px}
+.cta-refund{margin-top:4px}
+.cta-refund a{color:inherit;text-decoration:underline;text-underline-offset:2px}
 
 /* ═══ LAYOUT ═══ */
 .divider{height:1px;background:linear-gradient(90deg,transparent,var(--line-2),transparent);position:relative;z-index:1}
