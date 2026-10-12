@@ -759,6 +759,58 @@ If Notes never gets `PURCHASE_SENT`: tokens missing, trigger not installed, or P
 
 ---
 
+## Pay now (off until you turn it on)
+
+The order form still posts to the Sheet and opens Telegram. USDT / manual payment stays the default.
+
+`config.js` → leave `PAY_NOW.enabled: false`. The Pay now panel is not rendered, and the page does not call `createPayment`.
+
+To turn it on:
+
+```javascript
+PAY_NOW: {
+  enabled: true,
+  crypto: "nowpayments", // or "plisio"
+  card: "whop",
+  nowpayments: { hostedLink: "", monthlyLink: "" },
+  plisio: { hostedLink: "", monthlyLink: "" },
+  whop: { productLink: "", monthlyLink: "" }
+}
+```
+
+Public values only. Do not put API keys in `config.js`.
+
+| Field | What to paste |
+|---|---|
+| `crypto` | `"nowpayments"` (current preferred) or `"plisio"` |
+| `card` | `"whop"` |
+| `nowpayments.hostedLink` | NOWPayments payment link for Entry, `https://nowpayments.io/payment/?iid=…` |
+| `nowpayments.monthlyLink` | Optional Monthly ($15) link |
+| `plisio.hostedLink` | Plisio hosted link, used when `crypto` is `"plisio"` |
+| `plisio.monthlyLink` | Optional |
+| `whop.productLink` | Whop checkout link, `https://whop.com/checkout/plan_…` |
+| `whop.monthlyLink` | Optional |
+
+After a successful submit, **Pay with Crypto** and **Pay with Card** call the Apps Script web app:
+
+`SHEET_URL?action=createPayment&orderId=MM-…&provider=nowpayments|plisio|whop`
+
+The browser does not send an amount. The server re-derives it from the sheet **Plan** column: Entry → 30 USD, Monthly → 15 USD (`config.js` `ENTRY_USD` / `MONTHLY_USD`). A client amount, a query amount, and the Amount cell are ignored.
+
+The script returns `{ ok, url }`. If that call fails, the button opens the hosted link and appends the Order ID (`order_id` on NOWPayments, `order_number` on Plisio, `orderId` plus `metadata[order_id]` on Whop) so a webhook can match the order.
+
+Paste `apps-script/PaymentCheckout.gs` next to `OrderProcessor.gs` and deploy a new web app version (Execute as: Me, Who has access: Anyone). Then set Script properties:
+
+- `NOWPAYMENTS_API_KEY`
+- `PLISIO_API_KEY`
+- `WHOP_API_KEY`
+- `WHOP_COMPANY_ID` (`biz_…`)
+- `WHOP_PRODUCT_ID` (optional, `prod_…`)
+
+Webhook fields: NOWPayments `order_id`, Plisio `order_number`, Whop `metadata.order_id`.
+
+---
+
 ## মনে রাখার নিয়ম
 
 - Purchase **শুধু Entry**, value **সবসময় 30 USD**

@@ -98,6 +98,31 @@ const CONFIG = {
      ডিফল্ট কোন ভাষায় খুলবে
      "en" = English | "bn" = বাংলা | "hi" = हिन्दी */
 
-  DEFAULT_LANG: "en"
+  DEFAULT_LANG: "en",
+
+
+  /* ─── PAY NOW (default OFF) ─────────────────────────────
+     false = আগের মতো শুধু Telegram / USDT। প্যানেল আসবে না।
+     true  = অর্ডার সাবমিটের পর Pay now।
+
+     crypto: "nowpayments" (এখনকার পছন্দ) অথবা "plisio"
+     card:   "whop"
+
+     এখানে শুধু public link। API key এই ফাইলে নয় —
+     সেগুলো Apps Script → Script properties (GUIDE দেখো)।
+
+     hostedLink / productLink খালি থাকলে বাটন Apps Script
+     action=createPayment থেকে checkout URL আনে।
+     লিংক দিলে সেটা fallback; Order ID query-তে যোগ হয়।
+     সার্ভার দাম নিজে বের করে (Entry $30, Monthly $15)। */
+
+  PAY_NOW: {
+    enabled: false,
+    crypto: "nowpayments",
+    card: "whop",
+    nowpayments: { hostedLink: "", monthlyLink: "" },
+    plisio: { hostedLink: "", monthlyLink: "" },
+    whop: { productLink: "", monthlyLink: "" }
+  }
 
 };

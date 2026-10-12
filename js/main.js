@@ -61,6 +61,9 @@ function applyLang(){
   updateLocalPrice();
   updateOrderBox();
   updatePlanOptions();
+  if(typeof MMPay !== 'undefined' && MMPay && typeof MMPay.relabel === 'function'){
+    try{ MMPay.relabel(document, payNowLabels()); }catch(e){}
+  }
 }
 
 /* ─── ভাষা মেনু ─── */
@@ -858,11 +861,67 @@ function noteOrderFieldEdit(){
   refreshSubmitHref();
 }
 
+function payNowLabels(){
+  function pick(key, fallback){
+    var v = '';
+    try{ v = t(key); }catch(e){ v = ''; }
+    return v || fallback;
+  }
+  return {
+    title: pick('payNowTitle', 'Pay now'),
+    note: pick('payNowNote', 'Crypto or card for this order. Telegram payment still works.'),
+    crypto: pick('payNowCrypto', 'Pay with Crypto'),
+    card: pick('payNowCard', 'Pay with Card'),
+    order: pick('payNowOrder', 'Order'),
+    opening: pick('payNowOpening', 'Opening checkout…'),
+    fail: pick('payNowFail', 'Checkout did not open. Use the button again, or pay on Telegram.')
+  };
+}
+
+/* No-op unless PAY_NOW.enabled is exactly true. Does not call the network. */
+function revealPayNow(orderId, plan){
+  if(typeof MMPay === 'undefined' || !MMPay || typeof MMPay.isEnabled !== 'function') return;
+  if(!MMPay.isEnabled(typeof CONFIG === 'undefined' ? null : CONFIG)) return;
+  if(typeof document === 'undefined' || typeof MMPay.mount !== 'function') return;
+  MMPay.mount(document, {
+    config: CONFIG,
+    orderId: orderId,
+    plan: plan,
+    labels: payNowLabels(),
+    onChoose: function(provider){ return openPayCheckout(orderId, plan, provider); }
+  });
+}
+
+function openPayCheckout(orderId, plan, provider){
+  if(typeof MMPay === 'undefined' || !MMPay || typeof MMPay.startCheckout !== 'function') return;
+  var status = document.getElementById('payNowStatus');
+  var labels = payNowLabels();
+  if(status){
+    status.hidden = false;
+    status.textContent = labels.opening;
+  }
+  return MMPay.startCheckout({
+    config: CONFIG,
+    orderId: orderId,
+    plan: plan,
+    provider: provider,
+    fetch: function(url, opts){ return fetch(url, opts); },
+    navigate: function(url){ window.location.href = url; },
+    onFail: function(){
+      if(status){
+        status.hidden = false;
+        status.textContent = labels.fail;
+      }
+    }
+  });
+}
+
 /* ─── অর্ডার সাবমিট ───
    Beacon first, then this same tab goes to the Telegram app. No popup.
    The link href stays the https t.me text URL. Only intent:// arms a
    fallback timer. Auxclick keeps the browser's own new tab.
-   No success toast, no spinner, no auto-copy. */
+   No success toast, no spinner, no auto-copy.
+   Pay now mounts only after that post, and only when the flag is on. */
 function submitOrder(e){
   var draft = collectOrderDraft(true);
   var btn = document.getElementById('submitBtn');
@@ -926,6 +985,7 @@ function submitOrder(e){
     }catch(err){}
 
     try{ localStorage.setItem('mm_last_order', orderId); }catch(err){}
+    revealPayNow(orderId, payload.plan);
   }
 
   if(e && e.type === 'auxclick') return true;
