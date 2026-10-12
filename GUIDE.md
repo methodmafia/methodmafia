@@ -765,6 +765,8 @@ The order form still posts to the Sheet and opens Telegram. USDT / manual paymen
 
 `config.js` → leave `PAY_NOW.enabled: false`. The Pay now panel is not rendered.
 
+The panel is also limited to `PAY_NOW.plans`. The default allowlist is `["entry"]`, so only an Entry ($30) order can show **Pay now**. A Monthly ($15) order or renewal shows nothing new: the same Sheet post and Telegram / USDT handoff, with no checkout request.
+
 NOWPayments is the default crypto provider. **Pay with Card** uses the same NOWPayments invoice, which includes the gateway's card on-ramp. Whop is optional and stays off unless `whop.enabled` is `true`.
 
 To turn it on:
@@ -772,6 +774,7 @@ To turn it on:
 ```javascript
 PAY_NOW: {
   enabled: true,
+  plans: ["entry"],
   crypto: "nowpayments", // or "plisio"
   nowpayments: { hostedLink: "", monthlyLink: "" },
   plisio: { hostedLink: "", monthlyLink: "" },
@@ -783,6 +786,7 @@ Public values only. Do not put API keys in `config.js`.
 
 | Field | What to paste |
 |---|---|
+| `plans` | `["entry"]`. Only these plans see Pay now. Monthly is not in the list. |
 | `crypto` | `"nowpayments"` (default) or `"plisio"` |
 | `nowpayments.hostedLink` | NOWPayments payment link for Entry, `https://nowpayments.io/payment/?iid=…` |
 | `nowpayments.monthlyLink` | Optional Monthly ($15) link |
@@ -798,7 +802,7 @@ After a successful submit, **Pay with Crypto** and **Pay with Card** POST the Ap
 
 Body (JSON, `text/plain`): `{ "orderId": "MM-…", "provider": "nowpayments" }` — or `"plisio"` / `"whop"`. The query is only `pay=create`. Order id and provider are not query params, and the body has no price.
 
-The browser does not send an amount. The server re-derives it from the sheet **Plan** column: Entry → 30 USD, Monthly → 15 USD (`config.js` `ENTRY_USD` / `MONTHLY_USD`). A client amount, a query amount, and the Amount cell are ignored.
+The browser does not send an amount. The server re-derives it from the sheet **Plan** column and refuses anything that is not Entry (`plan_not_allowed`). Entry → 30 USD (`config.js` `ENTRY_USD`). A client amount, a query amount, the Amount cell, and a client plan name are ignored. Monthly stays on Telegram.
 
 The script returns `{ ok, url }`. If that call fails, the button opens the hosted link and appends the Order ID (`order_id` on NOWPayments, `order_number` on Plisio, `orderId` plus `metadata[order_id]` on Whop) so a webhook can match the order.
 

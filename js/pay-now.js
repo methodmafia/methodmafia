@@ -1,8 +1,9 @@
 /* ═══════════════════════════════════════════════════════════
    THE METHOD MAFIA — Pay now (flag off by default)
    Public links only. The browser never sends the charge.
-   Apps Script re-derives Entry $30 / Monthly $15 from the
-   sheet plan when POST exec?pay=create runs.
+   Apps Script re-derives Entry $30 from the sheet plan when
+   POST exec?pay=create runs. Only plans in PAY_NOW.plans
+   (default "entry") get a panel. Monthly stays on Telegram.
    ═══════════════════════════════════════════════════════════ */
 (function(root, factory){
   if(typeof module === 'object' && module.exports){
@@ -21,6 +22,17 @@
 
   function isEnabled(config){
     return !!(config && config.PAY_NOW && config.PAY_NOW.enabled === true);
+  }
+
+  /* Allowlist is case-insensitive. An empty or missing list shows nothing. */
+  function planAllowed(config, plan){
+    var key = String(plan || '').trim().toLowerCase();
+    var list = config && config.PAY_NOW && config.PAY_NOW.plans;
+    if(!key || !list || !list.length) return false;
+    for(var i = 0; i < list.length; i++){
+      if(String(list[i] || '').trim().toLowerCase() === key) return true;
+    }
+    return false;
   }
 
   function cryptoProvider(config){
@@ -102,6 +114,7 @@
 
   function startCheckout(opts){
     opts = opts || {};
+    if(!planAllowed(opts.config, opts.plan)) return Promise.resolve('');
     var provider = String(opts.provider || '').toLowerCase();
     var orderId = String(opts.orderId || '');
     var fallback = hostedFallbackUrl(opts.config, provider, orderId, opts.plan);
@@ -125,6 +138,10 @@
         return null;
       })
       .then(function(json){
+        if(json && json.ok === false && json.error === 'plan_not_allowed'){
+          if(typeof opts.onFail === 'function') opts.onFail();
+          return '';
+        }
         var apiUrl = '';
         if(json && json.ok === true && typeof json.url === 'string' && /^https:\/\//i.test(json.url)){
           apiUrl = json.url;
@@ -167,8 +184,9 @@
     if(!doc || !opts) return;
     var box = doc.getElementById('payNow');
     if(!box) return;
-    if(!isEnabled(opts.config)){
+    if(!isEnabled(opts.config) || !planAllowed(opts.config, opts.plan)){
       box.hidden = true;
+      clearChildren(box);
       return;
     }
     var labels = opts.labels || {};
@@ -232,6 +250,7 @@
 
   return {
     isEnabled: isEnabled,
+    planAllowed: planAllowed,
     cryptoProvider: cryptoProvider,
     cardProvider: cardProvider,
     hostedFallbackUrl: hostedFallbackUrl,

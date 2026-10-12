@@ -9,9 +9,11 @@
  *   body: { orderId, provider }   provider = nowpayments | plisio | whop
  *
  * The browser does not send an amount. This file re-derives the charge
- * from the sheet Plan column (Entry → 30 USD, Monthly → 15 USD), matching
- * config.js ENTRY_USD / MONTHLY_USD. A query amount, a client amount, and
- * the sheet Amount cell are ignored.
+ * from the sheet Plan column (Entry → 30 USD), matching config.js
+ * ENTRY_USD. Checkout is refused unless that plan is on PAY_NOW_PLANS_
+ * (keep in sync with config.js PAY_NOW.plans; today only "entry").
+ * Monthly stays on the Telegram / USDT flow. A query amount, a client
+ * amount, and the sheet Amount cell are ignored.
  *
  * Script properties (Project Settings → Script properties). Never put these
  * in config.js or any other website file:
@@ -44,6 +46,18 @@ function chargeUsd_(order) {
 
 function isOrderId_(id) {
   return /^MM-\d{4}-\d{4,5}$/.test(String(id || ''));
+}
+
+/* Keep in sync with config.js PAY_NOW.plans. Non-entry is refused. */
+var PAY_NOW_PLANS_ = ['entry'];
+
+function payNowPlanAllowed_(plan) {
+  var key = String(plan || '').trim().toLowerCase();
+  if (!key) return false;
+  for (var i = 0; i < PAY_NOW_PLANS_.length; i++) {
+    if (String(PAY_NOW_PLANS_[i] || '').trim().toLowerCase() === key) return true;
+  }
+  return false;
 }
 
 function nowpaymentsInvoiceBody_(orderId, amountUsd, plan) {
@@ -160,6 +174,9 @@ function handleCreatePayment_(params) {
   if (!row) return paymentJson_({ ok: false, error: 'not_found', orderId: orderId });
 
   var plan = sheet.getRange(row, COL.PLAN + 1).getValue();
+  if (!payNowPlanAllowed_(plan)) {
+    return paymentJson_({ ok: false, error: 'plan_not_allowed', orderId: orderId });
+  }
   var amount = chargeUsd_({ plan: plan });
   if (!amount) return paymentJson_({ ok: false, error: 'unknown_plan', orderId: orderId });
 

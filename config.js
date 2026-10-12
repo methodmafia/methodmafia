@@ -103,8 +103,9 @@ const CONFIG = {
 
   /* ─── PAY NOW (default OFF) ─────────────────────────────
      false = আগের মতো শুধু Telegram / USDT। প্যানেল আসবে না।
-     true  = অর্ডার সাবমিটের পর Pay now।
+     true  = অর্ডার সাবমিটের পর Pay now, শুধু plans তালিকার প্ল্যানে।
 
+     plans: ["entry"] = শুধু Entry $30। Monthly $15 তে প্যানেল আসে না।
      crypto: "nowpayments" (ডিফল্ট) অথবা "plisio"
      Pay with Card ডিফল্টে NOWPayments invoice (কার্ড অন-র‍্যাম্প)।
      whop.enabled: true হলেই কার্ড বাটন Whop ব্যবহার করে।
@@ -115,10 +116,11 @@ const CONFIG = {
      hostedLink / productLink খালি থাকলে বাটন Apps Script
      POST ?pay=create থেকে checkout URL আনে।
      লিংক দিলে সেটা fallback; Order ID query-তে যোগ হয়।
-     সার্ভার দাম নিজে বের করে (Entry $30, Monthly $15)। */
+     সার্ভার দাম নিজে বের করে। এখন শুধু Entry $30। */
 
   PAY_NOW: {
     enabled: false,
+    plans: ["entry"],
     crypto: "nowpayments",
     nowpayments: { hostedLink: "", monthlyLink: "" },
     plisio: { hostedLink: "", monthlyLink: "" },

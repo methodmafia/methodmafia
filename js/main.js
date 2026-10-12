@@ -878,7 +878,7 @@ function payNowLabels(){
   };
 }
 
-/* No-op unless PAY_NOW.enabled is exactly true. Does not call the network. */
+/* No-op unless the flag is on and the plan is in PAY_NOW.plans. No network. */
 function revealPayNow(orderId, plan){
   if(typeof MMPay === 'undefined' || !MMPay || typeof MMPay.isEnabled !== 'function') return;
   if(!MMPay.isEnabled(typeof CONFIG === 'undefined' ? null : CONFIG)) return;

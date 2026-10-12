@@ -24,6 +24,7 @@ function loadCheckoutFns() {
     'planAmountUsd_:planAmountUsd_,' +
     'chargeUsd_:chargeUsd_,' +
     'isOrderId_:isOrderId_,' +
+    'payNowPlanAllowed_:payNowPlanAllowed_,' +
     'nowpaymentsInvoiceBody_:nowpaymentsInvoiceBody_,' +
     'plisioInvoiceParams_:plisioInvoiceParams_,' +
     'whopCheckoutBody_:whopCheckoutBody_,' +
@@ -102,6 +103,7 @@ function fakeDoc() {
 function payConfig(over) {
   const pay = Object.assign({
     enabled: false,
+    plans: ['entry'],
     crypto: 'nowpayments',
     nowpayments: { hostedLink: 'https://nowpayments.io/payment/?iid=PUBLIC', monthlyLink: '' },
     plisio: { hostedLink: 'https://plisio.net/account/stores/PUBLIC', monthlyLink: '' },
@@ -183,7 +185,7 @@ function loadPaySubmit(opts) {
   const src = [
     'var LANG = "en";',
     'var SELECTED_PAY = "Binance Pay";',
-    'var SELECTED_PLAN = "entry";',
+    'var SELECTED_PLAN = ' + JSON.stringify((opts && opts.selectedPlan) || 'entry') + ';',
     'var SELECTED_PREF_LANG = "en";',
     'var CONFIG = ' + JSON.stringify(config) + ';',
     'var MMSheet = {',
@@ -225,6 +227,7 @@ test('PAY_NOW defaults off and config.js holds only public links', () => {
   assert.doesNotMatch(src, /NOWPAYMENTS_API_KEY|PLISIO_API_KEY|WHOP_API_KEY|x-api-key|api_key\s*[:=]/i);
   const CONFIG = new Function(src + '\nreturn CONFIG;')();
   assert.equal(CONFIG.PAY_NOW.enabled, false);
+  assert.deepEqual(CONFIG.PAY_NOW.plans, ['entry']);
   assert.equal(CONFIG.PAY_NOW.crypto, 'nowpayments');
   assert.equal(CONFIG.PAY_NOW.card, undefined);
   assert.equal(CONFIG.PAY_NOW.whop.enabled, false);
@@ -446,6 +449,95 @@ test('checkout prefers the Apps Script URL and falls back without sending an amo
   assert.equal(failed, true);
 });
 
+test('Monthly does not mount Pay now and checkout refuses a plan outside the allowlist', async () => {
+  const MMPay = loadPay();
+  assert.equal(MMPay.planAllowed(payConfig(), 'Entry'), true);
+  assert.equal(MMPay.planAllowed(payConfig(), 'entry'), true);
+  assert.equal(MMPay.planAllowed(payConfig(), 'Monthly'), false);
+  assert.equal(MMPay.planAllowed(payConfig(), 'monthly'), false);
+  assert.equal(MMPay.planAllowed(payConfig(), ''), false);
+  assert.equal(MMPay.planAllowed({ PAY_NOW: { enabled: true } }, 'Entry'), false);
+  assert.equal(MMPay.planAllowed(payConfig({ plans: [] }), 'Entry'), false);
+
+  const doc = fakeDoc();
+  MMPay.mount(doc, {
+    config: payConfig({ enabled: true }),
+    orderId: 'MM-2026-1515',
+    plan: 'Monthly',
+    labels: LABELS,
+    onChoose: function() { throw new Error('monthly must not choose'); }
+  });
+  assert.equal(doc.payNow.hidden, true);
+  assert.equal(doc.payNow.children.length, 0);
+  assert.equal(doc.getElementById('payCrypto'), null);
+  assert.equal(doc.getElementById('payCard'), null);
+
+  const calls = [];
+  let dest = 'untouched';
+  const blocked = await MMPay.startCheckout({
+    config: payConfig({ enabled: true }),
+    orderId: 'MM-2026-1515',
+    plan: 'Monthly',
+    provider: 'nowpayments',
+    fetch: function(url, opts) {
+      calls.push({ url: url, opts: opts });
+      return Promise.resolve({ json: function() { return Promise.resolve({ ok: true, url: 'https://nowpayments.io/payment/?iid=LIVE' }); } });
+    },
+    navigate: function(url) { dest = url; }
+  });
+  assert.equal(blocked, '');
+  assert.equal(dest, 'untouched');
+  assert.equal(calls.length, 0);
+
+  dest = 'untouched';
+  const refused = await MMPay.startCheckout({
+    config: payConfig({ enabled: true }),
+    orderId: 'MM-2026-1001',
+    plan: 'Entry',
+    provider: 'nowpayments',
+    fetch: function() {
+      return Promise.resolve({
+        json: function() { return Promise.resolve({ ok: false, error: 'plan_not_allowed' }); }
+      });
+    },
+    navigate: function(url) { dest = url; },
+    onFail: function() { dest = 'failed'; }
+  });
+  assert.equal(refused, '');
+  assert.equal(dest, 'failed');
+
+  const api = loadCheckoutFns();
+  assert.equal(api.payNowPlanAllowed_('Entry'), true);
+  assert.equal(api.payNowPlanAllowed_(' ENTRY '), true);
+  assert.equal(api.payNowPlanAllowed_('Monthly'), false);
+  assert.equal(api.payNowPlanAllowed_('monthly'), false);
+  assert.equal(api.payNowPlanAllowed_(''), false);
+  const pay = read('apps-script/PaymentCheckout.gs');
+  const handler = pay.slice(pay.indexOf('function handleCreatePayment_'), pay.indexOf('function createProviderCheckoutUrl_'));
+  const gate = handler.indexOf('payNowPlanAllowed_(plan)');
+  const charge = handler.indexOf('chargeUsd_');
+  assert.ok(gate !== -1 && gate < charge);
+  assert.match(handler, /plan_not_allowed/);
+});
+
+test('a Monthly submit keeps Telegram and does not render Pay now', () => {
+  const api = loadPaySubmit({ pay: { enabled: true }, selectedPlan: 'monthly' });
+  assert.equal(api.click(), false);
+  assert.equal(api.beacons.length, 1);
+  assert.equal(api.fetches.length, 0);
+  const order = JSON.parse(api.beacons[0]);
+  assert.equal(order.plan, 'Monthly');
+  assert.equal(order.amount, '$15');
+  assert.equal(order.pay, undefined);
+  assert.equal(api.beaconUrls[0].includes('pay='), false);
+  assert.equal(api.fields.payNow.hidden, true);
+  assert.equal(api.fields.payNow.children.length, 0);
+  assert.equal(api.doc.getElementById('payCrypto'), null);
+  assert.equal(api.doc.getElementById('payCard'), null);
+  assert.equal(api.fields.orderHandoff.hidden, false);
+  assert.equal(api.location.href.indexOf('tg://resolve?domain=MMHQ_Support&text='), 0);
+});
+
 test('flag off submit does not render Pay now and makes no createPayment call', () => {
   const api = loadPaySubmit({ pay: { enabled: false } });
   assert.equal(api.click(), false);
@@ -635,6 +727,7 @@ test('POST ?pay=create is separate from the order writer, which has no pay hook'
 test('GUIDE says how to turn Pay now on and which public values to fill', () => {
   const guide = read('GUIDE.md');
   assert.match(guide, /PAY_NOW/);
+  assert.match(guide, /plans:\s*\[[^\]]*["']entry["']/);
   assert.match(guide, /enabled:\s*false/);
   assert.match(guide, /pay=create/);
   assert.match(guide, /whop\.enabled/);
