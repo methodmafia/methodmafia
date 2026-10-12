@@ -980,3 +980,23 @@ footer{
   .next-steps-box{padding:16px 15px}
   .upsell-box{padding:15px 16px}
 }
+
+/* Decorative motion only. Timer, popups, tabs, and ratings stay as they are. */
+@media (prefers-reduced-motion: reduce){
+  html{scroll-behavior:auto}
+  #bg-canvas{display:none}
+  .ticker,
+  .logo-img,
+  .logo-ring,
+  .logo-ring-2,
+  .dot,
+  .p-save-badge{
+    animation:none;
+  }
+  .logo-img{transition:none}
+  .reveal{
+    opacity:1;
+    transform:none;
+    transition:none;
+  }
+}
