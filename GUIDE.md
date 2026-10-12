@@ -761,9 +761,11 @@ If Notes never gets `PURCHASE_SENT`: tokens missing, trigger not installed, or P
 
 ## Pay now (off until you turn it on)
 
-The order form still posts to the Sheet and opens Telegram. USDT / manual payment stays the default.
+The order form still posts to the Sheet and opens Telegram. USDT / manual payment stays the default. That order post has no `pay` query and no payment hook.
 
-`config.js` → leave `PAY_NOW.enabled: false`. The Pay now panel is not rendered, and the page does not call `createPayment`.
+`config.js` → leave `PAY_NOW.enabled: false`. The Pay now panel is not rendered.
+
+NOWPayments is the default crypto provider. **Pay with Card** uses the same NOWPayments invoice, which includes the gateway's card on-ramp. Whop is optional and stays off unless `whop.enabled` is `true`.
 
 To turn it on:
 
@@ -771,10 +773,9 @@ To turn it on:
 PAY_NOW: {
   enabled: true,
   crypto: "nowpayments", // or "plisio"
-  card: "whop",
   nowpayments: { hostedLink: "", monthlyLink: "" },
   plisio: { hostedLink: "", monthlyLink: "" },
-  whop: { productLink: "", monthlyLink: "" }
+  whop: { enabled: false, productLink: "", monthlyLink: "" }
 }
 ```
 
@@ -782,18 +783,20 @@ Public values only. Do not put API keys in `config.js`.
 
 | Field | What to paste |
 |---|---|
-| `crypto` | `"nowpayments"` (current preferred) or `"plisio"` |
-| `card` | `"whop"` |
+| `crypto` | `"nowpayments"` (default) or `"plisio"` |
 | `nowpayments.hostedLink` | NOWPayments payment link for Entry, `https://nowpayments.io/payment/?iid=…` |
 | `nowpayments.monthlyLink` | Optional Monthly ($15) link |
 | `plisio.hostedLink` | Plisio hosted link, used when `crypto` is `"plisio"` |
 | `plisio.monthlyLink` | Optional |
-| `whop.productLink` | Whop checkout link, `https://whop.com/checkout/plan_…` |
-| `whop.monthlyLink` | Optional |
+| `whop.enabled` | `false` by default. `true` sends **Pay with Card** to Whop |
+| `whop.productLink` | Whop checkout link, `https://whop.com/checkout/plan_…`, used only when `whop.enabled` is true |
+| `whop.monthlyLink` | Optional, same switch |
 
-After a successful submit, **Pay with Crypto** and **Pay with Card** call the Apps Script web app:
+After a successful submit, **Pay with Crypto** and **Pay with Card** POST the Apps Script web app:
 
-`SHEET_URL?action=createPayment&orderId=MM-…&provider=nowpayments|plisio|whop`
+`POST SHEET_URL?pay=create`
+
+Body (JSON, `text/plain`): `{ "orderId": "MM-…", "provider": "nowpayments" }` — or `"plisio"` / `"whop"`. The query is only `pay=create`. Order id and provider are not query params, and the body has no price.
 
 The browser does not send an amount. The server re-derives it from the sheet **Plan** column: Entry → 30 USD, Monthly → 15 USD (`config.js` `ENTRY_USD` / `MONTHLY_USD`). A client amount, a query amount, and the Amount cell are ignored.
 
@@ -803,8 +806,8 @@ Paste `apps-script/PaymentCheckout.gs` next to `OrderProcessor.gs` and deploy a 
 
 - `NOWPAYMENTS_API_KEY`
 - `PLISIO_API_KEY`
-- `WHOP_API_KEY`
-- `WHOP_COMPANY_ID` (`biz_…`)
+- `WHOP_API_KEY` (only if `whop.enabled` is true)
+- `WHOP_COMPANY_ID` (`biz_…`, only if Whop is on)
 - `WHOP_PRODUCT_ID` (optional, `prod_…`)
 
 Webhook fields: NOWPayments `order_id`, Plisio `order_number`, Whop `metadata.order_id`.

@@ -105,24 +105,24 @@ const CONFIG = {
      false = আগের মতো শুধু Telegram / USDT। প্যানেল আসবে না।
      true  = অর্ডার সাবমিটের পর Pay now।
 
-     crypto: "nowpayments" (এখনকার পছন্দ) অথবা "plisio"
-     card:   "whop"
+     crypto: "nowpayments" (ডিফল্ট) অথবা "plisio"
+     Pay with Card ডিফল্টে NOWPayments invoice (কার্ড অন-র‍্যাম্প)।
+     whop.enabled: true হলেই কার্ড বাটন Whop ব্যবহার করে।
 
      এখানে শুধু public link। API key এই ফাইলে নয় —
      সেগুলো Apps Script → Script properties (GUIDE দেখো)।
 
      hostedLink / productLink খালি থাকলে বাটন Apps Script
-     action=createPayment থেকে checkout URL আনে।
+     POST ?pay=create থেকে checkout URL আনে।
      লিংক দিলে সেটা fallback; Order ID query-তে যোগ হয়।
      সার্ভার দাম নিজে বের করে (Entry $30, Monthly $15)। */
 
   PAY_NOW: {
     enabled: false,
     crypto: "nowpayments",
-    card: "whop",
     nowpayments: { hostedLink: "", monthlyLink: "" },
     plisio: { hostedLink: "", monthlyLink: "" },
-    whop: { productLink: "", monthlyLink: "" }
+    whop: { enabled: false, productLink: "", monthlyLink: "" }
   }
 
 };

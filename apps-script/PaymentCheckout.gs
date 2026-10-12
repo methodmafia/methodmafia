@@ -5,7 +5,8 @@
  * Deploy a new web app version (Execute as: Me, Access: Anyone).
  *
  * The website calls:
- *   GET exec?action=createPayment&orderId=MM-…&provider=nowpayments|plisio|whop
+ *   POST exec?pay=create
+ *   body: { orderId, provider }   provider = nowpayments | plisio | whop
  *
  * The browser does not send an amount. This file re-derives the charge
  * from the sheet Plan column (Entry → 30 USD, Monthly → 15 USD), matching

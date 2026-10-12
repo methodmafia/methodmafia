@@ -103,10 +103,9 @@ function payConfig(over) {
   const pay = Object.assign({
     enabled: false,
     crypto: 'nowpayments',
-    card: 'whop',
     nowpayments: { hostedLink: 'https://nowpayments.io/payment/?iid=PUBLIC', monthlyLink: '' },
     plisio: { hostedLink: 'https://plisio.net/account/stores/PUBLIC', monthlyLink: '' },
-    whop: { productLink: 'https://whop.com/checkout/plan_PUBLIC', monthlyLink: '' }
+    whop: { enabled: false, productLink: 'https://whop.com/checkout/plan_PUBLIC', monthlyLink: '' }
   }, over || {});
   return {
     SUPPORT: 'https://t.me/MMHQ_Support',
@@ -129,6 +128,7 @@ function loadPaySubmit(opts) {
   const config = payConfig(opts && opts.pay);
   const fetches = [];
   const beacons = [];
+  const beaconUrls = [];
   const doc = fakeDoc();
   function cls() {
     return { add(){}, remove(){}, contains(){ return false; }, toggle(){} };
@@ -155,7 +155,8 @@ function loadPaySubmit(opts) {
   const navigatorObj = {
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36',
     maxTouchPoints: 0,
-    sendBeacon: function(_url, body) {
+    sendBeacon: function(url, body) {
+      beaconUrls.push(String(url));
       beacons.push(String(body));
       return true;
     }
@@ -195,7 +196,7 @@ function loadPaySubmit(opts) {
     main.slice(start, end),
     'function fetch(url, opts){',
     '  fetches.push({ url: String(url), opts: opts || {} });',
-    '  if (String(url).indexOf("action=createPayment") !== -1) {',
+    '  if (String(url).indexOf("pay=create") !== -1) {',
     '    return Promise.resolve({',
     '      ok: true,',
     '      json: function(){ return Promise.resolve({ ok: true, url: "https://pay.example/invoice?ref=1" }); }',
@@ -208,6 +209,7 @@ function loadPaySubmit(opts) {
   const run = new Function('window', 'document', 'navigator', 'fetches', 'labels', 'MMPay', src);
   const api = run(windowObj, documentObj, navigatorObj, fetches, labels, MMPay);
   api.beacons = beacons;
+  api.beaconUrls = beaconUrls;
   api.fetches = fetches;
   api.location = location;
   api.fields = fields;
@@ -224,7 +226,8 @@ test('PAY_NOW defaults off and config.js holds only public links', () => {
   const CONFIG = new Function(src + '\nreturn CONFIG;')();
   assert.equal(CONFIG.PAY_NOW.enabled, false);
   assert.equal(CONFIG.PAY_NOW.crypto, 'nowpayments');
-  assert.equal(CONFIG.PAY_NOW.card, 'whop');
+  assert.equal(CONFIG.PAY_NOW.card, undefined);
+  assert.equal(CONFIG.PAY_NOW.whop.enabled, false);
   assert.equal(CONFIG.PAY_NOW.nowpayments.hostedLink, '');
   assert.equal(CONFIG.PAY_NOW.plisio.hostedLink, '');
   assert.equal(CONFIG.PAY_NOW.whop.productLink, '');
@@ -274,18 +277,22 @@ test('flag off mounts nothing and createPayment omits the amount', () => {
   assert.equal(doc.getElementById('payCard'), null);
 
   const url = MMPay.buildCreatePaymentUrl(
-    'https://script.google.com/macros/s/x/exec?token=SECRET&foo=1',
-    'MM-2026-1001',
-    'nowpayments'
+    'https://script.google.com/macros/s/x/exec?token=SECRET&foo=1'
   );
   const u = new URL(url);
-  assert.equal(u.searchParams.get('action'), 'createPayment');
-  assert.equal(u.searchParams.get('orderId'), 'MM-2026-1001');
-  assert.equal(u.searchParams.get('provider'), 'nowpayments');
+  assert.equal(u.searchParams.get('pay'), 'create');
+  assert.equal(u.searchParams.get('action'), null);
+  assert.equal(u.searchParams.get('orderId'), null);
+  assert.equal(u.searchParams.get('provider'), null);
   assert.equal(u.searchParams.get('token'), null);
   assert.equal(u.searchParams.get('amount'), null);
   assert.equal(u.searchParams.get('price'), null);
   assert.equal(url.includes('SECRET'), false);
+  const body = JSON.parse(MMPay.createPaymentFetchOptions('MM-2026-1001', 'nowpayments').body);
+  assert.equal(body.orderId, 'MM-2026-1001');
+  assert.equal(body.provider, 'nowpayments');
+  assert.equal(body.amount, undefined);
+  assert.equal(body.pay, undefined);
 });
 
 test('flag on renders Pay with Crypto and Pay with Card with the order id', () => {
@@ -305,17 +312,40 @@ test('flag on renders Pay with Crypto and Pay with Card with the order id', () =
   assert.equal(crypto.textContent, 'Pay with Crypto');
   assert.equal(card.textContent, 'Pay with Card');
   assert.equal(crypto.getAttribute('data-provider'), 'plisio');
-  assert.equal(card.getAttribute('data-provider'), 'whop');
+  assert.equal(card.getAttribute('data-provider'), 'nowpayments');
   const cryptoUrl = new URL(crypto.href);
   const cardUrl = new URL(card.href);
   assert.equal(cryptoUrl.searchParams.get('order_number'), 'MM-2026-4242');
   assert.match(cryptoUrl.hostname, /plisio\.net/);
+  assert.equal(cardUrl.searchParams.get('order_id'), 'MM-2026-4242');
+  assert.match(cardUrl.hostname, /nowpayments\.io/);
+  assert.equal(cardUrl.searchParams.get('orderId'), null);
+  crypto.listeners.click({ preventDefault: function() {} });
+  card.listeners.click({ preventDefault: function() {} });
+  assert.deepEqual(chosen, ['plisio', 'nowpayments']);
+});
+
+test('Whop is off unless whop.enabled is true, then Pay with Card uses it', () => {
+  const MMPay = loadPay();
+  assert.equal(MMPay.cardProvider(payConfig()), 'nowpayments');
+  assert.equal(MMPay.cardProvider(payConfig({ whop: { enabled: false, productLink: 'https://whop.com/checkout/plan_PUBLIC' } })), 'nowpayments');
+  const doc = fakeDoc();
+  MMPay.mount(doc, {
+    config: payConfig({
+      enabled: true,
+      whop: { enabled: true, productLink: 'https://whop.com/checkout/plan_PUBLIC', monthlyLink: '' }
+    }),
+    orderId: 'MM-2026-4242',
+    plan: 'Entry',
+    labels: LABELS,
+    onChoose: function() {}
+  });
+  const card = doc.getElementById('payCard');
+  const cardUrl = new URL(card.href);
+  assert.equal(card.getAttribute('data-provider'), 'whop');
   assert.equal(cardUrl.searchParams.get('orderId'), 'MM-2026-4242');
   assert.equal(cardUrl.searchParams.get('metadata[order_id]'), 'MM-2026-4242');
   assert.match(cardUrl.pathname, /plan_PUBLIC/);
-  crypto.listeners.click({ preventDefault: function() {} });
-  card.listeners.click({ preventDefault: function() {} });
-  assert.deepEqual(chosen, ['plisio', 'whop']);
 });
 
 test('NOWPayments fallback uses order_id and a monthly link when the plan is Monthly', () => {
@@ -342,8 +372,9 @@ test('NOWPayments fallback uses order_id and a monthly link when the plan is Mon
     'Entry'
   ), '');
   assert.equal(MMPay.cryptoProvider(payConfig({ crypto: 'plisio' })), 'plisio');
+  assert.equal(MMPay.cryptoProvider(payConfig({})), 'nowpayments');
   assert.equal(MMPay.cryptoProvider(payConfig({ crypto: 'nowpayments' })), 'nowpayments');
-  assert.equal(MMPay.cardProvider(payConfig()), 'whop');
+  assert.equal(MMPay.cardProvider(payConfig()), 'nowpayments');
 });
 
 test('checkout prefers the Apps Script URL and falls back without sending an amount', async () => {
@@ -369,14 +400,19 @@ test('checkout prefers the Apps Script URL and falls back without sending an amo
   assert.equal(apiUrl, 'https://nowpayments.io/payment/?iid=LIVE');
   assert.equal(dest, apiUrl);
   const u = new URL(calls[0].url);
-  assert.equal(u.searchParams.get('action'), 'createPayment');
-  assert.equal(u.searchParams.get('orderId'), 'MM-2026-1001');
-  assert.equal(u.searchParams.get('provider'), 'nowpayments');
+  const posted = JSON.parse(calls[0].opts.body);
+  assert.equal(u.searchParams.get('pay'), 'create');
+  assert.equal(u.searchParams.get('action'), null);
+  assert.equal(u.searchParams.get('orderId'), null);
+  assert.equal(u.searchParams.get('provider'), null);
   assert.equal(u.searchParams.get('amount'), null);
-  assert.equal(calls[0].opts.method, 'GET');
+  assert.equal(posted.orderId, 'MM-2026-1001');
+  assert.equal(posted.provider, 'nowpayments');
+  assert.equal(posted.amount, undefined);
+  assert.equal(posted.pay, undefined);
+  assert.equal(calls[0].opts.method, 'POST');
   assert.equal(calls[0].opts.mode, 'cors');
   assert.equal(calls[0].opts.credentials, 'omit');
-  assert.equal(calls[0].opts.body, undefined);
 
   dest = '';
   const fallback = await MMPay.startCheckout({
@@ -423,27 +459,34 @@ test('flag off submit does not render Pay now and makes no createPayment call', 
   const body = JSON.parse(api.beacons[0]);
   assert.match(body.orderId, /^MM-\d{4}-\d{4,5}$/);
   assert.equal(body.action, undefined);
+  assert.equal(body.pay, undefined);
+  assert.equal(api.beaconUrls[0].includes('pay='), false);
+  assert.equal(api.beaconUrls[0].includes('createPayment'), false);
   assert.equal(JSON.stringify(api.beacons).includes('createPayment'), false);
 });
 
-test('flag on submit shows the panel and Pay buttons call createPayment with the order id', async () => {
+test('flag on submit shows the panel and Pay buttons POST pay=create with the order id', async () => {
   const api = loadPaySubmit({
     pay: {
       enabled: true,
-      crypto: 'nowpayments',
-      card: 'whop'
+      crypto: 'nowpayments'
     }
   });
   api.click();
   assert.equal(api.fetches.length, 0);
   assert.equal(api.fields.payNow.hidden, false);
   const id = JSON.parse(api.beacons[0]).orderId;
+  const order = JSON.parse(api.beacons[0]);
+  assert.equal(order.pay, undefined);
+  assert.equal(api.beaconUrls[0].includes('pay='), false);
   const crypto = api.doc.getElementById('payCrypto');
   const card = api.doc.getElementById('payCard');
   assert.equal(crypto.textContent, 'Pay with Crypto');
   assert.equal(card.textContent, 'Pay with Card');
+  assert.equal(crypto.getAttribute('data-provider'), 'nowpayments');
+  assert.equal(card.getAttribute('data-provider'), 'nowpayments');
   assert.equal(new URL(crypto.href).searchParams.get('order_id'), id);
-  assert.equal(new URL(card.href).searchParams.get('orderId'), id);
+  assert.equal(new URL(card.href).searchParams.get('order_id'), id);
   assert.equal(crypto.getAttribute('data-order-id'), id);
 
   const ev = { preventDefault: function() { this.prevented = true; }, prevented: false };
@@ -451,18 +494,26 @@ test('flag on submit shows the panel and Pay buttons call createPayment with the
   assert.equal(ev.prevented, true);
   assert.equal(api.fetches.length, 1);
   const u = new URL(api.fetches[0].url);
-  assert.equal(u.searchParams.get('action'), 'createPayment');
-  assert.equal(u.searchParams.get('orderId'), id);
-  assert.equal(u.searchParams.get('provider'), 'nowpayments');
+  const posted = JSON.parse(api.fetches[0].opts.body);
+  assert.equal(u.searchParams.get('pay'), 'create');
+  assert.equal(u.searchParams.get('orderId'), null);
+  assert.equal(u.searchParams.get('provider'), null);
   assert.equal(u.searchParams.get('amount'), null);
   assert.equal(u.searchParams.get('token'), null);
   assert.equal(api.fetches[0].url.includes('SECRET'), false);
+  assert.equal(api.fetches[0].opts.method, 'POST');
+  assert.equal(posted.orderId, id);
+  assert.equal(posted.provider, 'nowpayments');
+  assert.equal(posted.amount, undefined);
   assert.equal(api.location.href, 'https://pay.example/invoice?ref=1');
 
   await card.listeners.click({ preventDefault: function() {} });
   assert.equal(api.fetches.length, 2);
-  assert.equal(new URL(api.fetches[1].url).searchParams.get('provider'), 'whop');
-  assert.equal(new URL(api.fetches[1].url).searchParams.get('orderId'), id);
+  const cardPost = JSON.parse(api.fetches[1].opts.body);
+  assert.equal(new URL(api.fetches[1].url).searchParams.get('pay'), 'create');
+  assert.equal(cardPost.provider, 'nowpayments');
+  assert.equal(cardPost.orderId, id);
+  assert.equal(cardPost.amount, undefined);
 });
 
 test('a failed order does not mount Pay now', () => {
@@ -535,14 +586,27 @@ test('the server re-derives Entry $30 and Monthly $15 and ignores client amounts
   assert.equal(api.checkoutUrlFromProvider_('nowpayments', { invoice_url: 'javascript:alert(1)' }), '');
 });
 
-test('createPayment is public, prices from the plan column, and keys stay in Script properties', () => {
+test('POST ?pay=create is separate from the order writer, which has no pay hook', () => {
   const gs = read('apps-script/OrderProcessor.gs');
+  const post = gs.slice(gs.indexOf('function doPost'), gs.indexOf('function writeOrderPost_'));
+  assert.match(post, /parameter[\s\S]{0,80}pay/);
+  assert.match(post, /=== 'create'/);
+  assert.match(post, /handleCreatePayment_/);
+  assert.equal(post.includes('amount'), false);
+  const order = gs.slice(gs.indexOf('function writeOrderPost_'), gs.indexOf('function doGet'));
+  assert.match(order, /appendRow/);
+  assert.equal(order.includes('parameter.pay'), false);
+  assert.equal(order.includes('?pay'), false);
+  assert.equal(order.includes("pay === 'create'"), false);
+  assert.equal(order.includes('createPayment'), false);
+  assert.equal(/data\.pay(?!ment)/.test(order), false);
   const get = gs.slice(gs.indexOf('function doGet'), gs.indexOf('function checkDuplicate'));
-  const payAt = get.indexOf("action === 'createPayment'");
-  const tokenAt = get.indexOf('token !== ADMIN_TOKEN');
-  assert.ok(payAt !== -1 && tokenAt !== -1 && payAt < tokenAt);
-  const post = gs.slice(gs.indexOf('function doPost'), gs.indexOf('function doGet'));
-  assert.ok(post.indexOf("action === 'createPayment'") < post.indexOf('appendRow'));
+  assert.equal(get.includes('createPayment'), false);
+  assert.equal(get.includes('parameter.pay'), false);
+  const main = read('js/main.js');
+  const sheetPost = main.slice(main.indexOf('function postOrderToSheet'), main.indexOf('function copyOrderHandoff'));
+  assert.equal(sheetPost.includes('pay=create'), false);
+  assert.equal(sheetPost.includes('?pay'), false);
 
   const pay = read('apps-script/PaymentCheckout.gs');
   assert.match(pay, /re-deriv/i);
@@ -572,7 +636,9 @@ test('GUIDE says how to turn Pay now on and which public values to fill', () => 
   const guide = read('GUIDE.md');
   assert.match(guide, /PAY_NOW/);
   assert.match(guide, /enabled:\s*false/);
-  assert.match(guide, /createPayment/);
+  assert.match(guide, /pay=create/);
+  assert.match(guide, /whop\.enabled/);
+  assert.doesNotMatch(guide, /action=createPayment/);
   assert.match(guide, /re-deriv/i);
   assert.match(guide, /hostedLink/);
   assert.match(guide, /productLink/);

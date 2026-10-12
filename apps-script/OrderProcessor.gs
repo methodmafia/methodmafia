@@ -54,13 +54,18 @@ const COL = {
    doPost — receives order form submission from website
    ──────────────────────────────────────────────────────────── */
 function doPost(e) {
+  var params = (e && e.parameter) || {};
+  if (String(params.pay || '') === 'create') {
+    var posted = {};
+    try { posted = JSON.parse((e.postData && e.postData.contents) || '{}'); } catch (err) { posted = {}; }
+    return handleCreatePayment_({ orderId: posted.orderId, provider: posted.provider });
+  }
+  return writeOrderPost_(e);
+}
+
+function writeOrderPost_(e) {
   try {
     const data = JSON.parse(e.postData.contents);
-    /* Invoice creation is GET action=createPayment. Never append a row for it. */
-    if (data && data.action === 'createPayment') {
-      return ContentService.createTextOutput(JSON.stringify({ ok: false, error: 'use_get' }))
-                           .setMimeType(ContentService.MimeType.JSON);
-    }
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME)
                   || SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
 
@@ -117,11 +122,6 @@ function doGet(e) {
   const token   = params.token || '';
   const action  = params.action || '';
   const orderId = (params.orderId || '').toUpperCase();
-
-  /* Public checkout. No admin token. PaymentCheckout.gs re-derives the price. */
-  if (action === 'createPayment') {
-    return handleCreatePayment_(params);
-  }
 
   /* Security: reject wrong token */
   if (token !== ADMIN_TOKEN) {

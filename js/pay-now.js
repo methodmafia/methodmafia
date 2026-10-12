@@ -2,7 +2,7 @@
    THE METHOD MAFIA — Pay now (flag off by default)
    Public links only. The browser never sends the charge.
    Apps Script re-derives Entry $30 / Monthly $15 from the
-   sheet plan when action=createPayment runs.
+   sheet plan when POST exec?pay=create runs.
    ═══════════════════════════════════════════════════════════ */
 (function(root, factory){
   if(typeof module === 'object' && module.exports){
@@ -28,8 +28,10 @@
     return name === 'plisio' ? 'plisio' : 'nowpayments';
   }
 
-  function cardProvider(){
-    return 'whop';
+  function cardProvider(config){
+    var whop = config && config.PAY_NOW && config.PAY_NOW.whop;
+    if(whop && whop.enabled === true) return 'whop';
+    return 'nowpayments';
   }
 
   function isMonthlyPlan(plan){
@@ -61,33 +63,40 @@
     }
   }
 
-  /* GET only. Amount is not a parameter — the server prices the invoice. */
-  function buildCreatePaymentUrl(sheetUrl, orderId, provider){
+  /* POST ?pay=create. Order id and provider travel in the body, never the price. */
+  function buildCreatePaymentUrl(sheetUrl){
     var base = String(sheetUrl || '').trim();
-    var id = String(orderId || '').trim();
-    var name = String(provider || '').trim().toLowerCase();
-    if(!base || !id || !name) return '';
-    if(name !== 'nowpayments' && name !== 'plisio' && name !== 'whop') return '';
+    if(!base) return '';
     try{
       var u = new URL(base);
       u.searchParams.delete('token');
+      u.searchParams.delete('action');
+      u.searchParams.delete('orderId');
+      u.searchParams.delete('provider');
       u.searchParams.delete('amount');
       u.searchParams.delete('price');
-      u.searchParams.set('action', 'createPayment');
-      u.searchParams.set('orderId', id);
-      u.searchParams.set('provider', name);
+      u.searchParams.set('pay', 'create');
       return u.toString();
     }catch(e){
       return '';
     }
   }
 
-  function createPaymentFetchOptions(){
+  function createPaymentBody(orderId, provider){
     return {
-      method: 'GET',
+      orderId: String(orderId || ''),
+      provider: String(provider || '').toLowerCase()
+    };
+  }
+
+  function createPaymentFetchOptions(orderId, provider){
+    return {
+      method: 'POST',
       mode: 'cors',
       credentials: 'omit',
-      redirect: 'follow'
+      redirect: 'follow',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(createPaymentBody(orderId, provider))
     };
   }
 
@@ -96,7 +105,7 @@
     var provider = String(opts.provider || '').toLowerCase();
     var orderId = String(opts.orderId || '');
     var fallback = hostedFallbackUrl(opts.config, provider, orderId, opts.plan);
-    var requestUrl = buildCreatePaymentUrl(opts.config && opts.config.SHEET_URL, orderId, provider);
+    var requestUrl = buildCreatePaymentUrl(opts.config && opts.config.SHEET_URL);
     function go(url){
       if(!url || !/^https:\/\//i.test(url)){
         if(typeof opts.onFail === 'function') opts.onFail();
@@ -108,7 +117,7 @@
     if(!requestUrl || typeof opts.fetch !== 'function') return Promise.resolve(go(fallback));
     return Promise.resolve()
       .then(function(){
-        return opts.fetch(requestUrl, createPaymentFetchOptions());
+        return opts.fetch(requestUrl, createPaymentFetchOptions(orderId, provider));
       })
       .then(function(res){
         if(typeof opts.readJson === 'function') return opts.readJson(res);
