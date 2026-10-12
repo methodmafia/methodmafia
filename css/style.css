@@ -614,6 +614,59 @@ html[lang="bn"] h2.sec-title,html[lang="hi"] h2.sec-title{letter-spacing:.8px}
 }
 .order-tg-btn:hover{color:#fff;transform:translateY(-2px)}
 
+.pay-now{
+  display:none;margin-top:16px;
+  background:rgba(255,215,0,.03);
+  border:1px solid var(--line-2);
+  border-radius:12px;
+  padding:16px 14px 14px;
+}
+.pay-now.show{display:block}
+#payNow[hidden]{display:none !important}
+.pay-now-title{
+  font-family:var(--font-display);
+  font-size:14px;font-weight:800;letter-spacing:1.4px;
+  color:var(--gold);text-align:center;margin-bottom:6px;
+}
+.pay-now-note{
+  font-size:12px;line-height:1.55;color:var(--gold-dim);
+  text-align:center;margin-bottom:8px;
+}
+.pay-now-id{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:11px;letter-spacing:.4px;color:var(--gold);
+  text-align:center;margin:0 0 12px;
+}
+.pay-now-btn{
+  display:flex;align-items:center;justify-content:center;
+  width:100%;min-height:52px;margin-bottom:10px;
+  border-radius:9px;text-decoration:none;
+  font-family:var(--font-display);
+  font-size:14px;font-weight:800;letter-spacing:.6px;
+  transition:transform .2s,box-shadow .2s;
+}
+.pay-now-crypto{
+  background:transparent;color:var(--gold);
+  border:2px solid var(--gold);
+}
+.pay-now-crypto:hover{background:rgba(255,215,0,.08);transform:translateY(-2px)}
+.pay-now-card{
+  background:linear-gradient(135deg,#FFD700,#FFA500 55%,#FF7A00);
+  color:#000;border:0;
+  box-shadow:0 0 22px rgba(255,165,0,.28);
+}
+.pay-now-card:hover{color:#000;transform:translateY(-2px)}
+.pay-now-btn:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+.pay-now-status{
+  font-size:12px;line-height:1.45;color:var(--text);
+  text-align:center;margin:2px 0 0;
+}
+.pay-now-status[hidden]{display:none}
+@media (prefers-reduced-motion: reduce){
+  .pay-now-btn{transition:none}
+  .pay-now-crypto:hover,.pay-now-card:hover{transform:none}
+}
+
 /* ═══ FAQ ═══ */
 .faq{max-width:680px;margin:24px auto 0}
 .faq-item{

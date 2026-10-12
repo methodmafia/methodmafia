@@ -54,6 +54,16 @@ const COL = {
    doPost — receives order form submission from website
    ──────────────────────────────────────────────────────────── */
 function doPost(e) {
+  var params = (e && e.parameter) || {};
+  if (String(params.pay || '') === 'create') {
+    var posted = {};
+    try { posted = JSON.parse((e.postData && e.postData.contents) || '{}'); } catch (err) { posted = {}; }
+    return handleCreatePayment_({ orderId: posted.orderId, provider: posted.provider });
+  }
+  return writeOrderPost_(e);
+}
+
+function writeOrderPost_(e) {
   try {
     const data = JSON.parse(e.postData.contents);
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME)
