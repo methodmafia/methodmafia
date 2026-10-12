@@ -1,8 +1,13 @@
 {
-  // Cloudflare Workers Static Assets — pure HTML/CSS/JS site, no Worker script
+  // Static site. The worker only 301s www → apex, then serves assets.
+  // run_worker_first is required: without it, existing files are served
+  // before this script and www would stay 200.
   "name": "methodmafia",
   "compatibility_date": "2026-09-13",
+  "main": "worker/index.mjs",
   "assets": {
-    "directory": "./"
+    "directory": "./",
+    "binding": "ASSETS",
+    "run_worker_first": true
   }
 }

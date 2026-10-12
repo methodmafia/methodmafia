@@ -106,33 +106,44 @@ function initParticles(){
   const c = document.getElementById('bg-canvas');
   if(!c) return;
   const ctx = c.getContext('2d');
-  let W, H, parts = [];
+  if(!ctx) return;
+  const motion = window.matchMedia
+    ? window.matchMedia('(prefers-reduced-motion: reduce)')
+    : { matches: false };
+  let W = 0, H = 0, parts = [];
+  let frame = 0;
+  let built = false;
+  let mx = 0, my = 0;
   const isMobile = window.innerWidth < 700;
-  const COUNT = isMobile ? 90 : 200;
 
-  function resize(){ W = c.width = innerWidth; H = c.height = innerHeight; }
-  resize();
-  addEventListener('resize', resize);
-
-  const rnd = (a,b)=> a + Math.random()*(b-a);
-  for(let i=0;i<COUNT;i++){
-    parts.push({
-      x: Math.random()*innerWidth,
-      y: Math.random()*innerHeight,
-      r: rnd(.4,2),
-      vx: rnd(-.14,.14),
-      vy: rnd(-.32,-.06),
-      a: rnd(.2,.75),
-      gold: Math.random() > .35
-    });
-  }
-
-  let mx = innerWidth/2, my = innerHeight/2;
-  if(!isMobile){
-    addEventListener('mousemove', e=>{ mx = e.clientX; my = e.clientY; });
+  function build(){
+    if(built) return;
+    built = true;
+    const COUNT = isMobile ? 90 : 200;
+    function resize(){ W = c.width = innerWidth; H = c.height = innerHeight; }
+    resize();
+    addEventListener('resize', resize);
+    mx = innerWidth / 2;
+    my = innerHeight / 2;
+    const rnd = (a,b)=> a + Math.random()*(b-a);
+    for(let i=0;i<COUNT;i++){
+      parts.push({
+        x: Math.random()*innerWidth,
+        y: Math.random()*innerHeight,
+        r: rnd(.4,2),
+        vx: rnd(-.14,.14),
+        vy: rnd(-.32,-.06),
+        a: rnd(.2,.75),
+        gold: Math.random() > .35
+      });
+    }
+    if(!isMobile){
+      addEventListener('mousemove', e=>{ mx = e.clientX; my = e.clientY; });
+    }
   }
 
   function draw(){
+    if(motion.matches){ frame = 0; return; }
     ctx.clearRect(0,0,W,H);
     const g = ctx.createRadialGradient(W/2,H*.35,0,W/2,H*.35,W*.45);
     g.addColorStop(0,'rgba(255,140,0,.035)');
@@ -160,9 +171,28 @@ function initParticles(){
       ctx.fill();
     });
     ctx.globalAlpha = 1;
-    requestAnimationFrame(draw);
+    frame = requestAnimationFrame(draw);
   }
-  draw();
+
+  function start(){
+    if(motion.matches || frame) return;
+    build();
+    draw();
+  }
+
+  function halt(){
+    if(frame) cancelAnimationFrame(frame);
+    frame = 0;
+    if(built) ctx.clearRect(0, 0, W, H);
+  }
+
+  if(typeof motion.addEventListener === 'function'){
+    motion.addEventListener('change', function(){
+      if(motion.matches) halt();
+      else start();
+    });
+  }
+  start();
 }
 
 /* ─── লোগো টিল্ট ─── */
@@ -170,7 +200,11 @@ function initLogoTilt(){
   const wrap = document.getElementById('logoWrap');
   const img = document.getElementById('logoImg');
   if(!wrap || !img || window.innerWidth < 700) return;
+  const motion = window.matchMedia
+    ? window.matchMedia('(prefers-reduced-motion: reduce)')
+    : { matches: false };
   wrap.addEventListener('mousemove', e=>{
+    if(motion.matches) return;
     const r = wrap.getBoundingClientRect();
     const x = (e.clientX - r.left - r.width/2)/(r.width/2);
     const y = (e.clientY - r.top - r.height/2)/(r.height/2);
@@ -179,7 +213,7 @@ function initLogoTilt(){
   });
   wrap.addEventListener('mouseleave', ()=>{
     img.style.transform = '';
-    img.style.animation = 'float 5s ease-in-out infinite';
+    img.style.animation = '';
   });
 }
 
@@ -447,10 +481,18 @@ function updateOrderBox(){
 
 /* ─── Order ID তৈরি ─── */
 function makeOrderId(){
-  const d = new Date();
-  const y = d.getFullYear();
-  const rnd = Math.floor(1000 + Math.random()*9000);
-  return `MM-${y}-${rnd}`;
+  /* 5 digits (10000–99999): 90k values/year. 4 digits collided
+     (~7 repeats in 400 draws). Remember ids minted on this page. */
+  if(!makeOrderId.issued) makeOrderId.issued = Object.create(null);
+  const y = new Date().getFullYear();
+  let id = '';
+  for(let attempt = 0; attempt < 12; attempt++){
+    const n = 10000 + Math.floor(Math.random() * 90000);
+    id = 'MM-' + y + '-' + n;
+    if(!makeOrderId.issued[id]) break;
+  }
+  makeOrderId.issued[id] = 1;
+  return id;
 }
 
 /* ─── UTM + click IDs (fbclid / ttclid) ─── */
