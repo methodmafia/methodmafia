@@ -1009,3 +1009,14 @@ test('the order payload carries user agent + _fbp/_fbc/_ttp + GA client id (Tele
   for (const k of ['fbp', 'fbc', 'ttp', 'gcid']) assert.equal(typeof sent[k], 'string');
   assert.equal(api.location.href.indexOf('Mozilla'), -1);
 });
+
+test('the order payload carries the visitor country code (or empty), never blocking the order', () => {
+  const api = loadSubmitRuntime({ ua: UAS.desktop });
+  api.click();
+  const sent = JSON.parse(api.beacons[0]);
+  assert.equal(typeof sent.country, 'string');
+  assert.ok(sent.country === '' || /^[A-Z]{2}$/.test(sent.country));
+  const main = read('js/main.js');
+  assert.match(main, /fetch\('\/cdn-cgi\/trace'/);
+  assert.match(main, /if\(document\.getElementById\('submitBtn'\)\) initVisitorCountry\(\);/);
+});

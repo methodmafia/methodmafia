@@ -483,6 +483,25 @@ function clientMeta(){
   return { ua: ua, fbp: readCookie('_fbp'), fbc: fbc, ttp: readCookie('_ttp'), gcid: gm ? gm[1] : '' };
 }
 
+/* Visitor country (2-letter code) from Cloudflare's own /cdn-cgi/trace — filled into the Sheet's
+   Country column; the owner can change it. Read once per visit, never blocks the order. */
+function initVisitorCountry(){
+  try{ if(sessionStorage.getItem('mm_cc')) return; }catch(e){ return; }
+  try{
+    fetch('/cdn-cgi/trace', { credentials: 'omit' })
+      .then(function(r){ return r.text(); })
+      .then(function(t){
+        var m = /(?:^|\n)loc=([A-Z]{2})(?:\n|$)/.exec(String(t || ''));
+        if(m){ try{ sessionStorage.setItem('mm_cc', m[1]); }catch(e){} }
+      })
+      .catch(function(){});
+  }catch(e){}
+}
+
+function visitorCountry(){
+  try{ return String(sessionStorage.getItem('mm_cc') || '').slice(0, 2); }catch(e){ return ''; }
+}
+
 /* ─── UTM + click IDs (fbclid / ttclid) ─── */
 function getUtmData(){
   try{
@@ -838,6 +857,7 @@ function collectOrderDraft(showErrors){
   payload.fbc = cm.fbc;
   payload.ttp = cm.ttp;
   payload.gcid = cm.gcid;
+  payload.country = visitorCountry();
   var langLabel = (typeof MMSheet !== 'undefined')
     ? MMSheet.sheetLanguageLabel(payload.language)
     : String(payload.language || 'en').toUpperCase();
@@ -1214,6 +1234,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   initExitPopup();
   initOrderStatusPage();
   getUtmData();
+  if(document.getElementById('submitBtn')) initVisitorCountry();
   ['iName','iEmail','iTelegram'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.addEventListener('input', noteOrderFieldEdit);
