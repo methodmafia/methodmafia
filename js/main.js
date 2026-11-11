@@ -446,11 +446,41 @@ function updateOrderBox(){
 }
 
 /* ─── Order ID তৈরি ─── */
+/* 5 digits (90,000 a year; 4 digits = 9,000 and two customers shared MM-2026-3007).
+   The same page never mints an id twice. The Sheet script also renames a clash (…-B). */
 function makeOrderId(){
-  const d = new Date();
-  const y = d.getFullYear();
-  const rnd = Math.floor(1000 + Math.random()*9000);
-  return `MM-${y}-${rnd}`;
+  const y = new Date().getFullYear();
+  const issued = makeOrderId.issued || (makeOrderId.issued = {});
+  let id = '';
+  for(let i = 0; i < 25; i++){
+    id = `MM-${y}-${Math.floor(10000 + Math.random()*90000)}`;
+    if(!issued[id]) break;
+  }
+  issued[id] = 1;
+  return id;
+}
+
+/* Browser details for Meta / TikTok match quality (saved with the order, never shown). */
+function readCookie(name){
+  try{
+    var parts = String(document.cookie || '').split('; ');
+    for(var i = 0; i < parts.length; i++){
+      var eq = parts[i].indexOf('=');
+      if(eq > 0 && parts[i].slice(0, eq) === name) return decodeURIComponent(parts[i].slice(eq + 1));
+    }
+  }catch(e){}
+  return '';
+}
+
+function clientMeta(){
+  var ua = '';
+  try{ ua = String(navigator.userAgent || '').slice(0, 400); }catch(e){}
+  var fbc = readCookie('_fbc');
+  if(!fbc){
+    try{ fbc = localStorage.getItem('mm_fbc') || sessionStorage.getItem('mm_fbc') || ''; }catch(e){ fbc = ''; }
+  }
+  var gm = /^GA\d\.\d\.(.+)$/.exec(readCookie('_ga'));
+  return { ua: ua, fbp: readCookie('_fbp'), fbc: fbc, ttp: readCookie('_ttp'), gcid: gm ? gm[1] : '' };
 }
 
 /* ─── UTM + click IDs (fbclid / ttclid) ─── */
@@ -665,9 +695,12 @@ function showOrderHandoff(text, telegramUrl){
   }
 }
 
-/* One transport per Order ID: a beacon OR a fetch, never both, never twice.
-   The id is claimed before sending, so a re-entrant call cannot double it.
-   A send that fails on every transport releases the id so a retry can go. */
+/* Each Order ID is posted once per transport: a beacon AND a keepalive fetch.
+   2026-11-12: in-app browsers that jump straight to Telegram can drop one of them
+   (Meta counted ~84 order Leads in 28 days, the Sheet ~46 orders), so both go out.
+   The Sheet script writes ONE row per Order ID + person (idempotent doPost with a lock),
+   so the second copy is ignored there. The id is claimed before sending; if every
+   transport fails the id is released so a retry can go. */
 var POSTED_ORDER_IDS = {};
 
 function postOrderToSheet(payload){
@@ -676,11 +709,12 @@ function postOrderToSheet(payload){
   if(postedId) POSTED_ORDER_IDS[postedId] = 1;
   var body = JSON.stringify(payload || {});
   var url = (typeof CONFIG !== 'undefined') ? CONFIG.SHEET_URL : '';
+  var sent = false;
   try{
     if(url && navigator.sendBeacon){
       /* A string is text/plain;charset=UTF-8. A Blob body is dropped by
          iPhone Safari, so the Sheet row never arrives. */
-      if(navigator.sendBeacon(url, body)) return true;
+      if(navigator.sendBeacon(url, body)) sent = true;
     }
   }catch(e){}
   var sheetOpts = (typeof MMSheet !== 'undefined')
@@ -693,9 +727,9 @@ function postOrderToSheet(payload){
         headers:{'Content-Type':'text/plain;charset=utf-8'},
         body: body
       };
-  try{ fetch(url, sheetOpts).catch(function(){}); return true; }catch(e){}
-  if(postedId) delete POSTED_ORDER_IDS[postedId];
-  return false;
+  try{ fetch(url, sheetOpts).catch(function(){}); sent = true; }catch(e){}
+  if(!sent && postedId) delete POSTED_ORDER_IDS[postedId];
+  return sent;
 }
 
 function copyOrderHandoff(){
@@ -798,6 +832,12 @@ function collectOrderDraft(showErrors){
     fbclid: track.fbclid,
     ttclid: track.ttclid
   };
+  var cm = clientMeta();
+  payload.ua = cm.ua;
+  payload.fbp = cm.fbp;
+  payload.fbc = cm.fbc;
+  payload.ttp = cm.ttp;
+  payload.gcid = cm.gcid;
   var langLabel = (typeof MMSheet !== 'undefined')
     ? MMSheet.sheetLanguageLabel(payload.language)
     : String(payload.language || 'en').toUpperCase();

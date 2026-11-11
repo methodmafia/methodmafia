@@ -887,16 +887,18 @@ test('a throwing Contact pixel does not stop the Telegram handoff', () => {
 
 /* ── single submit per order (MM-2026-9882 twin rows, 2026-10-05) ── */
 
-test('one Order ID goes out on exactly one transport, once (never beacon AND fetch)', () => {
+test('one Order ID goes out once per transport (beacon AND keepalive fetch), never twice', () => {
+  /* 2026-11-12: both transports on purpose (in-app browsers drop one); the Sheet's doPost is
+     idempotent per Order ID + person, so the second copy never becomes a second row. */
   const api = loadSubmitRuntime({ ua: UAS.android });
-  const payload = { orderId: 'MM-2026-9882', name: 'x' };
+  const payload = { orderId: 'MM-2026-98821', name: 'x' };
   assert.equal(api.postOrderToSheet(payload), true);
   assert.equal(api.postOrderToSheet(Object.assign({}, payload)), true);
   assert.equal(api.beacons.length, 1);
-  assert.equal(api.fetches.length, 0);
+  assert.equal(api.fetches.length, 1);
 
   const viaFetch = loadSubmitRuntime({ ua: UAS.android, beaconOk: false });
-  viaFetch.postOrderToSheet(payload);
+  assert.equal(viaFetch.postOrderToSheet(payload), true); // beacon refused → the fetch still carries it
   viaFetch.net.beaconOk = true;               // beacon "recovers": still no second send for this id
   viaFetch.postOrderToSheet(payload);
   assert.equal(viaFetch.fetches.length, 1);
@@ -980,4 +982,30 @@ test('Submit shows a busy class while the order is sending and is never disabled
   assert.equal(api.fields.submitBtn.disabled, false);
   const css = read('css/style.css');
   assert.match(css, /\.submit-btn\.is-sending\{/);
+});
+
+/* ── 2026-11-12: 5-digit Order IDs + browser meta for CAPI ── */
+
+test('Order IDs have 5 digits and one page never mints the same id twice', () => {
+  const main = read('js/main.js');
+  const start = main.indexOf('function makeOrderId');
+  const end = main.indexOf('function readCookie');
+  const makeOrderId = new Function(main.slice(start, end) + '\nreturn makeOrderId;')();
+  const seen = new Set();
+  for (let i = 0; i < 3000; i++) {
+    const id = makeOrderId();
+    assert.match(id, /^MM-\d{4}-\d{5}$/);
+    assert.equal(seen.has(id), false, 'repeat ' + id);
+    seen.add(id);
+  }
+});
+
+test('the order payload carries user agent + _fbp/_fbc/_ttp + GA client id (Telegram text does not)', () => {
+  const api = loadSubmitRuntime({ ua: UAS.android });
+  api.click();
+  const sent = JSON.parse(api.beacons[0]);
+  assert.match(sent.orderId, /^MM-\d{4}-\d{5}$/);
+  assert.equal(sent.ua, UAS.android);
+  for (const k of ['fbp', 'fbc', 'ttp', 'gcid']) assert.equal(typeof sent[k], 'string');
+  assert.equal(api.location.href.indexOf('Mozilla'), -1);
 });

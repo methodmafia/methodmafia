@@ -13,37 +13,31 @@
 
   <!-- Core pages -->
   <url>
-    <loc>https://themethodmafia.com/about.html</loc>
+    <loc>https://themethodmafia.com/about</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-09-13</lastmod>
   </url>
   <url>
-    <loc>https://themethodmafia.com/payment.html</loc>
+    <loc>https://themethodmafia.com/payment</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
     <lastmod>2026-09-13</lastmod>
   </url>
   <url>
-    <loc>https://themethodmafia.com/order-status.html</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-    <lastmod>2026-09-13</lastmod>
-  </url>
-  <url>
-    <loc>https://themethodmafia.com/terms.html</loc>
+    <loc>https://themethodmafia.com/terms</loc>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
     <lastmod>2026-09-13</lastmod>
   </url>
   <url>
-    <loc>https://themethodmafia.com/privacy.html</loc>
+    <loc>https://themethodmafia.com/privacy</loc>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
     <lastmod>2026-09-13</lastmod>
   </url>
   <url>
-    <loc>https://themethodmafia.com/refund.html</loc>
+    <loc>https://themethodmafia.com/refund</loc>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
     <lastmod>2026-09-13</lastmod>
@@ -51,25 +45,25 @@
 
   <!-- Blog / teaser pages (E4) -->
   <url>
-    <loc>https://themethodmafia.com/blog/vip-access.html</loc>
+    <loc>https://themethodmafia.com/blog/vip-access</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
     <lastmod>2026-09-13</lastmod>
   </url>
   <url>
-    <loc>https://themethodmafia.com/blog/how-payment-works.html</loc>
+    <loc>https://themethodmafia.com/blog/how-payment-works</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-09-13</lastmod>
   </url>
   <url>
-    <loc>https://themethodmafia.com/blog/freelancer-tools.html</loc>
+    <loc>https://themethodmafia.com/blog/freelancer-tools</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
     <lastmod>2026-09-13</lastmod>
   </url>
   <url>
-    <loc>https://themethodmafia.com/blog/getting-started.html</loc>
+    <loc>https://themethodmafia.com/blog/getting-started</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
     <lastmod>2026-09-13</lastmod>
